@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import traceback
 from collections.abc import Generator
@@ -18,6 +19,59 @@ from pooltool.utils import Run
 from pooltool.utils.strenum import StrEnum, auto
 
 run = Run()
+
+
+WINDOW_SIZE_PRESETS = {
+    "fullhd": (1920, 1080),
+    "1080p": (1920, 1080),
+    "fhd": (1920, 1080),
+    "2k": (2560, 1440),
+    "1440p": (2560, 1440),
+    "qhd": (2560, 1440),
+}
+
+
+def parse_window_size(value: str | tuple[int, int] | None) -> tuple[int, int] | None:
+    """Parse common display names or WIDTHxHEIGHT strings into pixels."""
+    if value is None:
+        return None
+
+    if isinstance(value, tuple):
+        width, height = value
+        return int(width), int(height)
+
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+
+    if normalized in WINDOW_SIZE_PRESETS:
+        return WINDOW_SIZE_PRESETS[normalized]
+
+    separator = "x" if "x" in normalized else ","
+    parts = [part.strip() for part in normalized.split(separator)]
+    if len(parts) != 2:
+        raise ValueError(
+            f"Unsupported window size {value!r}. Use fullhd, 2k, or WIDTHxHEIGHT."
+        )
+
+    width, height = (int(part) for part in parts)
+    if width <= 0 or height <= 0:
+        raise ValueError("Window dimensions must be positive integers.")
+
+    return width, height
+
+
+def parse_bool(value: str | None) -> bool | None:
+    if value is None:
+        return None
+
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    raise ValueError(f"Unsupported boolean value {value!r}.")
 
 
 class SettingsCategory(StrEnum):
@@ -55,6 +109,10 @@ def settings_field(*args, **kwargs) -> Any:
 class SystemConfig:
     show_frame_rate: bool = True
     window_width: int = 1400
+    window_height_override: int | None = None
+    fullscreen: bool = False
+    borderless: bool = False
+    window_title: str = "pooltool"
     sync_video: bool = False
     gl_check_errors: bool = False
     gl_version_major: int = 3
@@ -63,7 +121,13 @@ class SystemConfig:
 
     @property
     def window_height(self) -> int:
+        if self.window_height_override is not None:
+            return self.window_height_override
         return int(self.window_width / self.aspect_ratio)
+
+    @property
+    def effective_aspect_ratio(self) -> float:
+        return self.window_width / self.window_height
 
     def apply_settings(self) -> None:
         """Apply Panda3D configuration settings at runtime."""
@@ -71,7 +135,11 @@ class SystemConfig:
             "", f"show-frame-rate-meter {'#t' if self.show_frame_rate else '#f'}"
         )
         loadPrcFileData("", f"win-size {self.window_width} {self.window_height}")
-        loadPrcFileData("", "fullscreen #f")  # hard-coded, fullscreen broken
+        loadPrcFileData("", f"fullscreen {'#t' if self.fullscreen else '#f'}")
+        loadPrcFileData("", f"undecorated {'#t' if self.borderless else '#f'}")
+        if self.borderless:
+            loadPrcFileData("", "win-origin 0 0")
+        loadPrcFileData("", f"window-title {self.window_title}")
         loadPrcFileData("", f"sync-video {'#t' if self.sync_video else '#f'}")
         loadPrcFileData("", f"gl-check-errors {'#t' if self.gl_check_errors else '#f'}")
         loadPrcFileData(
@@ -382,5 +450,51 @@ class SettingsProxy(Settings):
 
 settings = SettingsProxy(GENERAL_CONFIG)
 
+
+def apply_runtime_window_settings(
+    *,
+    window_mode: str | None = None,
+    window_size: str | tuple[int, int] | None = None,
+    window_title: str | None = None,
+) -> SystemConfig:
+    """Apply non-persistent window overrides before the Panda3D window opens."""
+    cfg = settings.read()
+    system = cfg.system
+
+    parsed_size = parse_window_size(window_size)
+    if parsed_size is not None:
+        system.window_width, system.window_height_override = parsed_size
+
+    if window_mode is not None:
+        normalized_mode = window_mode.strip().lower()
+        if normalized_mode not in {"windowed", "fullscreen", "borderless"}:
+            raise ValueError(
+                "Unsupported window mode "
+                f"{window_mode!r}. Use windowed, fullscreen, or borderless."
+            )
+
+        system.fullscreen = normalized_mode == "fullscreen"
+        system.borderless = normalized_mode == "borderless"
+
+    if window_title is not None:
+        system.window_title = window_title
+
+    system.apply_settings()
+    settings._cache = cfg
+    settings._valid_cache = True
+
+    return system
+
+
+def apply_environment_window_settings() -> SystemConfig:
+    """Apply POOLTOOL_* window overrides from the process environment."""
+    return apply_runtime_window_settings(
+        window_mode=os.environ.get("POOLTOOL_WINDOW_MODE"),
+        window_size=os.environ.get("POOLTOOL_WINDOW_SIZE"),
+        window_title=os.environ.get("POOLTOOL_WINDOW_TITLE"),
+    )
+
+
 # Apply Panda3D settings from the config
-settings.read().apply_panda_settings()
+settings.apply_panda_settings()
+apply_environment_window_settings()

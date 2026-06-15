@@ -26,8 +26,8 @@ from pooltool.ani.menu import MenuRegistry
 from pooltool.ani.modes import Mode, ModeManager, all_modes
 from pooltool.ani.mouse import mouse
 from pooltool.ani.scene import PlaybackMode, visual
+from pooltool.ani.warmup import warmup_shot_simulation
 from pooltool.config import settings
-from pooltool.evolution import simulate
 from pooltool.evolution.continuous import continuize
 from pooltool.layouts import get_rack
 from pooltool.objects.cue.datatypes import Cue
@@ -47,6 +47,7 @@ class ShowBaseConfig:
     window_size: tuple[int, int] | None = None
     fb_prop: FrameBufferProperties | None = None
     monitor: bool = False
+    warmup_physics: bool = True
 
     @classmethod
     def default(cls):
@@ -55,6 +56,7 @@ class ShowBaseConfig:
             window_size=None,
             fb_prop=None,
             monitor=False,
+            warmup_physics=True,
         )
 
 
@@ -91,8 +93,9 @@ def window_task(win=None):
     requested_width = Global.base.win.getXSize()
     requested_height = Global.base.win.getYSize()
 
-    diff = abs(requested_width / requested_height - settings.system.aspect_ratio)
-    if diff / settings.system.aspect_ratio < 0.05:
+    aspect_ratio = settings.system.effective_aspect_ratio
+    diff = abs(requested_width / requested_height - aspect_ratio)
+    if diff / aspect_ratio < 0.05:
         # If they are within 5% of the intended ratio, just let them be.
         return
 
@@ -101,8 +104,8 @@ def window_task(win=None):
     # A = w*h
     # A = r*h*h
     # h = (A/r)^(1/2)
-    height = (requested_area / settings.system.aspect_ratio) ** (1 / 2)
-    width = height * settings.system.aspect_ratio
+    height = (requested_area / aspect_ratio) ** (1 / 2)
+    width = height * aspect_ratio
 
     properties = WindowProperties()
     properties.setSize(int(width), int(height))
@@ -498,10 +501,11 @@ class Game(Interface):
             frame_color=(0, 0, 0, 0.4),
             title_pos=(0, 0, 0),
         )
-        code_comp_menu.show()
-        boop(2)
-        simulate(System.example(), inplace=True)
-        code_comp_menu.hide()
+        if self.showbase_config.warmup_physics:
+            code_comp_menu.show()
+            boop(2)
+            warmup_shot_simulation()
+            code_comp_menu.hide()
 
         Global.mode_mgr.change_mode(Mode.aim)
 
