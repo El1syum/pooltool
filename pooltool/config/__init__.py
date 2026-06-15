@@ -114,6 +114,7 @@ class SystemConfig:
     borderless: bool = False
     window_title: str = "pooltool"
     shot_animation_dt: float = 1 / 60
+    shot_max_events: int = 0
     sync_video: bool = False
     gl_check_errors: bool = False
     gl_version_major: int = 3
@@ -486,6 +487,13 @@ def apply_runtime_window_settings(
 
     if system.shot_animation_dt <= 0:
         raise ValueError("POOLTOOL_SHOT_ANIMATION_DT must be greater than zero.")
+
+    shot_max_events = os.environ.get("POOLTOOL_SHOT_MAX_EVENTS")
+    if shot_max_events is not None:
+        system.shot_max_events = int(shot_max_events)
+
+    if system.shot_max_events < 0:
+        raise ValueError("POOLTOOL_SHOT_MAX_EVENTS must be zero or greater.")
 
     system.apply_settings()
     settings._cache = cfg

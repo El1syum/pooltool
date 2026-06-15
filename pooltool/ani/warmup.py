@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pooltool.config import settings
 from pooltool.evolution import simulate
+from pooltool.game.datatypes import GameType
 from pooltool.layouts import get_rack
+from pooltool.objects import Ball
 from pooltool.objects.cue.datatypes import Cue
 from pooltool.objects.table.collection import prebuilt_specs
 from pooltool.objects.table.datatypes import Table
@@ -18,8 +20,10 @@ def _warmup_example_shot() -> System:
     return system
 
 
-def _warmup_game_break() -> System:
-    game_type = settings.gameplay.game_type
+def _warmup_game_break(game_type=None) -> System:
+    if game_type is None:
+        game_type = settings.gameplay.game_type
+
     game = get_ruleset(game_type, enforce_rules=settings.gameplay.enforce_rules)()
     table = Table.from_table_specs(prebuilt_specs(settings.gameplay.table_name))
     balls = get_rack(
@@ -36,6 +40,15 @@ def _warmup_game_break() -> System:
     return system
 
 
+def _warmup_agent_eightball_shot(**cue_state) -> System:
+    table = Table.from_game_type(GameType.EIGHTBALL)
+    balls = get_rack(GameType.EIGHTBALL, table)
+    balls["cue"] = Ball.create("cue", xy=(table.w / 2, table.l * 0.25))
+    system = System(cue=Cue(cue_ball_id="cue"), table=table, balls=balls)
+    system.strike(**cue_state)
+    return system
+
+
 def warmup_shot_simulation() -> None:
     """Compile the hot shot-simulation path before the player takes a shot."""
     global _physics_warmed_up
@@ -43,13 +56,23 @@ def warmup_shot_simulation() -> None:
     if _physics_warmed_up:
         return
 
-    for system in (_warmup_example_shot(), _warmup_game_break()):
+    systems = (
+        _warmup_example_shot(),
+        _warmup_game_break(),
+        _warmup_game_break(GameType.EIGHTBALL),
+        _warmup_agent_eightball_shot(V0=2.5, phi=95, theta=0, a=0, b=0),
+        _warmup_agent_eightball_shot(V0=2.8, phi=95, theta=5, a=0, b=0),
+        _warmup_agent_eightball_shot(V0=2.5, phi=95, theta=0, a=0.2, b=0),
+        _warmup_agent_eightball_shot(V0=2.5, phi=95, theta=0, a=0, b=0.2),
+    )
+
+    for system in systems:
         simulate(
             system,
             continuous=True,
             dt=settings.system.shot_animation_dt,
             inplace=True,
-            max_events=160,
+            max_events=settings.system.shot_max_events,
         )
 
     _physics_warmed_up = True
