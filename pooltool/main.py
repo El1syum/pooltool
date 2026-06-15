@@ -28,7 +28,7 @@ from pooltool.config import apply_runtime_window_settings
     help="Warm up shot physics before the first playable shot.",
 )
 def run(monitor, window_mode, window_size, warmup):
-    apply_runtime_window_settings(
+    system_config = apply_runtime_window_settings(
         window_mode=window_mode,
         window_size=window_size,
         window_title="Cyberpool Pooltool",
@@ -40,6 +40,7 @@ def run(monitor, window_mode, window_size, warmup):
     config = attrs.evolve(
         ShowBaseConfig.default(),
         monitor=monitor,
+        window_size=(system_config.window_width, system_config.window_height),
         warmup_physics=bool(warmup),
     )
 

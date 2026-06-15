@@ -8,6 +8,7 @@ from pooltool.ani.constants import rotate_downtime
 from pooltool.ani.globals import Global
 from pooltool.ani.modes.datatypes import BaseMode, Mode
 from pooltool.ani.mouse import MouseMode, mouse
+from pooltool.config import settings
 from pooltool.evolution import simulate
 from pooltool.system.datatypes import System, multisystem
 
@@ -86,6 +87,7 @@ class CalculateMode(BaseMode):
         simulate(
             system,
             continuous=True,
+            dt=settings.system.shot_animation_dt,
             inplace=True,
         )
 

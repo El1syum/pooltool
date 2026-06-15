@@ -113,6 +113,7 @@ class SystemConfig:
     fullscreen: bool = False
     borderless: bool = False
     window_title: str = "pooltool"
+    shot_animation_dt: float = 1 / 60
     sync_video: bool = False
     gl_check_errors: bool = False
     gl_version_major: int = 3
@@ -478,6 +479,13 @@ def apply_runtime_window_settings(
 
     if window_title is not None:
         system.window_title = window_title
+
+    shot_animation_dt = os.environ.get("POOLTOOL_SHOT_ANIMATION_DT")
+    if shot_animation_dt is not None:
+        system.shot_animation_dt = float(shot_animation_dt)
+
+    if system.shot_animation_dt <= 0:
+        raise ValueError("POOLTOOL_SHOT_ANIMATION_DT must be greater than zero.")
 
     system.apply_settings()
     settings._cache = cfg

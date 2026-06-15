@@ -117,6 +117,19 @@ def _resize_offscreen_window(size: tuple[int, int]):
     Global.base.win.setSize(*[int(dim) for dim in size])
 
 
+def _apply_window_properties() -> None:
+    properties = WindowProperties()
+    properties.setSize(settings.system.window_width, settings.system.window_height)
+    properties.setFullscreen(settings.system.fullscreen)
+    properties.setUndecorated(settings.system.borderless)
+
+    if settings.system.borderless:
+        properties.setOrigin(0, 0)
+        properties.setFixedSize(True)
+
+    Global.base.win.requestProperties(properties)
+
+
 def _init_simplepbr() -> simplepbr.Pipeline:
     return simplepbr.init(
         enable_shadows=settings.graphics.shadows,
@@ -132,6 +145,8 @@ class Interface(ShowBase):
         self.openMainWindow(
             fbprops=self.showbase_config.fb_prop, size=self.showbase_config.window_size
         )
+        if isinstance(self.win, GraphicsWindow):
+            _apply_window_properties()
 
         # Background doesn't apply if ran after simplepbr.init(). See
         # https://discourse.panda3d.org/t/cant-change-base-background-after-simplepbr-init/28945

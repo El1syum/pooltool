@@ -17,6 +17,7 @@ class Mouse(ClockObject):
         ClockObject.__init__(self)
         self.relative_requested = False
         self.initialized = False
+        self.centered_relative = False
 
     def __enter__(self):
         return self
@@ -59,6 +60,7 @@ class Mouse(ClockObject):
         props = WindowProperties()
         props.setMouseMode(WindowProperties.M_absolute)
         Global.base.win.requestProperties(props)
+        self.centered_relative = False
 
         if self.relative_requested:
             self.relative_requested = False
@@ -66,17 +68,32 @@ class Mouse(ClockObject):
     def relative(self):
         if self.mouse.hasMouse():
             props = WindowProperties()
-            props.setMouseMode(WindowProperties.M_relative)
+            props.setMouseMode(WindowProperties.M_confined)
+            props.setCursorHidden(True)
             Global.base.win.requestProperties(props)
+            self.centered_relative = True
             self.relative_requested = False
+            self.center()
         else:
             self.relative_requested = True
+
+    def center(self):
+        if not self.centered_relative:
+            return
+
+        x = max(Global.base.win.getXSize() // 2, 0)
+        y = max(Global.base.win.getYSize() // 2, 0)
+        Global.base.win.movePointer(0, x, y)
 
     def touch(self):
         if self.relative_requested:
             self.relative()
 
-        self.last_x, self.last_y = self.get_xy()
+        if self.centered_relative:
+            self.center()
+            self.last_x, self.last_y = 0, 0
+        else:
+            self.last_x, self.last_y = self.get_xy()
         self.last_t = self.getRealTime() - self.getDt()
 
     def track(self):
