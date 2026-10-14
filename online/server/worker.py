@@ -23,7 +23,38 @@ def init_physics():
 
     engine = PhysicsEngine()
     engine.warmup()
+    _warm_full_path(engine)
     return engine
+
+
+def _warm_full_path(engine):
+    """Compile every lazily-jitted branch before the worker takes real shots.
+
+    The basic warmup misses pocket, jaw and dense-rack collisions, rule
+    evaluation and the bot. Without this, the first shots after a deploy (a new
+    release path invalidates the numba cache) took several seconds.
+    """
+    import math
+
+    from .bot import decide
+
+    try:
+        state = engine.new_match(seed=0)
+        cue = state["system"]["balls"]["cue"]["rvw"][0]
+        table = state["snapshot"]["table"]
+        phi = math.degrees(math.atan2(table["length"] * 0.75 - cue[1], table["width"] * 0.5 - cue[0]))
+        state = engine.simulate(state, {"V0": 6.5, "phi": phi}, shooter=0)["state"]
+        for seed in range(3):
+            if state["rules"]["winner"] is not None:
+                break
+            shooter = state["rules"]["currentPlayer"]
+            decision = decide(state, "hard", seed=seed)
+            if decision["placement"]:
+                state = engine.place_cue_ball(state, *decision["placement"], shooter=shooter)
+            state = engine.simulate(state, decision["shot"], shooter=shooter)["state"]
+    except Exception:
+        # Warming is an optimization; a real shot still compiles what it needs.
+        log.exception("Extended physics warmup failed")
 
 
 def handle(engine, op, state, payload, shooter):
