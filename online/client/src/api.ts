@@ -16,10 +16,10 @@ export interface Room {
   id: string
   code: string
   hostId: string
-  players: Array<{ id: string; displayName: string; ready: boolean }>
+  players: Array<{ id: string; displayName: string; ready: boolean; bot?: string }>
   spectators: unknown[] | number
   status: string
-  settings: { turnSeconds: number; ranked: boolean }
+  settings: { turnSeconds: number; ranked: boolean; solo?: boolean; difficulty?: string }
   matchId?: string | null
 }
 export interface ShotResult {
@@ -39,7 +39,7 @@ export interface Match {
   turn?: number
   serverTime?: string
   status: 'active' | 'calculating' | 'finished'
-  players: Array<{ id: string; displayName: string; elo?: number; group?: string }>
+  players: Array<{ id: string; displayName: string; elo?: number; group?: string; bot?: string }>
   currentPlayer: number
   deadline: number | string | null
   startedAt: number | string

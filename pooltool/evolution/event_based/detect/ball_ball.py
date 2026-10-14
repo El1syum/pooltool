@@ -199,7 +199,7 @@ def get_next_ball_ball_event(
     if not cache:
         return null_event(np.inf)
 
-    ball_pair = min(cache, key=lambda k: cache[k])
+    ball_pair = min(cache, key=cache.__getitem__)
 
     return ball_ball_collision(
         ball1=shot.balls[ball_pair[0]],

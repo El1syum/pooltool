@@ -56,6 +56,11 @@ class TestPhysics:
         result["snapshot"]["balls"][0]["position"] = [x, y, 0.03]
         return result
 
+    def bot_decide(self, state, difficulty, seed=None):
+        self.bot_calls = getattr(self, "bot_calls", 0) + 1
+        placement = [0.4, 1.0] if state["snapshot"].get("ballInHand") else None
+        return {"placement": placement, "shot": {"V0": 3, "phi": 90, "theta": 0, "a": 0, "b": 0}}
+
     def timeout(self, state, shooter=0):
         result = copy.deepcopy(state)
         result["snapshot"].update(currentPlayer=1 - shooter, ballInHand=True)
@@ -487,3 +492,67 @@ def test_finished_rooms_are_closed_after_ttl_and_players_become_free(setup):
     assert client.get("/api/me/current", headers=a).json()["room"] is None
     assert client.post("/api/rooms", headers=a, json={}).status_code == 200
     assert len(client.get("/api/me/history", headers=a).json()["matches"]) == 1
+
+
+
+def wait_for(predicate, seconds=5):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        value = predicate()
+        if value:
+            return value
+        time.sleep(0.02)
+    raise AssertionError("Condition was not reached")
+
+
+def test_solo_bot_answers_through_the_normal_command_path(setup):
+    client, engine, clock = setup
+    a, data_a = login(client, "Соло")
+    service = client.app.state.service
+    service.bot_delay = 0
+    started = client.post("/api/solo", headers=a, json={"difficulty": "hard", "turnSeconds": 60})
+    assert started.status_code == 200, started.text
+    match = started.json()["match"]
+    assert started.json()["room"]["settings"]["solo"] is True
+    assert match["players"][1]["id"] == "bot:hard" and match["players"][1]["bot"] == "hard"
+    assert match["players"][match["currentPlayer"]]["id"] == data_a["user"]["id"]
+    endpoint = f"/api/matches/{match['id']}/commands"
+    assert client.post(endpoint, headers=a, json=shot()).status_code == 200
+    clock[0] += 1  # Playback of the human shot is over; the bot may play.
+    current = wait_for(lambda: (m := client.get(f"/api/matches/{match['id']}", headers=a).json()["match"])["currentPlayer"] == 0 and m)
+    assert current["lastShot"]["playerId"] == "bot:hard"
+    assert engine.bot_calls == 1
+    # The bot cannot shoot again for the same position, and a human leaving closes the room.
+    assert client.post(f"/api/rooms/{current['roomCode']}/leave", headers=a).status_code == 200
+    finished = client.get(f"/api/matches/{match['id']}", headers=a).json()["match"]
+    assert finished["winnerId"] == "bot:hard" and finished["reason"] == "left"
+    assert client.app.state.service._room(current["roomCode"])["status"] == "closed"
+    assert client.get("/api/me/history", headers=a).json()["matches"][0]["opponentName"] == "Бот (сильный)"
+
+
+def test_bot_places_cue_ball_then_shoots_after_a_timeout(setup):
+    client, engine, clock = setup
+    a, _ = login(client, "Соло")
+    service = client.app.state.service
+    service.bot_delay = 0
+    match = client.post("/api/solo", headers=a, json={"difficulty": "easy"}).json()["match"]
+    clock[0] += 61
+    client.portal.call(service.tick)  # Human time-out: the bot gets ball in hand.
+    current = wait_for(lambda: (m := client.get(f"/api/matches/{match['id']}", headers=a).json()["match"])["currentPlayer"] == 0 and m["lastShot"] and m)
+    assert current["lastShot"]["playerId"] == "bot:easy"
+    types = [row["type"] for row in client.get(f"/api/matches/{match['id']}/telemetry", headers=a).json()["events"]]
+    assert types.count("cueBallPlacement") == 1 and types.count("shotResult") == 1
+
+
+def test_real_bot_decisions_are_legal_commands():
+    from online.server.bot import decide
+    from online.server.physics import PhysicsEngine
+    state = PhysicsEngine.new_match(5)
+    for level in ("easy", "medium", "hard"):
+        decision = decide(state, level, seed=1)
+        assert decision["placement"] is None
+        PhysicsEngine.validate_shot(state, decision["shot"], shooter=0)
+    fouled = PhysicsEngine.simulate(state, {"V0": 0.2, "phi": 270}, shooter=0)["state"]
+    decision = decide(fouled, "medium", seed=2)
+    placed = PhysicsEngine.place_cue_ball(fouled, *decision["placement"], shooter=1)
+    PhysicsEngine.validate_shot(placed, decision["shot"], shooter=1)

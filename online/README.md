@@ -36,7 +36,7 @@ cd ../..
 Open http://127.0.0.1:8790 in two separate browser profiles/private windows. Create
 a room, join with its six-character code, and confirm readiness in both clients.
 Both ready players start the match automatically. A third browser can join as a
-spectator with the same code. After the break, select the called ball and pocket
+spectator with the same code. For solo play choose a difficulty under "Игра с ботом". After the break, select the called ball and pocket
 before striking, as required by pooltool's eight-ball rules. Ball-in-hand after a
 foul requires legal cue placement; the opening placement is optional behind the
 head string. Settings are stored per guest/user locally and synchronized to the

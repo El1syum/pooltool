@@ -81,6 +81,23 @@ broadcast hub. Targets and the supported device list should be finalized with
 the tech lead after load testing on the production host, as the specification
 requires.
 
+## Solo mode and shot latency (2026-10-14, second revision)
+
+A server bot (easy/medium/hard) is available from the play screen. It uses
+pooltool's potting geometry, tests candidate shots with the real simulation on
+the stronger levels and submits normal commands, so rules, telemetry and replay
+are identical to a human opponent. Local full games against the easy and hard
+bots finished by the rules with no rejected command or timeout; a bot decision
+takes ~0.04–0.1 s (up to ~1.4 s when it must place the cue ball and no pot is
+open).
+
+Perceived shot latency was reduced further: the cue stroke animates immediately
+on click, the shared playback buffer dropped from 350 ms to 120 ms, and pooltool's
+collision-cache invalidation was rewritten without per-key generators (a break
+simulation 0.70 s -> 0.53 s; final ball positions are unchanged). Measured
+locally in the browser, the balls start moving 356 ms after a click on a break;
+an ordinary shot computes in ~50–70 ms.
+
 ## Renderer scope
 
 Physics and rules are the real pooltool engine on the server. The browser view is

@@ -111,6 +111,9 @@ export interface GameScene {
   setAim: (aim: Partial<AimParameters>, notify?: boolean) => void
   getAim: () => AimParameters
   shoot: () => boolean
+  /** Immediate local cue stroke while the server computes the shot. */
+  strike: () => void
+  cancelStrike: () => void
   playShot: (trajectory: ShotTrajectory, startAt: number) => void
   setSettings: (settings: Partial<SceneSettings>) => void
   resetCamera: (topDown?: boolean) => void

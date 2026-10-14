@@ -23,6 +23,7 @@ const name = ref(localStorage.getItem('pooltool.name') || 'Игрок')
 const code = ref('')
 const turnSeconds = ref(60)
 const searchMode = ref<'casual' | 'ranked'>('casual')
+const botDifficulty = ref<'easy' | 'medium' | 'hard'>((localStorage.getItem('pooltool.botDifficulty') as 'easy' | 'medium' | 'hard') || 'medium')
 const settingsOpen = ref(false)
 const gameMenuOpen = ref(false)
 const bindingCapture = ref<BindingAction | null>(null)
@@ -70,6 +71,8 @@ const canShoot = computed(() => turnReady.value && !match.value?.snapshot.needsP
 const canPlace = computed(() => turnReady.value && Boolean(match.value?.snapshot.ballInHand) && (Boolean(match.value?.snapshot.needsPlacement) || placingCue.value))
 const remaining = computed(() => Math.max(0, Math.ceil((timestamp(match.value?.deadline) - now.value - serverClockOffset.value) / 1000)))
 const elapsed = computed(() => Math.max(0, Math.floor(((match.value?.finishedAt ? timestamp(match.value.finishedAt) : now.value + serverClockOffset.value) - timestamp(match.value?.startedAt)) / 1000)))
+const isSolo = computed(() => Boolean(room.value?.settings.solo))
+const botTurn = computed(() => Boolean(match.value && match.value.status === 'active' && match.value.players[match.value.currentPlayer]?.bot))
 const currentPlayerName = computed(() => match.value?.players[match.value.currentPlayer]?.displayName || '—')
 const winnerName = computed(() => match.value?.players.find((p) => p.id === match.value?.winnerId)?.displayName || 'Нет победителя')
 const remainingBalls = computed(() => {
@@ -321,7 +324,9 @@ async function resumePendingCommand() {
 async function shoot(value = aim.value) {
   if (!canShoot.value || canPlace.value) return
   if (match.value?.snapshot.callShotRequired && (!calledBall.value || !calledPocket.value)) { error.value = 'Выберите заказанный шар и лузу перед ударом.'; return }
+  scene?.strike()
   await sendCommand('shot', { ...value, ...(calledBall.value ? { ballCall: calledBall.value } : {}), ...(calledPocket.value ? { pocketCall: calledPocket.value } : {}) })
+  if (!playbackBusy.value) scene?.cancelStrike()
 }
 async function createRoom() {
   await perform(async () => { const result = await post<{ room: Room }>('/api/rooms', { settings: { turnSeconds: turnSeconds.value, ranked: false }, clientVersion: CLIENT_VERSION }); receiveRoom(result.room) })
@@ -341,6 +346,19 @@ async function joinRoom(spectate = false) {
 }
 async function ready() { await perform(async () => { const me = room.value?.players.find((p) => p.id === user.value?.id); receiveRoom((await post<{ room: Room }>(`/api/rooms/${room.value!.code}/ready`, { ready: !me?.ready })).room) }) }
 async function start() { await perform(async () => { const result = await post<{ room: Room; match: Match }>(`/api/rooms/${room.value!.code}/start`); receiveRoom(result.room); receiveMatch(result.match) }) }
+async function playBot() {
+  await perform(async () => {
+    localStorage.setItem('pooltool.botDifficulty', botDifficulty.value)
+    const result = await post<{ room: Room; match: Match }>('/api/solo', { difficulty: botDifficulty.value, turnSeconds: turnSeconds.value })
+    departedRooms.delete(result.room.code)
+    receiveRoom(result.room)
+    receiveMatch(result.match)
+  })
+}
+async function playBotAgain() {
+  await leave()
+  if (!room.value) await playBot()
+}
 async function search(mode: 'casual' | 'ranked') {
   await perform(async () => {
     searchMode.value = mode
@@ -428,6 +446,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
     </main>
     <main v-else-if="view === 'play'" class="panel">
       <h1>Выбор игры</h1><div class="button-row"><button :disabled="busy || !connected" @click="search('casual')">Случайный противник</button><button :disabled="busy || !connected" @click="search('ranked')">Рейтинговая игра</button></div>
+      <section><h2>Игра с ботом</h2><label>Сложность <select v-model="botDifficulty"><option value="easy">Лёгкий</option><option value="medium">Средний</option><option value="hard">Сильный</option></select></label><button :disabled="busy || !connected" @click="playBot">Играть с ботом</button></section>
       <section><h2>Игра с другом</h2><label>Время на ход <select v-model.number="turnSeconds"><option :value="30">30 секунд</option><option :value="60">60 секунд</option><option :value="90">90 секунд</option><option :value="120">120 секунд</option></select></label><button :disabled="busy || !connected" @click="createRoom">Создать комнату</button></section>
       <section><label>Код комнаты <input v-model="code" maxlength="12" autocomplete="off" @keyup.enter="joinRoom(false)" /></label><div class="button-row"><button :disabled="busy || !connected" @click="joinRoom(false)">Присоединиться</button><button :disabled="busy || !connected" @click="joinRoom(true)">Наблюдать матч</button></div></section>
       <button :disabled="busy" @click="view = 'menu'">Назад</button>
@@ -445,7 +464,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
     </main>
     <main v-else-if="view === 'match' && match" class="match-screen">
       <div class="match-bar"><div v-for="(player, index) in match.players" :key="player.id" :class="{ current: index === match.currentPlayer && match.status !== 'finished' }"><strong>{{ player.displayName }}</strong><span>{{ groupLabel(groupAt(index)) }} · Осталось {{ groupBalls(index).filter(ball => !ball.pocketed).length }}</span><span class="ball-indicators"><i v-for="ball in groupBalls(index)" :key="ball.id" :class="{ pocketed: ball.pocketed }">{{ ball.id }}</i></span></div><span>Матч {{ formatTime(elapsed) }}</span><span>Ход {{ remaining }} с</span><button @click="gameMenuOpen = true">Меню</button><button @click="settingsOpen = true">Настройки</button><button v-if="isPlayer && match.status !== 'finished'" :disabled="busy" @click="sendCommand('surrender', {})">Сдаться</button><button v-else @click="leave">Выйти</button></div>
-      <div class="match-status" role="status">{{ match.status === 'finished' ? `Матч завершён. ${winnerName}` : match.status === 'calculating' || busy ? 'Сервер рассчитывает удар' : playbackBusy ? 'Воспроизведение удара' : !isPlayer ? `Наблюдение. Ходит ${currentPlayerName}` : ownTurn ? 'Ваш ход' : `Ходит ${currentPlayerName}` }}<span v-if="canPlace"> · Установите биток кликом по столу</span></div>
+      <div class="match-status" role="status">{{ match.status === 'finished' ? `Матч завершён. ${winnerName}` : match.status === 'calculating' || busy ? 'Сервер рассчитывает удар' : playbackBusy ? 'Воспроизведение удара' : !isPlayer ? `Наблюдение. Ходит ${currentPlayerName}` : ownTurn ? 'Ваш ход' : botTurn ? `${currentPlayerName} думает…` : `Ходит ${currentPlayerName}` }}<span v-if="canPlace"> · Установите биток кликом по столу</span></div>
       <div v-for="player in offlinePlayers" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
       <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол"></div>
       <div v-if="match.status !== 'finished'" class="shot-controls">
@@ -458,7 +477,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
         <button class="shoot" :disabled="!canShoot || canPlace" @click="shoot()">Удар</button><button @click="scene?.resetCamera(true)">Вид сверху</button>
         <button v-if="turnReady && match.snapshot.ballInHand && !match.snapshot.needsPlacement" @click="placingCue = !placingCue">{{ placingCue ? 'Отменить перестановку' : 'Переставить биток' }}</button>
       </div>
-      <div v-else class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
+      <div v-else class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
     </main>
     <div v-if="gameMenuOpen" class="modal-backdrop" @click.self="gameMenuOpen = false">
       <section class="settings-dialog menu" role="dialog" aria-modal="true" aria-labelledby="game-menu-title">

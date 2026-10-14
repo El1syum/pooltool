@@ -191,7 +191,7 @@ def get_next_ball_pocket_event(
             )
             cache[obj_ids] = shot.t + dtau_E
 
-    ball_id, pocket_id = min(cache, key=lambda k: cache[k])
+    ball_id, pocket_id = min(cache, key=cache.__getitem__)
 
     return ball_pocket_collision(
         ball=shot.balls[ball_id],

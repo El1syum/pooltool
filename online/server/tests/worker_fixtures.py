@@ -6,13 +6,13 @@ def no_init():
     return None
 
 
-def hanging_handler(context, state, shot, shooter):
+def hanging_handler(context, op, state, shot, shooter):
     time.sleep(30)
 
 
-def echo_handler(context, state, shot, shooter):
+def echo_handler(context, op, state, shot, shooter):
     if shot.get("hang"):
         time.sleep(30)
     if shot.get("reject"):
         raise ValueError("rejected")
-    return {"state": state, "shooter": shooter, "pid": os.getpid()}
+    return {"op": op, "state": state, "shooter": shooter, "pid": os.getpid()}

@@ -146,6 +146,11 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   let playback: { trajectory: ShotTrajectory; startAt: number; lastT: number; eventIndex: number } | null = null
   let calledPocket: string | null = null
   let destroyed = false
+  // Local cue stroke shown the moment the player shoots, while the server computes
+  // the authoritative shot; it never moves a ball.
+  let stroke: { startedAt: number; from: THREE.Vector3; to: THREE.Vector3; sounded: boolean } | null = null
+  let strokeSoundPlayed = false
+  const STROKE_MS = 110
   let animationId = 0
   let lastTick = performance.now()
   let measuredAt = lastTick
@@ -318,6 +323,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function updateAimGuide(): void {
+    if (stroke && !playback) { cueGroup.visible = true; line.visible = ghost.visible = contactLine.visible = false; return }
     const enabled = isEnabled() || (!playback && !!interaction.showRemoteAim && !interaction.canPlaceCueBall)
     cueGroup.visible = enabled
     line.visible = ghost.visible = enabled && settings.showAimGuide
@@ -587,7 +593,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       if (type.includes('pocket')) audio.impact('pocket', 0.55)
       else if (type.includes('cushion')) audio.impact('cushion', 0.35)
       else if (type.includes('ball_ball') || type.includes('ball-ball')) audio.impact('ball', 0.55)
-      else if (type.includes('stick_ball') || type.includes('stick-ball')) audio.impact('cue', aim.V0 / 8)
+      else if ((type.includes('stick_ball') || type.includes('stick-ball')) && !strokeSoundPlayed) audio.impact('cue', aim.V0 / 8)
     }
     playback.lastT = t
   }
@@ -609,6 +615,11 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
         updateAimGuide()
         callbacks.onPlaybackComplete?.()
       }
+    }
+    if (stroke) {
+      const progress = Math.min(1, (performance.now() - stroke.startedAt) / STROKE_MS)
+      cueGroup.position.lerpVectors(stroke.from, stroke.to, progress * progress)
+      if (progress >= 1 && !stroke.sounded) { stroke.sounded = strokeSoundPlayed = true; audio.impact('cue', aim.V0 / 8) }
     }
     controls.update()
     renderer.render(scene, camera)
@@ -663,8 +674,32 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     setAim,
     getAim: () => ({ ...aim }),
     shoot,
+    strike() {
+      if (!cueGroup.visible) return
+      audio.unlock()
+      const cueId = String(snapshot.cueBallId ?? 'cue')
+      const cueBall = snapshot.balls.find(ball => String(ball.id) === cueId)
+      if (!cueBall) return
+      const radians = aim.phi * Math.PI / 180
+      const backwards = new THREE.Vector3(-Math.cos(radians), Math.tan(aim.theta * Math.PI / 180), Math.sin(radians)).normalize()
+      const from = cueGroup.position.clone()
+      // The tip stops at the cue ball surface: shaft half-length + tip offset from the group origin.
+      const to = from.clone().addScaledVector(backwards, -(0.028 + aim.V0 / 8 * 0.10))
+      stroke = { startedAt: performance.now(), from, to, sounded: false }
+      strokeSoundPlayed = false
+      updateAimGuide()
+    },
+    cancelStrike() {
+      if (!stroke) return
+      stroke = null
+      strokeSoundPlayed = false
+      updateAimGuide()
+    },
     playShot(trajectory, startAt) {
       if (!trajectory.frames.length || !Number.isFinite(startAt)) { callbacks.onError?.('Получены некорректные данные удара.'); return }
+      // A remote shot (opponent/bot) has no local stroke; its cue sound comes from the events.
+      if (!stroke) strokeSoundPlayed = false
+      stroke = null
       playback = { trajectory, startAt, lastT: Math.max(0, (Date.now() - startAt) / 1000), eventIndex: 0 }
       clearKeys()
       updateAimGuide()

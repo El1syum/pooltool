@@ -17,6 +17,9 @@ from .auth import new_token, token_hash
 from .storage import Store, decode, encode
 from .worker import PhysicsWorkers
 
+BOT_PREFIX = "bot:"
+BOT_NAMES = {"easy": "Бот (лёгкий)", "medium": "Бот (средний)", "hard": "Бот (сильный)"}
+
 
 def utc(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp, timezone.utc).isoformat().replace("+00:00", "Z")
@@ -44,6 +47,13 @@ class GameService:
         self.compute_timeout = int(os.getenv("SHOT_COMPUTE_TIMEOUT_SECONDS", "30"))
         self.max_match_seconds = int(os.getenv("MAX_MATCH_SECONDS", "5400"))
         self.room_ttl = int(os.getenv("ROOM_TTL_SECONDS", "3600"))
+        # A short pause before a bot shot reads as "thinking" and lets the
+        # player see the table settle.
+        self.bot_delay = float(os.getenv("BOT_THINK_SECONDS", "0.6"))
+        # Both clients start the shared animation at the same server time; this only
+        # needs to cover broadcast delivery, late receivers skip the first frames.
+        self.playback_buffer = float(os.getenv("PLAYBACK_BUFFER_SECONDS", "0.12"))
+        self.bot_turns: set[tuple[str, int]] = set()
         self.closed = False
 
     async def _noop(self, recipients, message):
@@ -140,6 +150,84 @@ class GameService:
                     event["match"]["lastShot"].pop("result", None)
                 event["result"] = result
             await self.emit(self._recipients(room), event)
+        self._schedule_bot(match)
+
+    # --- Solo play against the server bot -------------------------------------------
+
+    @staticmethod
+    def is_bot(player_id):
+        return isinstance(player_id, str) and player_id.startswith(BOT_PREFIX)
+
+    async def create_solo(self, user_id, difficulty, turn_seconds):
+        async with self.lock:
+            self._ensure_free(user_id)
+            human = self._user(user_id)
+            bot_id = BOT_PREFIX + difficulty
+            with self.store.transaction() as db:
+                db.execute("DELETE FROM matchmaking WHERE user_id=?", (user_id,))
+                db.execute("INSERT OR IGNORE INTO users(id,display_name,created_at) VALUES(?,?,?)",
+                           (bot_id, BOT_NAMES[difficulty], self.now()))
+                bot = self._user(bot_id)
+                players = [{"id": user_id, "displayName": human["displayName"], "elo": human["elo"], "ready": True},
+                           {"id": bot_id, "displayName": bot["displayName"], "elo": bot["elo"], "ready": True, "bot": difficulty}]
+                room = self._new_room(user_id, {"turnSeconds": turn_seconds, "ranked": False, "solo": True, "difficulty": difficulty},
+                                      players=players)
+                self._save_room(db, room)
+                match = self._start(db, room)
+        await self.announce_room(room)
+        await self.announce_match(match)
+        return {"room": room, "match": self.public_match(match)}
+
+    def _schedule_bot(self, match):
+        if self.closed or match.get("status") != "active":
+            return
+        player = match["players"][match["currentPlayer"]]
+        key = (match["id"], match["revision"])
+        if not self.is_bot(player["id"]) or key in self.bot_turns:
+            return
+        self.bot_turns.add(key)
+        self._spawn(self._bot_turn(match["id"], match["revision"], player["id"], player.get("bot", "medium")))
+
+    async def _bot_turn(self, match_id, revision, bot_id, difficulty):
+        import logging
+        log = logging.getLogger(__name__)
+        try:
+            started = self.now()
+            while True:
+                match, physics, _ = self._match(match_id)
+                if match["revision"] != revision or match["status"] != "active":
+                    return
+                # Pause after the balls stop, so the player sees the table before the bot plays.
+                remaining = max(epoch(match.get("playbackUntil")), started) + self.bot_delay - self.now()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(remaining, 0.1))
+            if self.pool:
+                decision = await self.pool.decide(physics, difficulty, self.compute_timeout, seed=revision)
+            else:
+                decide = getattr(self.engine, "bot_decide", None)
+                if decide is None:
+                    from .bot import decide
+                decision = await asyncio.to_thread(decide, physics, difficulty, revision)
+            session = {"id": "bot", "clientVersion": "bot"}
+            if decision.get("placement"):
+                x, y = decision["placement"]
+                # The placement broadcast must not start a second bot turn for this move.
+                self.bot_turns.add((match_id, revision + 1))
+                placed = await self.command(match_id, bot_id, {"commandId": f"bot-{uuid.uuid4().hex}", "expectedRevision": revision,
+                                                               "type": "placeCueBall", "payload": {"x": x, "y": y}}, session)
+                revision = placed["match"]["revision"]
+            await self.command(match_id, bot_id, {"commandId": f"bot-{uuid.uuid4().hex}", "expectedRevision": revision,
+                                                  "type": "shot", "payload": decision["shot"]}, session)
+        except asyncio.CancelledError:
+            raise
+        except HTTPException as error:
+            # A rejected bot shot restores the turn; the next broadcast retries with a new seed.
+            log.warning("Bot move rejected match_id=%s detail=%s", match_id, error.detail)
+        except Exception:
+            log.exception("Bot move failed match_id=%s; the turn clock still applies", match_id)
+        finally:
+            self.bot_turns = {key for key in self.bot_turns if key[0] != match_id or key[1] > revision}
 
     def session(self, raw_token):
         if not isinstance(raw_token, str) or not raw_token or len(raw_token) > 256:
@@ -360,7 +448,7 @@ class GameService:
                             self._finish(db, match, physics, 1 - index, "left")
                     room = self._room(code)
                     room["players"] = [p for p in room["players"] if p["id"] != user_id]
-                    if room["players"]:
+                    if room["players"] and not all(self.is_bot(p["id"]) for p in room["players"]):
                         room["hostId"] = room["players"][0]["id"]
                     else:
                         room["status"] = "closed"
@@ -492,7 +580,7 @@ class GameService:
                     match["turn"] += 1
                     # The next legal shot begins after the server-defined animation.
                     playback_seconds = max(0, min(float(result["duration"]), 120))
-                    playback_start = self.now() + 0.35
+                    playback_start = self.now() + self.playback_buffer
                     match["playbackUntil"] = utc(playback_start + playback_seconds)
                     match["deadline"] = utc(playback_start + playback_seconds + room["settings"]["turnSeconds"])
                     public_result = {key: value for key, value in result.items() if key not in {"state", "trajectories"}}
@@ -626,6 +714,7 @@ class GameService:
 
     async def recover(self):
         jobs = []
+        recovered = []
         async with self.lock:
             with self.store.transaction() as db:
                 for row in self._active_rows():
@@ -636,7 +725,7 @@ class GameService:
                     if pending:
                         pending["startedAt"] = self.now()
                     # All clients have a full grace window after a server restart.
-                    match["disconnected"] = {p["id"]: self.now() for p in match["players"]}
+                    match["disconnected"] = {p["id"]: self.now() for p in match["players"] if not self.is_bot(p["id"])}
                     if match["status"] == "active":
                         room = self._room_id(match["roomId"])
                         match["deadline"] = utc(self.now() + max(self.grace, room["settings"]["turnSeconds"]))
@@ -648,8 +737,11 @@ class GameService:
                         match["status"] = "active"
                         match["deadline"] = utc(self.now() + 60)
                         self._save_match(db, match, physics)
+                    recovered.append(match)
         for args in jobs:
             self._spawn(self._calculate(*args))
+        for match in recovered:
+            self._schedule_bot(match)
 
     async def tick(self):
         changed = []

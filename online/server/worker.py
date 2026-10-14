@@ -26,8 +26,12 @@ def init_physics():
     return engine
 
 
-def simulate(engine, state, shot, shooter):
-    return engine.simulate(state, shot, shooter=shooter)
+def handle(engine, op, state, payload, shooter):
+    if op == "bot":
+        from .bot import decide
+
+        return decide(state, payload.get("difficulty", "medium"), seed=payload.get("seed"))
+    return engine.simulate(state, payload, shooter=shooter)
 
 
 def _serve(pipe, initializer, handler):
@@ -44,9 +48,9 @@ def _serve(pipe, initializer, handler):
             return
         if job is None:
             return
-        state, shot, shooter = job
+        op, state, payload, shooter = job
         try:
-            pipe.send(("ok", handler(context, state, shot, shooter)))
+            pipe.send(("ok", handler(context, op, state, payload, shooter)))
         except ValueError as error:
             pipe.send(("rejected", str(error)))
         except BaseException:
@@ -73,7 +77,7 @@ class _Worker:
 
 
 class PhysicsWorkers:
-    def __init__(self, size=None, *, handler=simulate, initializer=init_physics, max_jobs=500):
+    def __init__(self, size=None, *, handler=handle, initializer=init_physics, max_jobs=500):
         self.size = size or int(os.getenv("PHYSICS_WORKERS", "2"))
         self.context = multiprocessing.get_context("spawn")
         self.handler = handler
@@ -144,13 +148,20 @@ class PhysicsWorkers:
         worker.kill()
 
     async def calculate(self, state, shot, shooter, timeout):
+        return await self._run("simulate", state, shot, shooter, timeout)
+
+    async def decide(self, state, difficulty, timeout, seed=None):
+        """Bot move for the side to play: {"placement": [x, y] | None, "shot": {...}}."""
+        return await self._run("bot", state, {"difficulty": difficulty, "seed": seed}, None, timeout)
+
+    async def _run(self, op, state, payload, shooter, timeout):
         self.start()
         deadline = time.monotonic() + timeout
         # Waiting for a free warm worker is bounded as well as the actual simulation.
         worker = await asyncio.wait_for(self.idle.get(), timeout=timeout)
         healthy = False
         try:
-            worker.conn.send((state, shot, shooter))
+            worker.conn.send((op, state, payload, shooter))
             while not worker.conn.poll():
                 if not worker.process.is_alive():
                     raise RuntimeError("Physics worker stopped without a result")

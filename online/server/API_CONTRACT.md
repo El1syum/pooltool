@@ -93,13 +93,26 @@ for reconnect; after `playbackUntil` the trajectory/initialState/finalState are
 omitted from later broadcasts and reads (the snapshot is then authoritative).
 `trajectory = {duration,dt,encoding:"delta",frames:[{t,balls}],events}`: the first
 frame lists every ball, later frames only changed balls, each as
-`[id,x,y,z,state,qx,qy,qz,qw]` (positions 0.01 mm, quaternion 1e-4). Both clients play from the same timestamp (350ms broadcast buffer).
+`[id,x,y,z,state,qx,qy,qz,qw]` (positions 0.01 mm, quaternion 1e-4). Both clients play from the same timestamp (`PLAYBACK_BUFFER_SECONDS`, default 120 ms;
+a late receiver skips the frames it missed).
 The next shot cannot begin before `playbackUntil`; its timer begins after playback.
 History items (`GET /api/me/history`) also carry `opponentName` and the caller's
 `eloDelta` (null for casual matches). Error `detail` texts are Russian.
 Every authoritative change increments revision. Timeout gives the opponent
 ball-in-hand through the real ruleset. Forfeit/disconnect applies one result and
 one Elo update atomically. K=32, initial Elo 1000. Casual games do not alter Elo.
+
+## Solo play against the bot
+
+POST `/api/solo` with `{difficulty:"easy"|"medium"|"hard", turnSeconds?}` creates a
+started casual match against the server bot (player ID `bot:<difficulty>`, room
+`settings.solo:true`). The bot has no special access: on its turn the server
+computes a decision in a physics worker (pooltool's pot geometry; medium/hard
+also test candidates with the real simulation, then add aiming noise) and submits
+ordinary `placeCueBall`/`shot` commands, which are validated, simulated, recorded
+in telemetry and broadcast like a player's. It plays `BOT_THINK_SECONDS` (0.6)
+after the previous playback ends. Solo matches never change Elo; when the human
+leaves, the bot wins and the room closes.
 
 ## WebSocket
 

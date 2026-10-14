@@ -48,7 +48,7 @@ def get_next_ball_table_event(shot: System, collision_cache: CollisionCache) -> 
         )
         cache[obj_ids] = shot.t + dtau_E
 
-    obj_ids = min(cache, key=lambda k: cache[k])
+    obj_ids = min(cache, key=cache.__getitem__)
 
     return ball_table_collision(
         ball=shot.balls[obj_ids[0]],

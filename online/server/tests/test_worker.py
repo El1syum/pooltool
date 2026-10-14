@@ -37,6 +37,8 @@ def test_warm_worker_is_reused_and_a_stalled_one_is_killed_and_replaced():
             assert first["pid"] not in {process.pid for process in workers.children}
             replaced = await workers.calculate({}, {}, 0, timeout=60)
             assert replaced["pid"] != first["pid"]
+            assert first["op"] == "simulate"
+            assert (await workers.decide({}, "hard", timeout=5))["op"] == "bot"
         finally:
             workers.close()
         assert not workers.children

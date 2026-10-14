@@ -71,6 +71,11 @@ class Ready(StrictModel):
     ready: bool = True
 
 
+class SoloRequest(StrictModel):
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    turnSeconds: int = Field(default=60, ge=15, le=180)
+
+
 class QueueRequest(StrictModel):
     mode: Literal["casual", "ranked"]
 
@@ -339,6 +344,10 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
     @application.post("/api/rooms/{code}/leave")
     async def leave(code: str, identity=Depends(session), current=Depends(service)):
         return await current.leave_room(code, identity["userId"])
+
+    @application.post("/api/solo")
+    async def solo(body: SoloRequest, identity=Depends(session), current=Depends(service)):
+        return await current.create_solo(identity["userId"], body.difficulty, body.turnSeconds)
 
     @application.post("/api/matchmaking")
     async def queue(body: QueueRequest, identity=Depends(session), current=Depends(service)):
