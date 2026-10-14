@@ -35,6 +35,18 @@ for (const engineName of engines) {
   const performanceSamples = []
   const textures = new Set()
   const tag = `${engineName}-${Date.now()}`
+  const socketFrames = new Map()
+  /** Resolve with the first frame after `from` that matches; the caller snapshots `from` before acting. */
+  async function nextFrame(page, from, predicate, timeout = 65_000) {
+    const deadline = Date.now() + timeout
+    const frames = socketFrames.get(page)
+    while (Date.now() < deadline) {
+      const found = frames.slice(from).find(predicate)
+      if (found) return found
+      await new Promise(resolve => setTimeout(resolve, 25))
+    }
+    throw new Error('Expected WebSocket frame did not arrive')
+  }
   try {
     async function client(label, viewport = { width: 1280, height: 800 }) {
       const context = await browser.newContext({ viewport, hasTouch: viewport.width < 600 })
@@ -59,6 +71,10 @@ for (const engineName of engines) {
         }
       })
       const page = await context.newPage()
+      // Commands travel over the WebSocket; keep each page's received frames.
+      const frames = []
+      socketFrames.set(page, frames)
+      page.on('websocket', socket => socket.on('framereceived', frame => { try { frames.push(JSON.parse(frame.payload)) } catch { /* binary/ping */ } }))
       page.on('pageerror', error => errors.push(`${label}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`))
       page.on('requestfailed', request => failures.push({ client: label, path: new URL(request.url()).pathname, reason: request.failure()?.errorText }))
       page.on('request', request => {
@@ -103,9 +119,10 @@ for (const engineName of engines) {
       await currentPage.getByRole('button', { name: 'Вид сверху', exact: true }).click()
       const placementBounds = await currentPage.locator('.game-stage canvas').boundingBox()
       assert.ok(placementBounds)
-      const placementResponse = currentPage.waitForResponse(response => response.url().includes(`/api/matches/${currentMatch.id}/commands`) && response.request().method() === 'POST')
+      const placementFrom = socketFrames.get(currentPage).length
       await currentPage.locator('.game-stage canvas').click({ position: { x: placementBounds.width * 0.5, y: placementBounds.height * 0.75 } })
-      const placed = await placementResponse.then(response => response.json())
+      const placed = await nextFrame(currentPage, placementFrom, frame => frame.type === 'commandResult')
+      assert.ok(placed.ok, `Placement rejected: ${JSON.stringify(placed)}`)
       assert.ok(placed.match, `Raycast cue placement failed: ${JSON.stringify(placed)}`)
       currentMatch = placed.match
       initialRevision = currentMatch.revision
@@ -163,10 +180,12 @@ for (const engineName of engines) {
     await currentPage.getByRole('button', { name: 'Вид сверху', exact: true }).click()
     await currentPage.screenshot({ path: path.join(artifactDir, `${engineName}-desktop-initial.png`), fullPage: true })
     await spectator.screenshot({ path: path.join(artifactDir, `${engineName}-mobile-spectator.png`), fullPage: true })
-    const commandResponse = currentPage.waitForResponse(response => response.url().includes(`/api/matches/${currentMatch.id}/commands`) && response.request().method() === 'POST', { timeout: 65_000 })
+    const shotFrom = socketFrames.get(currentPage).length
     await currentPage.getByRole('button', { name: 'Удар', exact: true }).click()
     await currentPage.locator('.match-status').filter({ hasText: /рассчитывает|Воспроизведение/ }).waitFor({ timeout: 10_000 })
-    const result = await commandResponse.then(response => response.json())
+    // The trajectory arrives in the match broadcast; the command acknowledgement follows it.
+    const result = await nextFrame(currentPage, shotFrom, frame => frame.type === 'match' && frame.result)
+    assert.ok((await nextFrame(currentPage, shotFrom, frame => frame.type === 'commandResult')).ok, 'Shot command was not acknowledged')
     assert.ok(result.result?.trajectory?.frames?.length > 1, 'An actual physical trajectory is required')
     assert.ok(result.result.duration > 0, 'Shot duration is required')
     assert.equal(result.result.initialState.balls.length, 16)

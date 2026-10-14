@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .auth import verify_vk_launch_params
 from .service import GameService
@@ -107,6 +107,22 @@ class Shot(StrictModel):
 class Placement(StrictModel):
     x: float
     y: float
+
+
+def prepare_command(body: Command) -> dict:
+    try:
+        if body.type == "shot":
+            shot = Shot.model_validate(body.payload)
+            if shot.a * shot.a + shot.b * shot.b > 0.81 + 1e-12:
+                raise ValueError("Точка удара вне битка")
+            body.payload = shot.model_dump(exclude_none=True)
+        elif body.type == "placeCueBall":
+            body.payload = Placement.model_validate(body.payload).model_dump()
+        elif body.payload:
+            raise ValueError("Команда сдачи не принимает параметров")
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from None
+    return body.model_dump()
 
 
 class ClientEvent(StrictModel):
@@ -367,19 +383,7 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
 
     @application.post("/api/matches/{match_id}/commands")
     async def command(match_id: str, body: Command, identity=Depends(session), current=Depends(service)):
-        try:
-            if body.type == "shot":
-                shot = Shot.model_validate(body.payload)
-                if shot.a * shot.a + shot.b * shot.b > 0.81 + 1e-12:
-                    raise ValueError("Точка удара вне битка")
-                body.payload = shot.model_dump(exclude_none=True)
-            elif body.type == "placeCueBall":
-                body.payload = Placement.model_validate(body.payload).model_dump()
-            elif body.payload:
-                raise ValueError("Команда сдачи не принимает параметров")
-        except ValueError as error:
-            raise HTTPException(422, str(error)) from None
-        return await current.command(match_id, identity["userId"], body.model_dump(), identity)
+        return await current.command(match_id, identity["userId"], prepare_command(body), identity)
 
     @application.get("/api/matches/{match_id}/telemetry")
     async def match_telemetry(match_id: str, limit: int = 1000, identity=Depends(session), current=Depends(service)):
@@ -393,12 +397,34 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
         # Duplicate IDs are acknowledged too, so retries leave the client queue.
         return {**result, "acceptedIds": [event.id for event in body.events]}
 
+    async def socket_command(socket, current, identity, data):
+        """A match command sent over the open socket: one round trip instead of a new
+        HTTP request. Same validation, idempotency and authority as the HTTP route."""
+        command_id = None
+        try:
+            raw_command = data.get("command")
+            command_id = raw_command.get("commandId") if isinstance(raw_command, dict) else None
+            try:
+                body = Command.model_validate(raw_command)
+            except ValidationError:
+                raise HTTPException(422, "Некорректная команда") from None
+            match_id = str(data.get("matchId", ""))[:64]
+            result = await current.command(match_id, identity["userId"], prepare_command(body), identity)
+            # The shot result and its trajectory already arrived on this socket in
+            # the preceding match broadcast; do not send them twice.
+            reply = {key: value for key, value in result.items() if key != "result"}
+            await hub.send(socket, {"type": "commandResult", "commandId": command_id, "ok": True, **reply})
+        except HTTPException as error:
+            await hub.send(socket, {"type": "commandResult", "commandId": command_id, "ok": False,
+                                    "status": error.status_code, "detail": error.detail})
+
     @application.websocket("/ws")
     async def websocket(socket: WebSocket):
         await socket.accept()
         current = socket.app.state.service
         user_id = None
         identity = None
+        commands: set[asyncio.Task] = set()
         if current is None:
             await socket.close(code=1013, reason="Physics engine unavailable")
             return
@@ -428,6 +454,11 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
                 limiter.check(f"wsmsg:{user_id}", count=120)
                 if data.get("type") == "ping":
                     await hub.send(socket, {"type": "pong", "serverTime": current.now() * 1000, "clientTime": data.get("clientTime")})
+                elif data.get("type") == "command":
+                    # A shot awaits its calculation; keep reading pings meanwhile.
+                    task = asyncio.create_task(socket_command(socket, current, identity, data))
+                    commands.add(task)
+                    task.add_done_callback(commands.discard)
                 elif data.get("type") == "sync":
                     room = current._membership(user_id)
                     await hub.send(socket, {"type": "restored", "room": room,
@@ -435,7 +466,7 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
                                            "match": current.public_match(current._match(room["matchId"])[0]) if room and room["matchId"] else None,
                                            "queue": current.queue_status(user_id)})
                 else:
-                    await hub.send(socket, {"type": "error", "detail": "Команды отправляются через HTTP API"})
+                    await hub.send(socket, {"type": "error", "detail": "Неизвестный тип сообщения"})
         except HTTPException as error:
             await socket.close(code=1008, reason=str(error.detail)[:120])
         except (WebSocketDisconnect, asyncio.TimeoutError, json.JSONDecodeError, TypeError, AttributeError):

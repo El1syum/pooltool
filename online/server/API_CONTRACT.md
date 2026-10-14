@@ -121,7 +121,16 @@ Tokens never go in URLs. Server sends `authenticated` with user/serverTime;
 `restored` with room/match/queue; then broadcasts `room`, `match` (optionally
 result), `matchmaking`, or `error`. Client sends `{type:"ping",clientTime}` every
 20 seconds; server returns `{type:"pong",serverTime,clientTime}`. Send `{type:"sync"}`
-to receive restored state. Up to 5 sockets/player. Dead sockets expire after 45s.
+to receive restored state. Up to 5 sockets/player.
+
+Match commands can also be sent on the open socket, which saves a request round
+trip: `{type:"command",matchId,command:{commandId,expectedRevision,type,payload}}`.
+Validation, authority and idempotency are those of the HTTP route. The reply is
+`{type:"commandResult",commandId,ok:true,match,duplicate}` or
+`{type:"commandResult",commandId,ok:false,status,detail}`. A shot's `result` is not
+repeated in the reply: the preceding `match` broadcast on the same socket carries
+it. Clients fall back to the HTTP route with the same `commandId` if the socket
+drops. Dead sockets expire after 45s.
 
 Disconnect grace defaults to 30 seconds. Reconnect restores durable state and
 clears grace timer. Server restart grants all clients a fresh grace period and

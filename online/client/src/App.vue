@@ -50,6 +50,10 @@ let telemetryFlush = false
 let authSentAt = 0
 let clockCalibrated = false
 let lifecycleGeneration = 0
+type CommandResponse = { match: Match; result?: ShotResult }
+class SocketUnavailable extends Error {}
+// Commands sent over the open socket, keyed by commandId (resolved by commandResult).
+const socketCommands = new Map<string, { resolve: (value: CommandResponse) => void; reject: (error: Error) => void; timer: number }>()
 const departedRooms = new Set<string>()
 const departedMatches = new Set<string>()
 const clock = window.setInterval(() => { now.value = Date.now() }, 200)
@@ -202,6 +206,14 @@ function connect() {
       else if (message.type === 'matchmaking') {
         if (message.room) receiveRoom(message.room)
         if (message.matchId) void loadMatch(message.matchId)
+      } else if (message.type === 'commandResult') {
+        const pending = socketCommands.get(String(message.commandId))
+        if (pending) {
+          socketCommands.delete(String(message.commandId))
+          clearTimeout(pending.timer)
+          if (message.ok) pending.resolve(message as CommandResponse)
+          else pending.reject(new ApiError(typeof message.detail === 'string' ? message.detail : message.detail?.message || `Ошибка сервера (${message.status})`, message.status))
+        }
       } else if (message.type === 'error') error.value = message.detail || message.message || 'Ошибка соединения'
     } catch { error.value = 'Сервер прислал некорректное сообщение' }
   }
@@ -210,6 +222,7 @@ function connect() {
     connected.value = false
     connection.value = 'Связь потеряна. Партия сохраняется на сервере.'
     clearInterval(heartbeat)
+    for (const [id, pending] of socketCommands) { clearTimeout(pending.timer); pending.reject(new SocketUnavailable()); socketCommands.delete(id) }
     telemetry('clientReconnect', { connected: false })
     if (!disposed) reconnectTimer = window.setTimeout(connect, Math.min(1000 * 2 ** reconnectAttempt++, 10_000))
   }
@@ -293,6 +306,25 @@ watch(stage, () => { if (stage.value) ensureScene(); else { scene?.destroy(); sc
 watch([canShoot, canPlace, isPlayer], updateInteraction)
 watch(settings, () => { scene?.setSettings(settings.value); if (user.value) { localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value)); settingsDirty.value = true } }, { deep: true })
 function updateAim() { scene?.setAim(aim.value) }
+/** One round trip on the open socket; null when the socket is not usable. */
+function commandViaSocket(matchId: string, command: Record<string, unknown>): Promise<CommandResponse> | null {
+  const current = socket
+  if (!current || current.readyState !== WebSocket.OPEN || !connected.value) return null
+  const id = String(command.commandId)
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => { socketCommands.delete(id); reject(new SocketUnavailable()) }, 65_000)
+    socketCommands.set(id, { resolve, reject, timer })
+    current.send(JSON.stringify({ type: 'command', matchId, command }))
+  })
+}
+async function submitCommand(matchId: string, command: Record<string, unknown>): Promise<CommandResponse> {
+  const viaSocket = commandViaSocket(matchId, command)
+  if (viaSocket) {
+    try { return await viaSocket } catch (e) { if (!(e instanceof SocketUnavailable)) throw e }
+  }
+  // Same commandId: the server deduplicates, so this fallback can never apply a command twice.
+  return post<CommandResponse>(`/api/matches/${matchId}/commands`, command)
+}
 async function sendCommand(type: string, payload: Record<string, unknown>) {
   if (!match.value || !isPlayer.value || busy.value) return
   const command = { commandId: uuid(), expectedRevision: match.value.revision, type, payload }
@@ -300,7 +332,7 @@ async function sendCommand(type: string, payload: Record<string, unknown>) {
   localStorage.setItem('pooltool.pendingCommand', JSON.stringify(pending))
   await perform(async () => {
     try {
-      const response = await post<{ match: Match; result?: ShotResult }>(`/api/matches/${match.value!.id}/commands`, command)
+      const response = await submitCommand(pending.matchId, command)
       localStorage.removeItem('pooltool.pendingCommand')
       if (type === 'placeCueBall') placingCue.value = false
       receiveMatch(response.match, response.result)

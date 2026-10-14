@@ -556,3 +556,30 @@ def test_real_bot_decisions_are_legal_commands():
     decision = decide(fouled, "medium", seed=2)
     placed = PhysicsEngine.place_cue_ball(fouled, *decision["placement"], shooter=1)
     PhysicsEngine.validate_shot(placed, decision["shot"], shooter=1)
+
+
+def test_commands_over_websocket_share_validation_and_idempotency(setup):
+    client, engine, _ = setup
+    a, data_a = login(client, "А")
+    b, data_b = login(client, "Б")
+    _, match = start_room(client, a, b)
+    with client.websocket_connect("/ws") as socket_b, client.websocket_connect("/ws") as socket_a:
+        for socket, data in ((socket_a, data_a), (socket_b, data_b)):
+            socket.send_json({"type": "auth", "token": data["token"]})
+            receive_type(socket, "restored")
+        socket_b.send_json({"type": "command", "matchId": match["id"], "command": shot(command_id="ws-wrong-turn")})
+        rejected = receive_type(socket_b, "commandResult")
+        assert rejected == {"type": "commandResult", "commandId": "ws-wrong-turn", "ok": False, "status": 403, "detail": "Сейчас не ваш ход"}
+        socket_a.send_json({"type": "command", "matchId": match["id"], "command": {**shot(command_id="ws-bad"), "payload": {"V0": 99, "phi": 1}}})
+        assert receive_type(socket_a, "commandResult")["status"] == 422
+        socket_a.send_json({"type": "command", "matchId": match["id"], "command": shot(command_id="ws-shot-01")})
+        broadcast = receive_type(socket_a, "match")
+        while "result" not in broadcast:  # Skip the "calculating" broadcast.
+            broadcast = receive_type(socket_a, "match")
+        accepted = receive_type(socket_a, "commandResult")
+        assert accepted["ok"] and accepted["commandId"] == "ws-shot-01" and "result" not in accepted
+        assert accepted["match"]["revision"] == broadcast["match"]["revision"] == 2
+    # Retrying the same command over HTTP (the client's fallback) is a no-op.
+    repeated = client.post(f"/api/matches/{match['id']}/commands", headers=a, json=shot(command_id="ws-shot-01"))
+    assert repeated.json()["duplicate"] is True
+    assert engine.calls == 1

@@ -98,6 +98,11 @@ simulation 0.70 s -> 0.53 s; final ball positions are unchanged). Measured
 locally in the browser, the balls start moving 356 ms after a click on a break;
 an ordinary shot computes in ~50–70 ms.
 
+Commands now go over the already-open WebSocket (HTTP remains the fallback with
+the same command ID). From the reviewer's network a new HTTP request to `el1s`
+took 0.4–1 s while a socket round trip took 0.08–0.18 s; the server itself
+answers in ~2 ms, so most remote latency was the extra request.
+
 ## Renderer scope
 
 Physics and rules are the real pooltool engine on the server. The browser view is
