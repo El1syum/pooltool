@@ -1,0 +1,51 @@
+:root { font-family: system-ui, sans-serif; color: #edf3f4; background: #10191c; font-synthesis: none; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, select { font: inherit; }
+button { padding: .65rem 1rem; border: 1px solid #70868a; border-radius: .3rem; color: inherit; background: #263b40; cursor: pointer; }
+button:hover:not(:disabled) { background: #3b555b; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #b8e3dc; outline-offset: 3px; }
+input:not([type=range]):not([type=checkbox]), select { padding: .6rem; background: #142328; border: 1px solid #73868c; border-radius: .2rem; max-width: 100%; color: inherit; }
+input[type=range] { width: 100%; accent-color: #92c4b7; }
+label { display: flex; gap: .7rem; align-items: center; margin: .8rem 0; flex-wrap: wrap; }
+h1 { font-size: 1.7rem; margin-top: 0; }
+h2 { font-size: 1.2rem; }
+p { line-height: 1.5; color: #ccd8da; }
+.app-header { min-height: 58px; display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; padding: .7rem 1rem; background: #18282d; }
+.brand { margin-right: auto; background: transparent; border: none; font-weight: 700; padding-left: 0; }
+.connection { color: #a4d8a9; font-size: .85rem; }
+.connection.offline { color: #ffcc8d; }
+.panel { max-width: 900px; margin: 2rem auto; padding: 1.5rem; background: #1a2a30; border: 1px solid #41585e; border-radius: .4rem; }
+.panel section { padding: 1rem 0; border-bottom: 1px solid #41585e; margin-bottom: 1rem; }
+.menu { max-width: 550px; display: flex; flex-direction: column; gap: .8rem; }
+.menu p { margin-top: 0; }
+.button-row { display: flex; gap: .7rem; flex-wrap: wrap; }
+.error-banner { background: #583b36; padding: .7rem 1rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.error-banner button { border: none; background: transparent; padding: .2rem .5rem; }
+.player-list, .history-list { list-style: none; padding: 0; }
+.player-list li, .history-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; padding: .8rem; border-bottom: 1px solid #43555b; }
+.match-screen { display: flex; flex-direction: column; }
+.match-bar { display: flex; gap: .7rem; padding: .6rem; align-items: center; flex-wrap: wrap; background: #23363d; }
+.match-bar > div { display: flex; gap: .5rem; flex-direction: column; padding: .4rem .7rem; border: 1px solid transparent; }
+.match-bar .current { border-color: #a8dccb; }
+.match-bar span { font-size: .85rem; }
+.ball-indicators { display: flex; gap: .2rem; flex-wrap: wrap; }
+.ball-indicators i { font-size: .75rem; font-style: normal; width: 1.3rem; height: 1.3rem; display: grid; place-items: center; border: 1px solid #809ca3; border-radius: 50%; }
+.ball-indicators i.pocketed { opacity: .3; text-decoration: line-through; }
+.match-status { padding: .6rem 1rem; background: #16272e; }
+.game-stage { width: 100%; height: clamp(320px, 60vh, 800px); overflow: hidden; background: #0c1417; touch-action: none; }
+.game-stage canvas { display: block; }
+.shot-controls { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .8rem; align-items: flex-end; }
+.shot-controls label { margin: 0; font-size: .85rem; display: block; min-width: 115px; flex: 1; }
+.shot-controls input, .shot-controls select { display: block; width: 100%; }
+.shoot { background: #326653; }
+.result-panel { text-align: center; padding: 1rem; }
+.result-panel button { margin: .3rem; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 10; background: #000a; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.settings-dialog { background: #1c2d34; padding: 1.5rem; max-width: 760px; width: 100%; max-height: 90vh; overflow: auto; border: 1px solid #869da3; border-radius: .4rem; }
+.binding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .2rem 1.5rem; }
+.binding-grid label { justify-content: space-between; }
+.warning { color: #ffc6a3; }
+footer { padding: 1rem; text-align: center; color: #94a6ac; font-size: .8rem; }
+@media(max-width: 640px) { .panel { margin: 1rem .6rem; padding: 1rem; } .app-header { gap: .5rem; } .brand { width: 100%; } .binding-grid { grid-template-columns: 1fr; } .game-stage { height: 48vh; min-height: 280px; } .shot-controls label { min-width: 125px; } .match-bar > div { flex: 1; } }

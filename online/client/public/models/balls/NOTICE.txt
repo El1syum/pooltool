@@ -1,0 +1,7 @@
+These ball textures are unmodified assets from pooltool:
+https://github.com/El1syum/pooltool/tree/main/pooltool/models/balls/pooltool_pocket
+
+Original project: https://github.com/ekiefl/pooltool
+License: Apache License, Version 2.0 (see LICENSE.txt in this directory).
+
+The browser table and cue geometry are generated separately by the online client.
