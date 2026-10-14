@@ -158,3 +158,13 @@ install-log.txt
 errors.txt
 
 **/.claude/settings.local.json
+
+# Browser multiplayer runtime
+online/client/node_modules/
+online/client/dist/
+online/client/tests/artifacts/
+online/data/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+.playwright/

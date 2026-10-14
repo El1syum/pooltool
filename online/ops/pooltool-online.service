@@ -1,0 +1,26 @@
+[Unit]
+Description=Pooltool Online authoritative billiards
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ops
+Group=ops
+WorkingDirectory=/opt/pooltool-online/current
+EnvironmentFile=/opt/pooltool-online/shared/server.env
+Environment=POOLTOOL_DB=/opt/pooltool-online/shared/data/pooltool.sqlite3
+Environment=NUMBA_CACHE_DIR=/opt/pooltool-online/shared/cache/numba
+Environment=HOME=/opt/pooltool-online/shared/home
+ExecStart=/opt/pooltool-online/current/.venv/bin/python -m uvicorn online.server.app:app --host 0.0.0.0 --port 8790 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=35
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

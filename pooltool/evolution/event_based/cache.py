@@ -152,15 +152,29 @@ class CollisionCache:
         invalid_ball_ids = self._get_invalid_ball_ids(event)
 
         for event_type, event_times in self.times.items():
-            keys_to_delete = []
+            if not event_times:
+                continue
 
-            for key in event_times:
-                # Identify which indices in the key should be checked based on the event type
-                ball_indices = event_type_to_ball_indices.get(event_type, [])
-
-                # Check if any of the relevant ball IDs in the key match the invalid IDs
-                if any(key[idx] in invalid_ball_ids for idx in ball_indices):
-                    keys_to_delete.append(key)
+            # Which positions in a key hold ball IDs depends on the event type. This runs
+            # after every event over every cached pair, so the common one- and two-index
+            # cases avoid a per-key generator.
+            ball_indices = tuple(sorted(event_type_to_ball_indices.get(event_type, ())))
+            if len(ball_indices) == 1:
+                (idx,) = ball_indices
+                keys_to_delete = [key for key in event_times if key[idx] in invalid_ball_ids]
+            elif len(ball_indices) == 2:
+                first, second = ball_indices
+                keys_to_delete = [
+                    key
+                    for key in event_times
+                    if key[first] in invalid_ball_ids or key[second] in invalid_ball_ids
+                ]
+            else:
+                keys_to_delete = [
+                    key
+                    for key in event_times
+                    if any(key[idx] in invalid_ball_ids for idx in ball_indices)
+                ]
 
             for key in keys_to_delete:
                 del event_times[key]
