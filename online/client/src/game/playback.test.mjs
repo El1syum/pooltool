@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isLegalCuePlacement, normalizeAim, sampleTrajectory } from './playback.ts'
+import { isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } from './playback.ts'
+
+test('pocket labels use the same clockwise mapping regardless of server array order', () => {
+  const serverOrder = ['lb', 'lc', 'lt', 'rb', 'rc', 'rt']
+  assert.deepEqual(serverOrder.map(numberForPocket), [1, 2, 3, 6, 5, 4])
+  assert.equal(numberForPocket('4', 0), 4)
+})
 
 const trajectory = {
   duration: 2,

@@ -31,7 +31,7 @@ The reproducible commands and browser harness are documented in
 
 - Python: 42 tests and 6 subtests pass, including real physics and the upstream
   degenerate ball-collision regression; one test-library deprecation warning.
-- Client trajectory/input helpers: 6 tests pass.
+- Client trajectory/input helpers and pocket mapping: 7 tests pass.
 - Vue/TypeScript production build passes; npm reports no production dependency
   vulnerabilities at verification time.
 - Browser scenarios use separate Chromium/WebKit contexts for two players and

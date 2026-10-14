@@ -1,5 +1,10 @@
 import type { BallState, GameSnapshot, ShotTrajectory, Vec3Tuple } from './types'
 
+export function numberForPocket(id: string, index: number): number {
+  const mapping: Record<string, number> = { lb: 1, lc: 2, lt: 3, rt: 4, rc: 5, rb: 6 }
+  return mapping[id] ?? (Number(id) >= 1 && Number(id) <= 6 ? Number(id) : index + 1)
+}
+
 export function normalizeAim<T extends { phi: number; V0: number; theta: number; a: number; b: number }>(aim: T): T {
   const finite = (value: number, fallback: number) => Number.isFinite(value) ? value : fallback
   const a = finite(aim.a, 0)

@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ApiError, CLIENT_VERSION, post, request, setToken, socketUrl, timestamp } from './api'
 import type { User, Room, Match, ShotResult } from './api'
 import { createGameScene } from './game/createGameScene'
+import { numberForPocket } from './game/playback'
 import { DEFAULT_BINDINGS } from './game/types'
 import type { AimState, BindingAction, GameScene, GameSettings } from './game/types'
 
@@ -431,7 +432,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
         <label>Наклон {{ aim.theta }}°<input v-model.number="aim.theta" type="range" min="0" max="60" step="1" :disabled="!canShoot" @input="updateAim" /></label>
         <label>Вращение X<input v-model.number="aim.a" type="range" min="-0.6" max="0.6" step="0.02" :disabled="!canShoot" @input="updateAim" /></label><label>Вращение Y<input v-model.number="aim.b" type="range" min="-0.6" max="0.6" step="0.02" :disabled="!canShoot" @input="updateAim" /></label>
         <label>Заказанный шар<select v-model="calledBall" :disabled="!canShoot"><option value="">Без заказа</option><option v-for="ball in remainingBalls" :key="ball.id" :value="String(ball.id)">{{ ball.id }}</option></select></label>
-        <label>Заказанная луза<select v-model="calledPocket" :disabled="!canShoot" @change="scene?.setCalledPocket(calledPocket || null)"><option value="">Без заказа</option><option v-for="(pocket, i) in match.snapshot.table.pockets" :key="pocket.id" :value="String(pocket.id)">Луза {{ i + 1 }}</option></select></label>
+        <label>Заказанная луза<select v-model="calledPocket" :disabled="!canShoot" @change="scene?.setCalledPocket(calledPocket || null)"><option value="">Без заказа</option><option v-for="(pocket, i) in match.snapshot.table.pockets" :key="pocket.id" :value="String(pocket.id)">Луза {{ numberForPocket(String(pocket.id), i) }}</option></select></label>
         <button class="shoot" :disabled="!canShoot || canPlace" @click="shoot()">Удар</button><button @click="scene?.resetCamera(true)">Вид сверху</button>
         <button v-if="turnReady && match.snapshot.ballInHand && !match.snapshot.needsPlacement" @click="placingCue = !placingCue">{{ placingCue ? 'Отменить перестановку' : 'Переставить биток' }}</button>
       </div>

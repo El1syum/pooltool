@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GameAudio } from './audio'
-import { isLegalCuePlacement, normalizeAim, sampleTrajectory } from './playback'
+import { isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } from './playback'
 import {
   DEFAULT_BINDINGS,
   type AimParameters, type BallState, type BindingAction, type GameScene, type GameSnapshot,
@@ -187,11 +187,6 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
   function dimensionsSignature(value: GameSnapshot): string { return JSON.stringify(value.table) }
   function isEnabled(): boolean { return !destroyed && !playback && !interaction.spectator && interaction.canShoot && !interaction.canPlaceCueBall }
-  function numberForPocket(id: string, index: number): number {
-    const mapping: Record<string, number> = { lb: 1, lc: 2, lt: 3, rt: 4, rc: 5, rb: 6 }
-    return mapping[id] ?? (Number(id) >= 1 && Number(id) <= 6 ? Number(id) : index + 1)
-  }
-
   function createTable(): void {
     disposeGroup(tableGroup)
     pocketMeshes.clear()
