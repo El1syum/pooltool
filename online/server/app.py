@@ -37,7 +37,7 @@ class GuestLogin(StrictModel):
     def clean_name(cls, value):
         value = value.strip()
         if not value or any(ord(char) < 32 for char in value):
-            raise ValueError("Display name must contain visible characters")
+            raise ValueError("Имя должно содержать видимые символы")
         return value
 
 
@@ -85,7 +85,7 @@ class Command(StrictModel):
     @classmethod
     def bounded_payload(cls, value):
         if len(encode(value)) > 2048:
-            raise ValueError("Command payload is too large")
+            raise ValueError("Слишком большая команда")
         return value
 
 
@@ -118,9 +118,9 @@ class ClientEvent(StrictModel):
     def safe_data(cls, value):
         allowed = {"message", "code", "fps", "latencyMs", "width", "height", "visibility", "durationMs", "count", "reason", "connected", "visible", "drawCalls", "triangles"}
         if set(value) - allowed or len(encode(value)) > 4096:
-            raise ValueError("Unknown or oversized telemetry fields")
+            raise ValueError("Неизвестные или слишком большие поля телеметрии")
         if any(isinstance(item, (list, dict)) for item in value.values()):
-            raise ValueError("Telemetry values must be scalar")
+            raise ValueError("Значения телеметрии должны быть скалярными")
         for key, item in value.items():
             if isinstance(item, str):
                 # Error strings sometimes contain request headers; remove credentials.
@@ -166,7 +166,7 @@ class RateLimiter:
         while history and history[0] < now - seconds:
             history.popleft()
         if len(history) >= count:
-            raise HTTPException(429, "Too many requests; retry shortly")
+            raise HTTPException(429, "Слишком много запросов; повторите чуть позже")
         history.append(now)
         if len(self.entries) > 10000:
             self.entries = defaultdict(deque, {k: v for k, v in self.entries.items() if v and v[-1] > now - 60})
@@ -192,6 +192,8 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
             service = GameService(store, physics_engine, process_pool=process_pool, now=now)
             service.emit = hub.emit
             application.state.service = service
+            if service.pool:
+                service.pool.start()  # Warm workers before the first shot arrives.
             await service.recover()
             timer = service._spawn(service.run_timer()) if background else None
         except Exception as error:
@@ -217,7 +219,7 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
     @application.middleware("http")
     async def safe_headers(request, call_next):
         if request.headers.get("content-length", "0").isdigit() and int(request.headers.get("content-length", "0")) > 65536:
-            return JSONResponse({"detail": "Request body is too large"}, status_code=413)
+            return JSONResponse({"detail": "Слишком большой запрос"}, status_code=413)
         response = await call_next(request)
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
@@ -228,13 +230,13 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
     async def service(request: Request) -> GameService:
         current = request.app.state.service
         if current is None:
-            raise HTTPException(503, "The real physics engine is not ready")
+            raise HTTPException(503, "Физический движок ещё не готов")
         return current
 
     async def session(request: Request, current=Depends(service)):
         header = request.headers.get("Authorization", "")
         if not header.startswith("Bearer "):
-            raise HTTPException(401, "Bearer session token is required")
+            raise HTTPException(401, "Требуется токен сессии")
         identity = current.session(header[7:])
         limiter.check(f"user:{identity['userId']}", count=120)
         return identity
@@ -248,11 +250,16 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
 
     @application.get("/ready")
     def ready(request: Request):
+        # Not ready for traffic until a warm physics worker can take the first shot.
+        current = request.app.state.service
+        warm = current.pool.warm_count if current and current.pool else None
+        if current is not None and warm == 0:
+            return JSONResponse({"status": "warming", "physics": "pooltool", "warmWorkers": 0}, status_code=503)
         return health(request)
 
     @application.post("/api/auth/guest")
     async def guest(body: GuestLogin, request: Request, current=Depends(service)):
-        limiter.check(f"guest:{request.client.host if request.client else 'unknown'}", count=20)
+        limiter.check(f"guest:{request.client.host if request.client else 'unknown'}", count=int(os.getenv("GUEST_LOGINS_PER_MINUTE", "20")))
         return await current.authenticate(body.displayName, body.clientVersion)
 
     @application.post("/api/auth/vk")
@@ -279,9 +286,9 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
         try:
             encoded = encode(values)
         except (ValueError, TypeError):
-            raise HTTPException(422, "Settings must contain finite JSON values") from None
+            raise HTTPException(422, "Настройки содержат некорректные значения") from None
         if not isinstance(values, dict) or len(encoded.encode("utf-8")) > 16384:
-            raise HTTPException(422, "Settings must be an object smaller than 16 KiB")
+            raise HTTPException(422, "Настройки должны быть объектом меньше 16 КиБ")
         user = await current.update_profile(identity["userId"], settings=values)
         return {"settings": user["settings"]}
 
@@ -298,7 +305,7 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
     @application.post("/api/rooms")
     async def create_room(body: RoomCreate, identity=Depends(session), current=Depends(service)):
         if body.settings.ranked:
-            raise HTTPException(422, "Rated matches require ranked matchmaking")
+            raise HTTPException(422, "Рейтинговые матчи создаются только через рейтинговый поиск")
         return await current.create_room(identity["userId"], body.settings.model_dump())
 
     @application.get("/api/rooms/{code}")
@@ -355,12 +362,12 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
             if body.type == "shot":
                 shot = Shot.model_validate(body.payload)
                 if shot.a * shot.a + shot.b * shot.b > 0.81 + 1e-12:
-                    raise ValueError("Spin contact point is outside the cue ball")
+                    raise ValueError("Точка удара вне битка")
                 body.payload = shot.model_dump(exclude_none=True)
             elif body.type == "placeCueBall":
                 body.payload = Placement.model_validate(body.payload).model_dump()
             elif body.payload:
-                raise ValueError("Surrender does not accept a payload")
+                raise ValueError("Команда сдачи не принимает параметров")
         except ValueError as error:
             raise HTTPException(422, str(error)) from None
         return await current.command(match_id, identity["userId"], body.model_dump(), identity)
@@ -389,14 +396,14 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
         try:
             raw = await asyncio.wait_for(socket.receive_text(), timeout=10)
             if len(raw) > 2048:
-                raise HTTPException(413, "Authentication message too large")
+                raise HTTPException(413, "Сообщение авторизации слишком большое")
             data = json.loads(raw)
             if data.get("type") != "auth":
-                raise HTTPException(401, "First message must authenticate")
+                raise HTTPException(401, "Первое сообщение должно содержать авторизацию")
             identity = current.session(data.get("token", ""))
             user_id = identity["userId"]
             if len(hub.sockets[user_id]) >= 5:
-                raise HTTPException(429, "Too many active connections")
+                raise HTTPException(429, "Слишком много активных подключений")
             limiter.check(f"ws:{user_id}", count=20)
             hub.sockets[user_id].add(socket)
             hub.locks[socket] = asyncio.Lock()
@@ -419,7 +426,7 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
                                            "match": current.public_match(current._match(room["matchId"])[0]) if room and room["matchId"] else None,
                                            "queue": current.queue_status(user_id)})
                 else:
-                    await hub.send(socket, {"type": "error", "detail": "Commands use the authenticated HTTP API"})
+                    await hub.send(socket, {"type": "error", "detail": "Команды отправляются через HTTP API"})
         except HTTPException as error:
             await socket.close(code=1008, reason=str(error.detail)[:120])
         except (WebSocketDisconnect, asyncio.TimeoutError, json.JSONDecodeError, TypeError, AttributeError):

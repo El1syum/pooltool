@@ -81,14 +81,22 @@ or disconnected match cannot be overwritten by a later physics response.
 
 `match = {id,roomId,roomCode,revision,status,players,currentPlayer,turn,deadline,
 startedAt,finishedAt,winnerId,winner,reason,ranked,snapshot,lastShot,playbackUntil,
-serverTime,turnRemainingSeconds,ratings?}`. Status is active/calculating/finished.
+serverTime,turnRemainingSeconds,disconnectedPlayers,ratings?}`. Status is active/calculating/finished.
+`disconnectedPlayers` maps an offline player ID to the UTC time their forfeit
+takes effect; it is broadcast as soon as the socket drops and cleared on reconnect.
 `snapshot` holds public balls/table/rule constraints; internal simulation state
 is never sent to the client. `result` includes trajectory, events, potted,
 initialState, finalState, duration (simulated seconds), wallDuration (real compute
 seconds), rules, shotId, commandId, playerId and playbackStartAt (epoch ms).
 `lastShot = {shotId,commandId,playerId,startAt,startedAt,result}` preserves playback
-for reconnect. Both clients play from the same timestamp (350ms broadcast buffer).
+for reconnect; after `playbackUntil` the trajectory/initialState/finalState are
+omitted from later broadcasts and reads (the snapshot is then authoritative).
+`trajectory = {duration,dt,encoding:"delta",frames:[{t,balls}],events}`: the first
+frame lists every ball, later frames only changed balls, each as
+`[id,x,y,z,state,qx,qy,qz,qw]` (positions 0.01 mm, quaternion 1e-4). Both clients play from the same timestamp (350ms broadcast buffer).
 The next shot cannot begin before `playbackUntil`; its timer begins after playback.
+History items (`GET /api/me/history`) also carry `opponentName` and the caller's
+`eloDelta` (null for casual matches). Error `detail` texts are Russian.
 Every authoritative change increments revision. Timeout gives the opponent
 ball-in-hand through the real ruleset. Forfeit/disconnect applies one result and
 one Elo update atomically. K=32, initial Elo 1000. Casual games do not alter Elo.
@@ -106,7 +114,8 @@ Disconnect grace defaults to 30 seconds. Reconnect restores durable state and
 clears grace timer. Server restart grants all clients a fresh grace period and
 resumes any registered pending shot. If both players fail to reconnect the match
 ends abandoned without rating change; one disconnected player forfeits. Maximum
-match duration defaults to 90 minutes; open rooms expire after 1 hour.
+match duration defaults to 90 minutes; open rooms, and finished rooms nobody
+left, are closed after `ROOM_TTL_SECONDS` (1 hour).
 
 ## Telemetry
 
@@ -128,10 +137,13 @@ Participants can export their match events via GET `/api/matches/{matchId}/telem
 ## Deployment and readiness
 
 `/health`, `/api/health`, `/ready` return 200 only when the real physics engine
-initializes; unavailable engine gives 503 (no mock fallback). Client dist is
+initializes; unavailable engine gives 503 (no mock fallback). `/ready` also stays
+503 (`status: warming`) until at least one warm physics worker exists. Client dist is
 served at `/` when `online/client/dist` exists. OpenAPI is at `/openapi.json`.
 Environment: POOLTOOL_DB, PHYSICS_WORKERS, SHOT_COMPUTE_TIMEOUT_SECONDS,
-DISCONNECT_GRACE_SECONDS, MAX_MATCH_SECONDS, ROOM_TTL_SECONDS, CORS_ORIGINS.
-Run one ASGI worker per SQLite service. Physics runs in separately killable CPU
-processes; an over-time job is terminated. Multiple API workers require shared
+DISCONNECT_GRACE_SECONDS, MAX_MATCH_SECONDS, ROOM_TTL_SECONDS, CORS_ORIGINS,
+GUEST_LOGINS_PER_MINUTE (per IP, default 20).
+Run one ASGI worker per SQLite service. Physics runs in a pool of long-lived,
+pre-warmed CPU processes; an over-time or crashed job's process is killed and
+replaced in the background, and each process is recycled after 500 shots. Multiple API workers require shared
 room broadcasting/locks infrastructure and are intentionally not enabled.

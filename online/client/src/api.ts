@@ -46,6 +46,9 @@ export interface Match {
   finishedAt?: number | string | null
   winnerId?: string | null
   reason?: string
+  disconnectedPlayers?: Record<string, string>
+  ranked?: boolean
+  ratings?: Array<{ playerId: string; before: number; after: number; delta: number }>
   snapshot: GameSnapshot
   lastShot?: ShotResult | { id?: string; result: ShotResult; startAt?: number; playbackStartAt?: number }
   rules?: Record<string, unknown>

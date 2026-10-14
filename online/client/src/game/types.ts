@@ -41,9 +41,14 @@ export interface TrajectoryFrame {
   balls: BallState[]
 }
 
+/** Server delta entry: [id, x, y, z, state, qx, qy, qz, qw]. */
+export type CompactBallEntry = [string, number, number, number, number, number, number, number, number]
+
 export interface ShotTrajectory {
   duration: number
   frames: TrajectoryFrame[]
+  /** 'delta': each frame lists only changed balls as CompactBallEntry. */
+  encoding?: string
   events?: Array<{ t?: number; time?: number; type?: string; event_type?: string }>
 }
 

@@ -25,7 +25,9 @@ p { line-height: 1.5; color: #ccd8da; }
 .error-banner button { border: none; background: transparent; padding: .2rem .5rem; }
 .player-list, .history-list { list-style: none; padding: 0; }
 .player-list li, .history-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; padding: .8rem; border-bottom: 1px solid #43555b; }
+.app-shell { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
 .match-screen { display: flex; flex-direction: column; }
+.offline-banner { padding: .5rem 1rem; background: #5a4322; color: #ffe2b8; }
 .match-bar { display: flex; gap: .7rem; padding: .6rem; align-items: center; flex-wrap: wrap; background: #23363d; }
 .match-bar > div { display: flex; gap: .5rem; flex-direction: column; padding: .4rem .7rem; border: 1px solid transparent; }
 .match-bar .current { border-color: #a8dccb; }
@@ -49,3 +51,13 @@ p { line-height: 1.5; color: #ccd8da; }
 .warning { color: #ffc6a3; }
 footer { padding: 1rem; text-align: center; color: #94a6ac; font-size: .8rem; }
 @media(max-width: 640px) { .panel { margin: 1rem .6rem; padding: 1rem; } .app-header { gap: .5rem; } .brand { width: 100%; } .binding-grid { grid-template-columns: 1fr; } .game-stage { height: 48vh; min-height: 280px; } .shot-controls label { min-width: 125px; } .match-bar > div { flex: 1; } }
+/* Desktop: the whole match fits the window, controls sit beside the table and never cover it. */
+@media(min-width: 900px) and (min-height: 520px) {
+  .app-shell.in-match { height: 100vh; height: 100dvh; overflow: hidden; }
+  .in-match .match-screen { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto auto auto minmax(0, 1fr); }
+  .in-match .match-bar, .in-match .match-status, .in-match .offline-banner { grid-column: 1 / -1; }
+  .in-match .game-stage { grid-column: 1; grid-row: 4; height: auto; min-height: 0; }
+  .in-match .shot-controls, .in-match .result-panel { grid-column: 2; grid-row: 4; overflow-y: auto; align-content: flex-start; border-left: 1px solid #41585e; }
+  .in-match .shot-controls label { flex: 1 1 100%; }
+}
+

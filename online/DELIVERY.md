@@ -8,6 +8,10 @@ Python physics and EightBall rule engine on an authoritative server.
 
 ## Implemented scope
 
+Revised on 2026-10-14 after an independent review; corrections are listed under
+Verification and Performance boundary.
+
+
 | Requirement | Implementation |
 | --- | --- |
 | Two players, rooms, invitation, matchmaking, observers | Private room codes, ready lobby, casual/ranked queues, observer entry by code, leaving rooms |
@@ -29,39 +33,61 @@ not in URLs. Participant telemetry export is authenticated.
 The reproducible commands and browser harness are documented in
 `README.md` and `client/tests/README.md`.
 
-- Python: 42 tests and 6 subtests pass, including real physics and the upstream
-  degenerate ball-collision regression; one test-library deprecation warning.
-- Client trajectory/input helpers and pocket mapping: 7 tests pass.
-- Vue/TypeScript production build passes; npm reports no production dependency
-  vulnerabilities at verification time.
-- Browser scenarios use separate Chromium/WebKit contexts for two players and
-  a 390×844 observer: real shot, consistent final state, reload during playback,
-  placement, settings persistence, profile/history, exiting and a new queued match.
-- Live API probe on `el1s` passed ranked pairing/Elo, profile/settings/history,
-  telemetry dedupe/export and WebSocket reconnect during a real calculation.
-- Real service restart on `el1s` restored the exact confirmed snapshot, revision,
-  turn and last shot for both players; profile, settings, telemetry and command
-  dedupe survived. Readiness returned in 5.83 s. Durable pending-shot recovery is
-  also covered by the automated test.
-- A full Chromium scenario with 250 ms added to each API request passed without
-  JavaScript errors or inconsistent state.
+- Python: 32 tests and 6 subtests pass (the earlier note claimed 42; there were
+  28), including real physics and the upstream degenerate ball-collision
+  regression; one test-library deprecation warning.
+- Client trajectory/input helpers, delta-trajectory expansion and pocket
+  mapping: 8 tests pass. Vue/TypeScript type check and production build pass.
+- Browser smoke (`browser-smoke.mjs`) re-run on 2026-10-14 in Chromium only, also
+  with `NETWORK_DELAY_MS=250`, and `mobile-layout.mjs` (390×844) in Chromium: all
+  pass without JavaScript errors. WebKit was not re-run after these changes.
+- Manual check in a 1024×768 browser: the match fits the window with controls
+  beside the table; an opponent's disconnect shows a forfeit countdown; the
+  result screen shows a Russian reason and the rating change; history lists the
+  opponent and the Elo delta.
+- The `el1s` live/restart probes described in the previous revision predate these
+  changes and must be repeated after the next deployment.
 - A native Safari run on Apple hardware remains a release check;
   WebKit automation is not a claim of hardware certification.
 
 ## Performance boundary
 
-The local 12-shot warm physics-only benchmark measured p50 0.287 s, p95 1.477 s
-and maximum 1.921 s. One remote live-probe shot measured 8.743 s worker wall-time
-on the current shared two-vCPU host. These are different measurements, not a
-production latency SLA or concurrency/load-test result. Worker wall-time includes
-capacity wait, process startup/import/warmup, physics, IPC and cleanup; it excludes
-HTTP transport and database/broadcast completion. Motion duration is recorded
-separately. Computation cannot consume the next player's turn time.
+Before this revision every shot started a new Python process and re-imported and
+re-warmed pooltool: about 2.5–3.4 s from click to animation locally and 8.7 s on
+`el1s`. Workers are now long-lived and pre-warmed; a stalled or crashed worker is
+killed and replaced in the background.
 
-The service uses one ASGI process and one bounded CPU worker on this host. A
-30-second computation limit kills stalled work and restores the remaining turn.
-Targets and the supported device list should be finalized with the tech lead
-after representative load testing, as the specification requires.
+Local measurements (Windows desktop, 2 workers, `load_probe.py`, shot request to
+confirmed result, all matches shooting almost simultaneously):
+
+| Concurrent matches | p50 | p95 | Response raw / on the wire |
+| --- | --- | --- | --- |
+| 1–2 | 0.16–0.28 s | 0.22–0.36 s | ~120–180 KB / ~30–46 KB |
+| 8 | 0.37 s | 0.92 s | ~175 KB / ~42 KB |
+| 16 | 0.56 s | 1.89 s | ~118 KB / ~28 KB |
+
+In the browser, click to animation start was 284 ms (previously 3.4 s). Shot
+trajectories are delta-encoded (only moving balls per frame) and compressed on
+the wire; previously a single break response was ~874 KB uncompressed and the full
+trajectory was re-sent with every later match broadcast. Each resident worker
+uses ~230 MB. These are local figures, not a production SLA; `el1s` has two
+shared vCPUs and is configured with one worker, so repeat `load_probe.py` there.
+
+The service uses one ASGI process and SQLite. Room lookups use an index on room
+status and finished rooms are closed after `ROOM_TTL_SECONDS`, so per-request work
+no longer grows with every room ever created; history uses a `match_players`
+table. Scaling beyond one host still requires replacing SQLite and the in-process
+broadcast hub. Targets and the supported device list should be finalized with
+the tech lead after load testing on the production host, as the specification
+requires.
+
+## Renderer scope
+
+Physics and rules are the real pooltool engine on the server. The browser view is
+a separate, simplified Three.js scene (procedural table and cue, original ball
+textures), not the desktop Panda3D renderer, which cannot run in a browser. The
+fork's sparse checkout omits pooltool's room/table/cue art. Final visuals follow
+the designer's layouts.
 
 ## Deployment and remaining release work
 

@@ -62,18 +62,21 @@ class GameService:
     def _user(self, user_id):
         row = self.store.db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         if not row:
-            raise HTTPException(404, "Player does not exist")
+            raise HTTPException(404, "Игрок не найден")
         return {"id": row["id"], "displayName": row["display_name"], "elo": row["elo"],
                 "games": row["games"], "wins": row["wins"], "losses": row["losses"],
                 "settings": decode(row["settings"]), "isVk": row["vk_id"] is not None}
 
-    def _rooms(self):
-        return [decode(row["payload"]) for row in self.store.db.execute("SELECT payload FROM rooms")]
+    def _rooms(self, *statuses):
+        # Uses the rooms_status expression index; closed rooms are never scanned.
+        marks = ",".join("?" * len(statuses))
+        return [decode(row["payload"]) for row in self.store.db.execute(
+            f"SELECT payload FROM rooms WHERE json_extract(payload,'$.status') IN ({marks})", statuses)]
 
     def _room(self, code):
         row = self.store.db.execute("SELECT payload FROM rooms WHERE code=?", (code.upper(),)).fetchone()
         if not row:
-            raise HTTPException(404, "Room does not exist")
+            raise HTTPException(404, "Комната не найдена")
         return decode(row["payload"])
 
     def _room_id(self, room_id):
@@ -83,7 +86,7 @@ class GameService:
     def _match(self, match_id):
         row = self.store.db.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
         if not row:
-            raise HTTPException(404, "Match does not exist")
+            raise HTTPException(404, "Матч не найден")
         return decode(row["payload"]), decode(row["physics"]), decode(row["pending"]) if row["pending"] else None
 
     def _active_rows(self):
@@ -110,7 +113,14 @@ class GameService:
 
     def public_match(self, match):
         result = copy.deepcopy(match)
-        result.pop("disconnected", None)
+        # Players see who is offline and when the forfeit takes effect.
+        result["disconnectedPlayers"] = {player_id: utc(since + self.grace)
+                                         for player_id, since in result.pop("disconnected", {}).items()}
+        last = result.get("lastShot")
+        if last and last.get("result") and epoch(match.get("playbackUntil")) <= self.now():
+            # Playback is over; clients only need the confirmed snapshot, not ~50-200 KB of frames.
+            for key in ("trajectory", "trajectories", "initialState", "finalState"):
+                last["result"].pop(key, None)
         result["serverTime"] = utc(self.now())
         result["turnRemainingSeconds"] = max(0, math.ceil(epoch(match.get("deadline")) - self.now()))
         return result
@@ -133,11 +143,11 @@ class GameService:
 
     def session(self, raw_token):
         if not isinstance(raw_token, str) or not raw_token or len(raw_token) > 256:
-            raise HTTPException(401, "Authentication required")
+            raise HTTPException(401, "Требуется авторизация")
         row = self.store.db.execute("SELECT * FROM sessions WHERE token_hash=? AND expires_at>?",
                                     (token_hash(raw_token), self.now())).fetchone()
         if not row:
-            raise HTTPException(401, "Session expired or invalid")
+            raise HTTPException(401, "Сессия истекла или недействительна")
         return {"id": row["token_hash"][:16], "userId": row["user_id"], "clientVersion": row["client_version"]}
 
     async def authenticate(self, display_name="Гость", client_version="unknown", vk_id=None):
@@ -160,7 +170,7 @@ class GameService:
                     db.execute("UPDATE users SET display_name=? WHERE id=?", (display_name, user_id))
                 if settings is not None:
                     db.execute("UPDATE users SET settings=? WHERE id=?", (encode(settings), user_id))
-                for room in self._rooms():
+                for room in filter(None, [self._membership(user_id)]):
                     changed = False
                     for player in room["players"]:
                         if player["id"] == user_id and display_name is not None:
@@ -171,15 +181,15 @@ class GameService:
         return self._user(user_id)
 
     def _membership(self, user_id):
-        for room in self._rooms():
-            if room["status"] != "closed" and (any(p["id"] == user_id for p in room["players"]) or user_id in room["spectators"]):
+        for room in self._rooms("open", "playing", "finished"):
+            if any(p["id"] == user_id for p in room["players"]) or user_id in room["spectators"]:
                 return room
         return None
 
     def _ensure_free(self, user_id):
         room = self._membership(user_id)
         if room:
-            raise HTTPException(409, {"message": "Leave the current room first", "roomCode": room["code"]})
+            raise HTTPException(409, {"message": "Сначала выйдите из текущей комнаты", "roomCode": room["code"]})
 
     def _new_room(self, host_id, settings, *, players=None, matchmaking=False):
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -214,11 +224,11 @@ class GameService:
                 return result
             self._ensure_free(user_id)
             if room["status"] == "closed":
-                raise HTTPException(410, "Room is closed")
+                raise HTTPException(410, "Комната закрыта")
             if not spectate and (len(room["players"]) >= 2 or room["status"] != "open"):
-                raise HTTPException(409, "Room has no available player seat")
+                raise HTTPException(409, "В комнате нет свободного места игрока")
             if spectate and len(room["spectators"]) >= 100:
-                raise HTTPException(409, "Spectator limit reached")
+                raise HTTPException(409, "Достигнут лимит наблюдателей")
             user = self._user(user_id)
             with self.store.transaction() as db:
                 db.execute("DELETE FROM matchmaking WHERE user_id=?", (user_id,))
@@ -239,18 +249,18 @@ class GameService:
         players = [p["id"] for p in match["players"]]
         allowed = players if participant else players + (room["spectators"] if room else [])
         if user_id not in allowed:
-            raise HTTPException(403, "This match is not accessible to your account")
+            raise HTTPException(403, "Этот матч недоступен вашему аккаунту")
         return match, physics, pending
 
     async def configure_room(self, code, user_id, settings):
         async with self.lock:
             room = self._room(code)
             if room["hostId"] != user_id:
-                raise HTTPException(403, "Only the host can change room settings")
+                raise HTTPException(403, "Менять настройки комнаты может только её создатель")
             if room["status"] != "open":
-                raise HTTPException(409, "Match has already started")
+                raise HTTPException(409, "Матч уже начался")
             if settings.get("ranked") is True:
-                raise HTTPException(422, "Rated matches are created only through ranked matchmaking")
+                raise HTTPException(422, "Рейтинговые матчи создаются только через рейтинговый поиск")
             room["settings"].update(settings)
             for player in room["players"]:
                 player["ready"] = False
@@ -273,6 +283,8 @@ class GameService:
         room["matchId"] = match["id"]
         self._save_room(db, room)
         self._save_match(db, match, state)
+        db.executemany("INSERT OR IGNORE INTO match_players(match_id,user_id) VALUES(?,?)",
+                       [(match["id"], player["id"]) for player in match["players"]])
         self._event(db, "matchStart", match=match, payload={"playerIds": [p["id"] for p in match["players"]], "ranked": match["ranked"]})
         return match
 
@@ -280,16 +292,16 @@ class GameService:
         async with self.lock:
             room = self._room(code)
             if room["status"] != "open":
-                raise HTTPException(409, "Room is not waiting for players")
+                raise HTTPException(409, "Комната не ожидает игроков")
             player = next((p for p in room["players"] if p["id"] == user_id), None)
             if not player:
-                raise HTTPException(403, "Only room players can become ready")
+                raise HTTPException(403, "Подтвердить готовность могут только игроки комнаты")
             if start and room["hostId"] != user_id:
-                raise HTTPException(403, "Only the host can start a room")
+                raise HTTPException(403, "Начать матч может только создатель комнаты")
             if not start:
                 player["ready"] = ready
             if start and (len(room["players"]) != 2 or not all(p["ready"] for p in room["players"])):
-                raise HTTPException(409, "Both players must be ready")
+                raise HTTPException(409, "Оба игрока должны подтвердить готовность")
             match = None
             with self.store.transaction() as db:
                 if len(room["players"]) == 2 and all(p["ready"] for p in room["players"]):
@@ -333,7 +345,7 @@ class GameService:
         async with self.lock:
             room = self._room(code)
             if user_id not in self._recipients(room):
-                raise HTTPException(403, "You are not in this room")
+                raise HTTPException(403, "Вы не состоите в этой комнате")
             previous_recipients = self._recipients(room)
             match = None
             with self.store.transaction() as db:
@@ -368,25 +380,25 @@ class GameService:
                                              (match_id, command["commandId"])).fetchone()
             if existing:
                 if existing["actor_id"] != user_id or decode(existing["request"]) != command:
-                    raise HTTPException(409, "commandId was already used with different parameters")
+                    raise HTTPException(409, "Идентификатор команды уже использован с другими параметрами")
                 if existing["status"] == "rejected":
                     raise HTTPException(422, decode(existing["response"])["detail"])
                 return {**(decode(existing["response"]) if existing["response"] else {"match": self.public_match(match), "pending": True}), "duplicate": True}
             if command["expectedRevision"] != match["revision"]:
-                raise HTTPException(409, {"message": "State revision conflict", "match": self.public_match(match)})
+                raise HTTPException(409, {"message": "Состояние матча изменилось; обновлено", "match": self.public_match(match)})
             if match["status"] == "finished":
-                raise HTTPException(409, "Match has finished")
+                raise HTTPException(409, "Матч завершён")
             index = next(i for i, p in enumerate(match["players"]) if p["id"] == user_id)
             action = command["type"]
             if action != "surrender":
                 if match["status"] != "active":
-                    raise HTTPException(409, "An earlier shot is still being calculated")
+                    raise HTTPException(409, "Предыдущий удар ещё рассчитывается")
                 if index != match["currentPlayer"]:
-                    raise HTTPException(403, "It is not your turn")
+                    raise HTTPException(403, "Сейчас не ваш ход")
                 if epoch(match.get("deadline")) <= self.now():
-                    raise HTTPException(409, "Turn deadline has expired")
+                    raise HTTPException(409, "Время хода истекло")
                 if epoch(match.get("playbackUntil")) > self.now():
-                    raise HTTPException(409, "Wait until the previous shot playback finishes")
+                    raise HTTPException(409, "Дождитесь окончания предыдущего удара")
                 if action == "shot":
                     try:
                         self.engine.validate_shot(physics, command["payload"], shooter=index)
@@ -445,12 +457,12 @@ class GameService:
         except asyncio.TimeoutError:
             import logging
             logging.getLogger(__name__).warning("Physics timeout match_id=%s command_id=%s", match_id, pending["command"]["commandId"])
-            error = "Physics calculation timed out; the turn was restored"
+            error = "Расчёт удара занял слишком много времени; ход восстановлен"
         except Exception:
             import logging
             logging.getLogger(__name__).exception("Physics calculation failed match_id=%s command_id=%s", match_id, pending["command"]["commandId"])
             # Do not expose internal paths or launch/session credentials in errors.
-            error = "Physics calculation failed; the turn was restored"
+            error = "Ошибка расчёта удара; ход восстановлен"
         wall_seconds = time.perf_counter() - started
         command_id = pending["command"]["commandId"]
         async with self.lock:
@@ -590,6 +602,7 @@ class GameService:
         return {"room": room, "match": self.public_match(match) if match else None, "queue": self.queue_status(user_id)}
 
     async def disconnect(self, user_id, session):
+        match = None
         async with self.lock:
             self.connected[user_id] = max(0, self.connected.get(user_id, 1) - 1)
             if self.connected[user_id]:
@@ -606,6 +619,10 @@ class GameService:
                         self._save_match(db, match, physics, pending)
                         self._event(db, "disconnect", player=user_id, session=session["id"], match=match,
                                     payload={"graceSeconds": self.grace}, client_version=session["clientVersion"])
+                else:
+                    match = None
+        if match:
+            await self.announce_match(match)
 
     async def recover(self):
         jobs = []
@@ -665,7 +682,7 @@ class GameService:
                         match["deadline"] = utc(self.now() + pending.get("remainingSeconds", 60))
                         self._save_match(db, match, physics)
                         db.execute("UPDATE commands SET status='rejected',response=? WHERE match_id=? AND command_id=?",
-                                   (encode({"detail": "Stalled calculation recovered; retry with a new command ID"}), match["id"], pending["command"]["commandId"]))
+                                   (encode({"detail": "Зависший расчёт сброшен; повторите удар"}), match["id"], pending["command"]["commandId"]))
                         self._event(db, "stalledCalculationRecovered", match=match, payload={"commandId": pending["command"]["commandId"]})
                         changed.append(match)
                     elif match["status"] == "active" and epoch(match["deadline"]) <= self.now():
@@ -682,8 +699,13 @@ class GameService:
                         self._event(db, "turnTimeout", player=match["players"][shooter]["id"], match=match,
                                     payload={"nextPlayer": match["currentPlayer"]})
                         changed.append(match)
-                for room in self._rooms():
-                    if room["status"] == "open" and self.now() - epoch(room["createdAt"]) > self.room_ttl:
+                stale_finished = {row["id"] for row in db.execute(
+                    "SELECT id FROM rooms WHERE json_extract(payload,'$.status')='finished' AND updated_at<?",
+                    (self.now() - self.room_ttl,))}
+                for room in self._rooms("open", "finished"):
+                    # Abandoned lobbies and long-finished result screens are closed, so
+                    # the set of live rooms stays proportional to the online players.
+                    if (room["status"] == "open" and self.now() - epoch(room["createdAt"]) > self.room_ttl) or room["id"] in stale_finished:
                         room["status"] = "closed"
                         self._save_room(db, room)
                         expired_rooms.append(room)
@@ -708,16 +730,18 @@ class GameService:
 
     def history(self, user_id, limit=50):
         result = []
-        query = """SELECT payload FROM matches WHERE json_extract(payload,'$.status')='finished'
-                   AND EXISTS(SELECT 1 FROM json_each(payload,'$.players')
-                              WHERE json_extract(value,'$.id')=?)
-                   ORDER BY updated_at DESC LIMIT ?"""
+        query = """SELECT matches.payload FROM match_players JOIN matches ON matches.id=match_players.match_id
+                   WHERE match_players.user_id=? AND json_extract(matches.payload,'$.status')='finished'
+                   ORDER BY matches.updated_at DESC LIMIT ?"""
         for row in self.store.db.execute(query, (user_id, limit)):
             match = decode(row["payload"])
             if match["status"] == "finished" and any(p["id"] == user_id for p in match["players"]):
                 item = self.public_match(match)
                 item.pop("lastShot", None)
                 item.pop("snapshot", None)
+                rating = next((r for r in match.get("ratings", []) if r["playerId"] == user_id), None)
+                item["eloDelta"] = rating["delta"] if rating and match.get("ranked") else None
+                item["opponentName"] = next((p["displayName"] for p in match["players"] if p["id"] != user_id), None)
                 result.append(item)
                 if len(result) >= limit:
                     break

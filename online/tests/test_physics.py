@@ -54,13 +54,24 @@ class PhysicsTests(unittest.TestCase):
         frames = result["trajectory"]["frames"]
         self.assertGreater(len(frames), 2)
         self.assertEqual(frames[0]["t"], 0)
-        self.assertAlmostEqual(frames[-1]["t"], result["duration"])
+        self.assertAlmostEqual(frames[-1]["t"], result["duration"], places=4)
         self.assertTrue(all(a["t"] <= b["t"] for a, b in zip(frames, frames[1:])))
+        self.assertEqual(result["trajectory"]["encoding"], "delta")
+        self.assertEqual(len(frames[0]["balls"]), 16)
+        latest = {}
         for frame in frames:
-            self.assertEqual(len(frame["balls"]), 16)
-            for ball in frame["balls"]:
-                self.assertTrue(all(math.isfinite(x) for x in ball["position"]))
-                self.assertAlmostEqual(sum(q*q for q in ball["quaternion"]), 1, places=6)
+            for entry in frame["balls"]:
+                ball_id, x, y, z, ball_state, *quaternion = entry
+                self.assertTrue(all(math.isfinite(v) for v in (x, y, z)))
+                self.assertAlmostEqual(sum(q*q for q in quaternion), 1, places=3)
+                latest[ball_id] = {"position": [x, y, z], "state": ball_state}
+        # Replaying the deltas reproduces the authoritative final table.
+        for ball in result["finalState"]["balls"]:
+            for axis in range(3):
+                self.assertAlmostEqual(latest[ball["id"]]["position"][axis], ball["position"][axis], places=4)
+            self.assertEqual(latest[ball["id"]]["state"], ball["state"])
+        resting = sum(len(frame["balls"]) for frame in frames[1:])
+        self.assertLess(resting, 15 * (len(frames) - 1), "Resting balls must not be repeated in every frame")
         self.assertEqual(result["state"]["rules"]["shotNumber"], 1)
         self.assertEqual(result["finalState"], result["state"]["snapshot"])
         self.assertEqual(json.loads(json.dumps(result)), result)
@@ -117,7 +128,7 @@ class PhysicsTests(unittest.TestCase):
         for command in ({"V0": 100}, {"V0": float("nan")}, {"phi": float("inf")}, {"theta": 80}, {"a": 0.8, "b": 0.8}, {"cueBallId": "8"}):
             with self.subTest(command=command), self.assertRaises(PhysicsError):
                 PhysicsEngine.simulate(state, command)
-        with self.assertRaisesRegex(PhysicsError, "not this player's turn"):
+        with self.assertRaisesRegex(PhysicsError, "ход другого игрока"):
             PhysicsEngine.simulate(state, {}, shooter=1)
 
     def test_cue_placement_respects_head_string_and_collisions(self):
@@ -125,27 +136,27 @@ class PhysicsTests(unittest.TestCase):
         table = state["snapshot"]["table"]
         placed = PhysicsEngine.place_cue_ball(state, table["width"] / 2, table["length"] / 8)
         self.assertNotEqual(placed["system"]["balls"]["cue"]["rvw"], state["system"]["balls"]["cue"]["rvw"])
-        with self.assertRaisesRegex(PhysicsError, "head string"):
+        with self.assertRaisesRegex(PhysicsError, "линией дома"):
             PhysicsEngine.place_cue_ball(state, table["width"] / 2, table["length"] / 2)
         with self.assertRaises(PhysicsError):
             PhysicsEngine.place_cue_ball(state, 0, 0)
         free = PhysicsEngine.timeout(state)
         object_ball = free["system"]["balls"]["1"]["rvw"][0]
-        with self.assertRaisesRegex(PhysicsError, "overlaps"):
+        with self.assertRaisesRegex(PhysicsError, "пересекается"):
             PhysicsEngine.place_cue_ball(free, object_ball[0], object_ball[1], shooter=1)
 
     def test_shot_clock_foul_and_called_shot_validation(self):
         state = PhysicsEngine.timeout(PhysicsEngine.new_match(4), shooter=0)
         self.assertEqual(state["snapshot"]["currentPlayer"], 1)
         self.assertEqual(state["snapshot"]["foulReason"], "Shot clock expired")
-        with self.assertRaisesRegex(PhysicsError, "Place the cue ball"):
+        with self.assertRaisesRegex(PhysicsError, "установите биток"):
             PhysicsEngine.validate_shot(state, {}, shooter=1)
         state = PhysicsEngine.place_cue_ball(state, 0.4, 0.4, shooter=1)
         self.assertFalse(state["snapshot"]["needsPlacement"])
         self.assertTrue(state["snapshot"]["ballInHand"])
-        with self.assertRaisesRegex(PhysicsError, "Call a ball"):
+        with self.assertRaisesRegex(PhysicsError, "закажите шар"):
             PhysicsEngine.validate_shot(state, {}, shooter=1)
-        with self.assertRaisesRegex(PhysicsError, "six table pockets"):
+        with self.assertRaisesRegex(PhysicsError, "шести луз"):
             PhysicsEngine.validate_shot(state, {"ballCall": "1", "pocketCall": "unknown"}, shooter=1)
         PhysicsEngine.validate_shot(state, {"ballCall": "1", "pocketCall": "lt"}, shooter=1)
 
@@ -171,7 +182,7 @@ class PhysicsTests(unittest.TestCase):
 
     def test_limit_rejects_result_instead_of_accepting_truncated_physics(self):
         state = PhysicsEngine.new_match(123)
-        with patch("online.server.physics.MAX_EVENTS", 1), self.assertRaisesRegex(PhysicsError, "limit"):
+        with patch("online.server.physics.MAX_EVENTS", 1), self.assertRaisesRegex(PhysicsError, "лимит"):
             PhysicsEngine.simulate(state, {"V0": 2, "phi": 90})
 
 

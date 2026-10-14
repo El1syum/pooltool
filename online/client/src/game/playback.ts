@@ -1,4 +1,4 @@
-import type { BallState, GameSnapshot, ShotTrajectory, Vec3Tuple } from './types'
+import type { BallState, CompactBallEntry, GameSnapshot, QuaternionTuple, ShotTrajectory, Vec3Tuple } from './types'
 
 export function numberForPocket(id: string, index: number): number {
   const mapping: Record<string, number> = { lb: 1, lc: 2, lt: 3, rt: 4, rc: 5, rb: 6 }
@@ -18,6 +18,20 @@ export function normalizeAim<T extends { phi: number; V0: number; theta: number;
     a: a / spinScale,
     b: b / spinScale,
   }
+}
+
+/** Expand the server's delta encoding into full frames, once per received shot. */
+export function expandTrajectory(trajectory: ShotTrajectory): ShotTrajectory {
+  if (trajectory.encoding !== 'delta') return trajectory
+  const current = new Map<string, BallState>()
+  const frames = trajectory.frames.map(frame => {
+    for (const entry of frame.balls as unknown as CompactBallEntry[]) {
+      const [id, x, y, z, state, qx, qy, qz, qw] = entry
+      current.set(String(id), { id, position: [x, y, z], state, pocketed: state === 4, quaternion: [qx, qy, qz, qw] as QuaternionTuple })
+    }
+    return { t: frame.t, balls: [...current.values()] }
+  })
+  return { ...trajectory, encoding: undefined, frames }
 }
 
 export function sampleTrajectory(trajectory: ShotTrajectory, t: number): BallState[] {

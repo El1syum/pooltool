@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ApiError, CLIENT_VERSION, post, request, setToken, socketUrl, timestamp } from './api'
 import type { User, Room, Match, ShotResult } from './api'
 import { createGameScene } from './game/createGameScene'
-import { numberForPocket } from './game/playback'
+import { expandTrajectory, numberForPocket } from './game/playback'
 import { DEFAULT_BINDINGS } from './game/types'
 import type { AimState, BindingAction, GameScene, GameSettings } from './game/types'
 
@@ -86,6 +86,26 @@ const bindingConflicts = computed(() => {
     else seen.set(key, captureLabels[action as BindingAction])
   }
   return conflicts
+})
+const reasonLabels: Record<string, string> = { eightBall: 'Партия завершена по правилам восьмёрки', surrender: 'Соперник сдался', left: 'Игрок покинул матч', disconnect: 'Техническое поражение: игрок не вернулся после отключения', abandoned: 'Оба игрока отключились, матч прерван', maximumDuration: 'Превышена максимальная длительность матча' }
+function reasonLabel(value?: string | null) { return value ? reasonLabels[value] || value : '' }
+const resultReason = computed(() => {
+  const m = match.value
+  if (!m) return ''
+  if (m.reason === 'surrender' || m.reason === 'left') {
+    const loser = m.players.find((p) => p.id !== m.winnerId)
+    return loser?.id === user.value?.id ? (m.reason === 'surrender' ? 'Вы сдались' : 'Вы покинули матч') : `${loser?.displayName || 'Соперник'} ${m.reason === 'surrender' ? 'сдался' : 'покинул матч'}`
+  }
+  return reasonLabel(m.reason)
+})
+const ratingChange = computed(() => match.value?.ranked ? match.value.ratings?.find((r) => r.playerId === user.value?.id) : undefined)
+const offlinePlayers = computed(() => {
+  const m = match.value
+  if (!m || m.status === 'finished' || !m.disconnectedPlayers) return []
+  return Object.entries(m.disconnectedPlayers).filter(([id]) => id !== user.value?.id).map(([id, forfeitAt]) => ({
+    name: m.players.find((p) => p.id === id)?.displayName || 'Игрок',
+    seconds: Math.max(0, Math.ceil((timestamp(forfeitAt) - now.value - serverClockOffset.value) / 1000)),
+  }))
 })
 function formatTime(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` }
 function groupLabel(group?: string) { return group === 'solids' ? 'Цельные' : group === 'stripes' ? 'Полосатые' : 'Группа не определена' }
@@ -215,7 +235,8 @@ function receiveMatch(value: Match, result?: ShotResult) {
     if (shotKey !== lastPlayedShot && start + shot.duration * 1000 > Date.now()) {
       lastPlayedShot = shotKey
       playbackBusy.value = true
-      void nextTick(() => { ensureScene(); scene?.setState(shot.initialState); scene?.playShot(shot.trajectory, start) })
+      const trajectory = expandTrajectory(shot.trajectory)
+      void nextTick(() => { ensureScene(); scene?.setState(shot.initialState); scene?.playShot(trajectory, start) })
     } else if (!playbackBusy.value) scene?.setState(value.snapshot)
   } else if (!playbackBusy.value) scene?.setState(value.snapshot)
   updateInteraction()
@@ -388,7 +409,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'in-match': view === 'match' && match }">
     <header class="app-header">
       <button class="brand" :disabled="busy" @click="view = match ? 'match' : 'menu'">Pooltool Online</button>
       <span class="connection" :class="{ offline: !connected }" role="status">{{ connection }}</span>
@@ -403,7 +424,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
       <button :disabled="busy" @click="settingsOpen = true">Настройки</button>
       <button :disabled="busy" @click="showProfile">Профиль</button>
       <button v-if="match" :disabled="busy" @click="view = 'match'">Вернуться в матч</button>
-      <button :disabled="busy" @click="leave">Выход</button>
+      <button v-if="room && (!match || match.status === 'finished')" :disabled="busy" @click="leave">Выйти из комнаты</button>
     </main>
     <main v-else-if="view === 'play'" class="panel">
       <h1>Выбор игры</h1><div class="button-row"><button :disabled="busy || !connected" @click="search('casual')">Случайный противник</button><button :disabled="busy || !connected" @click="search('ranked')">Рейтинговая игра</button></div>
@@ -420,11 +441,12 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
     <main v-else-if="view === 'profile'" class="panel">
       <h1>Профиль</h1><label>Имя игрока <input v-model="name" maxlength="32" /></label><button :disabled="busy || !name.trim()" @click="saveName">Сохранить имя</button>
       <p>Рейтинг: {{ user.elo }} · Матчей: {{ user.games }} · Побед: {{ user.wins }} · Поражений: {{ user.losses }}</p>
-      <h2>История матчей</h2><p v-if="!history.length">Пока нет завершённых матчей.</p><ul class="history-list"><li v-for="item in history" :key="String(item.id || item.matchId)"><span>{{ new Date(timestamp(item.finishedAt as string || item.startedAt as string)).toLocaleString('ru-RU') }}</span><span>{{ item.mode === 'ranked' || item.ranked ? 'Рейтинговый' : 'Обычный' }}</span><span>{{ item.winnerId === user.id ? 'Победа' : item.winnerId ? 'Поражение' : 'Матч завершён' }}</span><span v-if="item.eloDelta != null">Эло {{ Number(item.eloDelta) > 0 ? '+' : '' }}{{ item.eloDelta }}</span></li></ul><button @click="view = 'menu'">Назад</button>
+      <h2>История матчей</h2><p v-if="!history.length">Пока нет завершённых матчей.</p><ul class="history-list"><li v-for="item in history" :key="String(item.id || item.matchId)"><span>{{ new Date(timestamp(item.finishedAt as string || item.startedAt as string)).toLocaleString('ru-RU') }}</span><span>{{ item.opponentName ? `против ${item.opponentName}` : '' }}</span><span>{{ item.mode === 'ranked' || item.ranked ? 'Рейтинговый' : 'Обычный' }}</span><span>{{ item.winnerId === user.id ? 'Победа' : item.winnerId ? 'Поражение' : 'Матч завершён' }}</span><span v-if="item.eloDelta != null">Эло {{ Number(item.eloDelta) > 0 ? '+' : '' }}{{ item.eloDelta }}</span></li></ul><button @click="view = 'menu'">Назад</button>
     </main>
     <main v-else-if="view === 'match' && match" class="match-screen">
       <div class="match-bar"><div v-for="(player, index) in match.players" :key="player.id" :class="{ current: index === match.currentPlayer && match.status !== 'finished' }"><strong>{{ player.displayName }}</strong><span>{{ groupLabel(groupAt(index)) }} · Осталось {{ groupBalls(index).filter(ball => !ball.pocketed).length }}</span><span class="ball-indicators"><i v-for="ball in groupBalls(index)" :key="ball.id" :class="{ pocketed: ball.pocketed }">{{ ball.id }}</i></span></div><span>Матч {{ formatTime(elapsed) }}</span><span>Ход {{ remaining }} с</span><button @click="gameMenuOpen = true">Меню</button><button @click="settingsOpen = true">Настройки</button><button v-if="isPlayer && match.status !== 'finished'" :disabled="busy" @click="sendCommand('surrender', {})">Сдаться</button><button v-else @click="leave">Выйти</button></div>
       <div class="match-status" role="status">{{ match.status === 'finished' ? `Матч завершён. ${winnerName}` : match.status === 'calculating' || busy ? 'Сервер рассчитывает удар' : playbackBusy ? 'Воспроизведение удара' : !isPlayer ? `Наблюдение. Ходит ${currentPlayerName}` : ownTurn ? 'Ваш ход' : `Ходит ${currentPlayerName}` }}<span v-if="canPlace"> · Установите биток кликом по столу</span></div>
+      <div v-for="player in offlinePlayers" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
       <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол"></div>
       <div v-if="match.status !== 'finished'" class="shot-controls">
         <label>Направление {{ aim.phi.toFixed(1) }}°<input v-model.number="aim.phi" type="range" min="0" max="359.9" step="0.1" :disabled="!canShoot" @input="updateAim" /></label>
@@ -436,7 +458,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
         <button class="shoot" :disabled="!canShoot || canPlace" @click="shoot()">Удар</button><button @click="scene?.resetCamera(true)">Вид сверху</button>
         <button v-if="turnReady && match.snapshot.ballInHand && !match.snapshot.needsPlacement" @click="placingCue = !placingCue">{{ placingCue ? 'Отменить перестановку' : 'Переставить биток' }}</button>
       </div>
-      <div v-else class="result-panel"><h1>{{ match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Матч завершён' : `Победитель: ${winnerName}` }}</h1><p>{{ match.reason }}</p><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
+      <div v-else class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
     </main>
     <div v-if="gameMenuOpen" class="modal-backdrop" @click.self="gameMenuOpen = false">
       <section class="settings-dialog menu" role="dialog" aria-modal="true" aria-labelledby="game-menu-title">

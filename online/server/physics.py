@@ -38,13 +38,13 @@ class PhysicsError(ValueError):
 
 def _finite(value: Any, name: str) -> float:
     if isinstance(value, bool):
-        raise PhysicsError(f"{name} must be a finite number")
+        raise PhysicsError(f"{name}: требуется конечное число")
     try:
         value = float(value)
     except (TypeError, ValueError):
-        raise PhysicsError(f"{name} must be a finite number") from None
+        raise PhysicsError(f"{name}: требуется конечное число") from None
     if not math.isfinite(value):
-        raise PhysicsError(f"{name} must be a finite number")
+        raise PhysicsError(f"{name}: требуется конечное число")
     return value
 
 
@@ -104,14 +104,14 @@ def _restore_game(state: dict[str, Any]):
 
 def _restore_system(state: dict[str, Any]):
     if state.get("version") != STATE_VERSION:
-        raise PhysicsError("Unsupported match physics state version")
+        raise PhysicsError("Неподдерживаемая версия состояния матча")
     table = pt.Table.from_game_type(pt.GameType.EIGHTBALL)
     balls = {}
     for ball_id, data in state["system"]["balls"].items():
         ball = pt.Ball.create(ball_id, xy=data["rvw"][0][:2])
         ball.state = BallState(np.asarray(data["rvw"], dtype=np.float64), int(data["s"]))
         if not np.isfinite(ball.state.rvw).all():
-            raise PhysicsError("Match state contains non-finite ball coordinates")
+            raise PhysicsError("Состояние матча содержит некорректные координаты")
         balls[ball_id] = ball
     for pocket_id, contains in state["system"].get("pockets", {}).items():
         table.pockets[pocket_id].contains.clear()
@@ -178,7 +178,7 @@ def _ensure_safe_cue_respot(system: Any) -> None:
                 cue.state.rvw[0] = [x, y, radius]
                 break
         else:
-            raise PhysicsError("No non-overlapping cue-ball respot is available")
+            raise PhysicsError("Не найдено свободное место для битка")
     cue.state.rvw[1:] = 0
     cue.state.s = pt.constants.stationary
     for pocket in system.table.pockets.values():
@@ -296,38 +296,38 @@ class PhysicsEngine:
     @staticmethod
     def _assert_turn(state: dict[str, Any], shooter: int) -> None:
         if state["rules"]["winner"] is not None:
-            raise PhysicsError("The match has already finished")
+            raise PhysicsError("Матч уже завершён")
         if shooter not in (0, 1) or shooter != state["rules"]["currentPlayer"]:
-            raise PhysicsError("It is not this player's turn")
+            raise PhysicsError("Сейчас ход другого игрока")
 
     @staticmethod
     def validate_shot(state: dict[str, Any], shot: dict[str, Any], shooter: int = 0) -> dict[str, float]:
         PhysicsEngine._assert_turn(state, shooter)
         if state["rules"].get("needsPlacement", False):
-            raise PhysicsError("Place the cue ball before striking")
+            raise PhysicsError("Перед ударом установите биток")
         values = {name: _finite(shot.get(name, default), name) for name, default in {"V0": 2.0, "phi": 90.0, "theta": 0.0, "a": 0.0, "b": 0.0}.items()}
         if not 0.05 <= values["V0"] <= 8.0:
-            raise PhysicsError("V0 must be between 0.05 and 8 m/s")
+            raise PhysicsError("Сила удара должна быть от 0,05 до 8 м/с")
         if not 0 <= values["theta"] <= 60:
-            raise PhysicsError("theta must be between 0 and 60 degrees")
+            raise PhysicsError("Наклон кия должен быть от 0 до 60 градусов")
         if values["a"] ** 2 + values["b"] ** 2 > 0.9 ** 2 + 1e-12:
-            raise PhysicsError("Cue contact must be within 90% of the cue-ball radius")
+            raise PhysicsError("Точка удара должна быть в пределах 90% радиуса битка")
         values["phi"] %= 360
         if shot.get("cueBallId", "cue") != "cue":
-            raise PhysicsError("Eight-ball can only be struck with the cue ball")
+            raise PhysicsError("Бить можно только битком")
         if state["system"]["balls"]["cue"]["s"] == pt.constants.pocketed:
-            raise PhysicsError("Place the cue ball before striking")
+            raise PhysicsError("Перед ударом установите биток")
         constraints = state["rules"]
         if constraints["callShotRequired"]:
             ball_call = str(shot.get("ballCall") or shot.get("ball_call") or "")
             pocket_call = str(shot.get("pocketCall") or shot.get("pocket_call") or "")
             if ball_call not in constraints["hittable"]:
-                raise PhysicsError("Call a ball from your target group before striking")
+                raise PhysicsError("Перед ударом закажите шар своей группы")
             if state["system"]["balls"][ball_call]["s"] == pt.constants.pocketed:
-                raise PhysicsError("Cannot call an already pocketed ball")
+                raise PhysicsError("Нельзя заказать уже забитый шар")
             pocket_call = POCKET_ALIASES.get(pocket_call, pocket_call)
             if pocket_call not in ("lb", "lc", "lt", "rb", "rc", "rt"):
-                raise PhysicsError("Call one of the six table pockets before striking")
+                raise PhysicsError("Перед ударом закажите одну из шести луз")
         return values
 
     @staticmethod
@@ -343,9 +343,9 @@ class PhysicsEngine:
         system.strike(**values)
         pt.simulate(system, engine=ENGINE, inplace=True, max_events=MAX_EVENTS, t_final=MAX_DURATION)
         if len(system.events) >= MAX_EVENTS or system.t >= MAX_DURATION:
-            raise PhysicsError("Physics simulation exceeded the event or duration limit")
+            raise PhysicsError("Симуляция превысила лимит событий или длительности")
         if any(ball.state.s not in (pt.constants.stationary, pt.constants.pocketed) for ball in system.balls.values()):
-            raise PhysicsError("Physics simulation did not reach a settled table")
+            raise PhysicsError("Симуляция не завершилась остановкой шаров")
         pt.continuize(system, dt=PLAYBACK_DT, inplace=True)
         quaternions = {key: list(data["quaternion"]) for key, data in state["system"]["balls"].items()}
         trajectory = PhysicsEngine._trajectory(system, quaternions)
@@ -425,9 +425,18 @@ class PhysicsEngine:
 
     @staticmethod
     def _trajectory(system: Any, quaternions: dict[str, list[float]]) -> dict[str, Any]:
+        """Delta-encoded playback: a frame lists only balls whose visible state changed.
+
+        Each entry is ``[id, x, y, z, state, qx, qy, qz, qw]``; the client expands
+        it back into full frames (see ``expandTrajectory`` in the web client).
+
+        Positions are rounded to 0.01 mm and quaternions to 1e-4, far below what
+        a rendered frame can show; resting balls are not repeated every 1/60 s.
+        """
         balls = sorted(system.balls.values(), key=lambda ball: ball.id)
         frames = []
         last_time = 0.0
+        emitted: dict[str, tuple] = {}
         for index in range(len(balls[0].history_cts)):
             timestamp = float(balls[0].history_cts[index].t)
             frame_balls = []
@@ -437,34 +446,38 @@ class PhysicsEngine:
                     previous = ball.history_cts[index - 1]
                     omega = (previous.rvw[2] + current.rvw[2]) / 2
                     quaternions[ball.id] = _quaternion_step(quaternions[ball.id], omega, timestamp - last_time)
-                view = _ball_view(ball, list(quaternions[ball.id]), current)
-                frame_balls.append({key: view[key] for key in ("id", "position", "state", "pocketed", "quaternion")})
-            frames.append({"t": round(timestamp, 9), "balls": frame_balls})
+                position = [round(float(value), 5) for value in current.rvw[0]]
+                quaternion = [round(float(value), 4) for value in quaternions[ball.id]]
+                key = (tuple(position), tuple(quaternion), int(current.s))
+                if emitted.get(ball.id) != key:
+                    emitted[ball.id] = key
+                    frame_balls.append([ball.id, *position, int(current.s), *quaternion])
+            frames.append({"t": round(timestamp, 5), "balls": frame_balls})
             last_time = timestamp
-        return {"duration": round(float(system.t), 9), "dt": PLAYBACK_DT, "frames": frames}
+        return {"duration": round(float(system.t), 9), "dt": PLAYBACK_DT, "encoding": "delta", "frames": frames}
 
     @staticmethod
     def place_cue_ball(state: dict[str, Any], x: float, y: float, shooter: int = 0) -> dict[str, Any]:
         PhysicsEngine._assert_turn(state, shooter)
         region = state["rules"]["ballInHandRegion"]
         if region == str(BallInHandOptions.NONE):
-            raise PhysicsError("Cue-ball placement is not allowed on this turn")
+            raise PhysicsError("В этот ход переставлять биток нельзя")
         x, y = _finite(x, "x"), _finite(y, "y")
         system = _restore_system(state)
         cue = system.balls["cue"]
         radius = cue.params.R
         if not radius <= x <= system.table.w - radius or not radius <= y <= system.table.l - radius:
-            raise PhysicsError("Cue ball must remain inside the playing surface")
+            raise PhysicsError("Биток должен находиться на игровом поле")
         if region == str(BallInHandOptions.BEHIND_LINE) and y > system.table.l / 4:
-            raise PhysicsError("The break cue ball must remain behind the head string")
+            raise PhysicsError("При разбое биток ставится за линией дома")
         for ball in system.balls.values():
             if ball.id == "cue" or ball.state.s == pt.constants.pocketed:
                 continue
             if math.hypot(x - ball.xyz[0], y - ball.xyz[1]) < radius + ball.params.R + 1e-5:
-                raise PhysicsError("Cue-ball placement overlaps another ball")
+                raise PhysicsError("Биток пересекается с другим шаром")
         for pocket in system.table.pockets.values():
             if math.hypot(x - pocket.center[0], y - pocket.center[1]) < pocket.radius + radius:
-                raise PhysicsError("Cue ball cannot be placed in a pocket opening")
+                raise PhysicsError("Биток нельзя поставить в створ лузы")
         next_state = copy.deepcopy(state)
         next_state["system"]["balls"]["cue"]["rvw"] = [[x, y, radius], [0.0] * 3, [0.0] * 3]
         next_state["system"]["balls"]["cue"]["s"] = pt.constants.stationary

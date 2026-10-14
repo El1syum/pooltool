@@ -64,6 +64,14 @@ class Store:
         CREATE INDEX IF NOT EXISTS telemetry_match ON telemetry(match_id,timestamp);
         CREATE INDEX IF NOT EXISTS matches_room ON matches(room_id);
         CREATE INDEX IF NOT EXISTS matches_status ON matches(json_extract(payload,'$.status'));
+        CREATE INDEX IF NOT EXISTS rooms_status ON rooms(json_extract(payload,'$.status'));
+        CREATE TABLE IF NOT EXISTS match_players(
+            match_id TEXT NOT NULL REFERENCES matches(id), user_id TEXT NOT NULL,
+            PRIMARY KEY(user_id, match_id)
+        );
+        INSERT OR IGNORE INTO match_players(match_id, user_id)
+            SELECT matches.id, json_extract(player.value, '$.id')
+            FROM matches, json_each(matches.payload, '$.players') AS player;
         """)
         self.db.commit()
 

@@ -11,7 +11,11 @@ rooms and invite codes, casual/ranked matchmaking, two players and spectators,
 server-owned turns/physics/rules, reconnect, timeouts, surrender, Elo, editable
 profiles, match history, persistent input/graphics/audio settings and telemetry.
 The user deferred final Figma styling and VK publication on 2026-10-14. The client
-uses functional controls until finished designer layouts are available. It does
+uses functional controls until finished designer layouts are available.
+Physics and rules are the real pooltool engine, but the browser renderer is a
+separate, simplified Three.js scene (procedural table, original ball textures):
+the desktop Panda3D renderer cannot run in a browser, and the fork's sparse
+checkout omits pooltool's room/table/cue art. It does
 not use Figma screenshots as assets. Ball textures are original pooltool assets.
 
 ## Run locally
@@ -44,8 +48,8 @@ WebSocket traffic to the same service on port 8790.
 ## Architecture
 
 The client sends `V0/phi/theta/a/b` and a command ID plus expected revision. Only
-the server holds complete physical state and adjudicates the shot. A separately
-killable CPU process simulates the real engine, produces trajectories/events,
+the server holds complete physical state and adjudicates the shot. A pool of pre-warmed,
+killable CPU processes simulates the real engine, produces trajectories/events,
 and commits final state before broadcasting it. Clients interpolate the shared
 trajectory using a server timestamp with clock calibration. No client-computed
 winner, ball position or coefficient is trusted.
@@ -68,6 +72,10 @@ cd online/client
 npm run build
 node --test --experimental-strip-types src/game/playback.test.mjs
 ```
+
+`python -m online.server.tests.load_probe --matches 8 --shots 3` measures shot latency
+under concurrent matches against a running service (see its header for the guest
+login limit).
 
 `online/client/tests/browser-smoke.mjs` exercises two real browser clients plus a
 spectator against the running service; see its header for the Playwright path and

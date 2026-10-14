@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } from './playback.ts'
+import { expandTrajectory, isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } from './playback.ts'
 
 test('pocket labels use the same clockwise mapping regardless of server array order', () => {
   const serverOrder = ['lb', 'lc', 'lt', 'rb', 'rc', 'rt']
@@ -60,4 +60,19 @@ test('placement honors the server-provided restricted region', () => {
   assert.equal(isLegalCuePlacement([0.5, 0.5, 0.03], snapshot, { maxY: 0.4 }), false)
   assert.equal(isLegalCuePlacement([0.5, 0.3, 0.03], snapshot, { maxY: 0.4 }), true)
   assert.equal(isLegalCuePlacement([NaN, 0.5, 0.03], snapshot), false)
+})
+
+test('delta trajectories expand to full frames that keep resting balls in place', () => {
+  const expanded = expandTrajectory({
+    duration: 1, encoding: 'delta',
+    frames: [
+      { t: 0, balls: [['cue', 0, 0, 0.03, 2, 0, 0, 0, 1], ['8', 1, 1, 0.03, 0, 0, 0, 0, 1]] },
+      { t: 0.5, balls: [['cue', 0.5, 0, 0.03, 2, 0, 0, 0, 1]] },
+      { t: 1, balls: [['8', 1, 1, 0.03, 4, 0, 0, 0, 1]] },
+    ],
+  })
+  assert.equal(expanded.frames.length, 3)
+  assert.deepEqual(expanded.frames[1].balls.map(b => [b.id, b.position[0]]), [['cue', 0.5], ['8', 1]])
+  assert.deepEqual(expanded.frames[2].balls.map(b => [b.id, b.position[0], b.pocketed]), [['cue', 0.5, false], ['8', 1, true]])
+  assert.deepEqual(sampleTrajectory(expanded, 0.25)[0].position, [0.25, 0, 0.03])
 })

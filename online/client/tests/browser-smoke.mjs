@@ -214,7 +214,7 @@ for (const engineName of engines) {
     assert.equal((await api(first, '/api/me', undefined, 'GET')).data.user.games, 1)
     await first.getByRole('button', { name: 'Назад', exact: true }).click()
     const firstLeave = first.waitForResponse(response => response.url().endsWith(`/api/rooms/${code}/leave`) && response.request().method() === 'POST')
-    await first.getByRole('button', { name: 'Выход', exact: true }).click()
+    await first.getByRole('button', { name: 'Выйти из комнаты', exact: true }).click()
     assert.equal((await firstLeave).status(), 200)
     const secondLeave = second.waitForResponse(response => response.url().endsWith(`/api/rooms/${code}/leave`) && response.request().method() === 'POST')
     await second.getByRole('button', { name: 'В главное меню', exact: true }).click()

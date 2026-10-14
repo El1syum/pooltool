@@ -412,3 +412,78 @@ def test_pending_command_is_recovered_after_server_restart(tmp_path):
         assert duplicate.status_code == 200, duplicate.text
         assert duplicate.json()["duplicate"] is True
         assert recovery_engine.calls == 1
+
+
+def time_of(value):
+    from datetime import datetime
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+
+
+def test_opponent_sees_disconnect_with_forfeit_time_and_its_clearing(setup):
+    client, _, clock = setup
+    a, data_a = login(client, "А")
+    b, data_b = login(client, "Б")
+    with client.websocket_connect("/ws") as socket_b:
+        socket_b.send_json({"type": "auth", "token": data_b["token"]})
+        receive_type(socket_b, "restored")
+        _, match = start_room(client, a, b)
+        receive_type(socket_b, "match")
+        # Starlette's test socket cancels the server handler on close, so the
+        # socket-close path is invoked directly, as uvicorn does after a drop.
+        service = client.app.state.service
+        client.portal.call(service.disconnect, data_a["user"]["id"], service.session(data_a["token"]))
+        # The remaining player is told immediately, not only when the forfeit happens.
+        notice = receive_type(socket_b, "match")["match"]
+        grace = client.app.state.service.grace
+        forfeit_at = notice["disconnectedPlayers"][data_a["user"]["id"]]
+        assert abs(time_of(forfeit_at) - (clock[0] + grace)) < 1
+        assert "disconnected" not in notice
+        with client.websocket_connect("/ws") as socket_a:
+            socket_a.send_json({"type": "auth", "token": data_a["token"]})
+            receive_type(socket_a, "restored")
+            assert receive_type(socket_b, "match")["match"]["disconnectedPlayers"] == {}
+
+
+def test_finished_playback_is_not_rebroadcast_and_history_has_elo_and_opponent(setup):
+    client, _, clock = setup
+    a, data_a = login(client, "А")
+    b, _ = login(client, "Б")
+    _, match = start_room(client, a, b)
+    endpoint = f"/api/matches/{match['id']}/commands"
+    assert client.post(endpoint, headers=a, json=shot()).status_code == 200
+    during = client.get(f"/api/matches/{match['id']}", headers=b).json()["match"]
+    assert "trajectory" in during["lastShot"]["result"]
+    clock[0] += 1
+    after = client.get(f"/api/matches/{match['id']}", headers=b).json()["match"]
+    assert "trajectory" not in after["lastShot"]["result"]
+    surrender = {"commandId": "casual-surrender", "expectedRevision": after["revision"], "type": "surrender"}
+    assert client.post(endpoint, headers=b, json=surrender).status_code == 200
+    item = client.get("/api/me/history", headers=a).json()["matches"][0]
+    assert item["opponentName"] == "Б"
+    assert item["eloDelta"] is None  # Casual matches do not change rating.
+
+
+def test_ranked_history_reports_own_elo_delta(setup):
+    client, _, clock = setup
+    a, data_a = login(client, "А")
+    b, _ = login(client, "Б")
+    client.post("/api/matchmaking", headers=a, json={"mode": "ranked"})
+    client.post("/api/matchmaking", headers=b, json={"mode": "ranked"})
+    match_id = client.get("/api/matchmaking", headers=a).json()["matchId"]
+    client.post(f"/api/matches/{match_id}/commands", headers=b, json={"commandId": "ranked-delta", "expectedRevision": 0, "type": "surrender"})
+    item = client.get("/api/me/history", headers=a).json()["matches"][0]
+    assert item["eloDelta"] == client.get("/api/me", headers=a).json()["user"]["elo"] - 1000 > 0
+
+
+def test_finished_rooms_are_closed_after_ttl_and_players_become_free(setup):
+    client, _, clock = setup
+    a, _ = login(client, "А")
+    b, _ = login(client, "Б")
+    code, match = start_room(client, a, b)
+    client.post(f"/api/matches/{match['id']}/commands", headers=a, json={"commandId": "ttl-surrender", "expectedRevision": 0, "type": "surrender"})
+    assert client.get("/api/me/current", headers=a).json()["room"]["status"] == "finished"
+    clock[0] += client.app.state.service.room_ttl + 1
+    client.portal.call(client.app.state.service.tick)
+    assert client.get("/api/me/current", headers=a).json()["room"] is None
+    assert client.post("/api/rooms", headers=a, json={}).status_code == 200
+    assert len(client.get("/api/me/history", headers=a).json()["matches"]) == 1

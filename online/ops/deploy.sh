@@ -22,7 +22,7 @@ install -m 644 "$release/online/ops/pooltool-online.service" /etc/systemd/system
 systemctl daemon-reload
 systemctl enable --now pooltool-online.service
 systemctl restart pooltool-online.service
-for attempt in $(seq 1 120); do
+for attempt in $(seq 1 240); do  # Covers JIT warmup of the server and the first physics worker.
   if curl --fail --silent http://127.0.0.1:8790/ready >/dev/null; then
     echo "Pooltool Online ready: $release"
     exit 0

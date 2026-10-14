@@ -28,7 +28,9 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
   await api(`/api/rooms/${room.code}/join`, second.token)
   await api(`/api/rooms/${room.code}/ready`, first.token, { ready: true })
   await api(`/api/rooms/${room.code}/ready`, second.token, { ready: true })
-  const browser = await engine.launch({ headless: true, ...(engineName === 'chromium' ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}) })
+  const browser = await engine.launch({ headless: true,
+    ...(process.env[`${engineName.toUpperCase()}_EXECUTABLE`] ? { executablePath: process.env[`${engineName.toUpperCase()}_EXECUTABLE`] } : {}),
+    ...(engineName === 'chromium' ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}) })
   try {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true })
     await context.addInitScript(token => localStorage.setItem('pooltool.token', token), first.token)
