@@ -31,6 +31,9 @@ export interface ShotResult {
   startAt?: number
   playbackStartAt?: number
   outcome?: Record<string, unknown>
+  playerId?: string
+  potted?: Array<{ ball: string; pocket: string; time?: number }>
+  rules?: { foul?: boolean; foulReason?: string; nextPlayer?: number; winner?: number | null }
 }
 export interface Match {
   id: string

@@ -2,10 +2,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ApiError, CLIENT_VERSION, post, request, setToken, socketUrl, timestamp } from './api'
 import type { User, Room, Match, ShotResult } from './api'
-import { createGameScene } from './game/createGameScene'
+import { BALL_COLORS, POCKET_COLORS, createGameScene } from './game/createGameScene'
 import { expandTrajectory, numberForPocket } from './game/playback'
 import { DEFAULT_BINDINGS } from './game/types'
-import type { AimState, BindingAction, GameScene, GameSettings } from './game/types'
+import type { AimState, BindingAction, CameraMode, GameScene, GameSettings } from './game/types'
 
 type View = 'menu' | 'play' | 'lobby' | 'search' | 'match' | 'profile'
 const view = ref<View>('menu')
@@ -83,7 +83,7 @@ const remainingBalls = computed(() => {
   const targets = match.value?.snapshot.hittable
   return match.value?.snapshot.balls.filter((b) => b.id !== 'cue' && !b.pocketed && (!Array.isArray(targets) || targets.includes(String(b.id)))) || []
 })
-const captureLabels: Record<BindingAction, string> = { aimLeft: 'Прицел влево', aimRight: 'Прицел вправо', powerUp: 'Увеличить силу', powerDown: 'Уменьшить силу', elevationUp: 'Поднять кий', elevationDown: 'Опустить кий', spinLeft: 'Вращение влево', spinRight: 'Вращение вправо', spinUp: 'Вращение вверх', spinDown: 'Вращение вниз', shoot: 'Удар', resetCamera: 'Сброс камеры', topView: 'Вид сверху', orbit: 'Вращать камеру' }
+const captureLabels: Record<BindingAction, string> = { aimLeft: 'Прицел влево', aimRight: 'Прицел вправо', powerUp: 'Увеличить силу', powerDown: 'Уменьшить силу', elevationUp: 'Поднять кий', elevationDown: 'Опустить кий', spinLeft: 'Вращение влево', spinRight: 'Вращение вправо', spinUp: 'Вращение вверх', spinDown: 'Вращение вниз', shoot: 'Удар', resetCamera: 'Сброс камеры', topView: 'Вид сверху', orbit: 'Вращать камеру', cameraLeft: 'Повернуть стол влево', cameraRight: 'Повернуть стол вправо', cueView: 'Вид из-за кия' }
 const bindingConflicts = computed(() => {
   const seen = new Map<string, string>()
   const conflicts: string[] = []
@@ -114,6 +114,77 @@ const offlinePlayers = computed(() => {
     seconds: Math.max(0, Math.ceil((timestamp(forfeitAt) - now.value - serverClockOffset.value) / 1000)),
   }))
 })
+const cameraMode = ref<CameraMode>('free')
+const toast = ref<{ title: string; lines: string[]; tone: 'good' | 'bad' | 'neutral' } | null>(null)
+let pendingSummary: ShotResult | null = null
+let toastTimer = 0
+const foulReasons: Record<string, string> = {
+  'Cue ball in pocket!': 'биток упал в лузу',
+  '4 rails must be contacted, or 1 ball potted': 'на разбое нужно 4 касания бортов или забитый шар',
+  'No ball contacted': 'биток не коснулся ни одного шара',
+  "First contact wasn't made with target balls": 'первым задет шар не своей группы',
+  'Cushion not contacted after first contact': 'после касания ни один шар не дошёл до борта',
+  'Shot not called, but it was required!': 'удар не был заказан',
+  '8-ball sunk illegally (out of turn or wrong pocket)!': 'восьмёрка забита не по правилам',
+  'Shot clock expired': 'истекло время хода',
+}
+const timerPercent = computed(() => Math.max(0, Math.min(100, remaining.value / (room.value?.settings.turnSeconds || 60) * 100)))
+const spinLabel = computed(() => {
+  const { a, b } = aim.value
+  const parts = [b > 0.12 ? 'накат' : b < -0.12 ? 'оттяжка' : '', a > 0.12 ? 'правый винт' : a < -0.12 ? 'левый винт' : ''].filter(Boolean)
+  return parts.length ? parts.join(', ') : 'центр'
+})
+const pocketChips = computed(() => (match.value?.snapshot.table.pockets || [])
+  .map((pocket, index) => ({ id: String(pocket.id), number: numberForPocket(String(pocket.id), index), color: pocketColor(String(pocket.id), index) }))
+  .sort((left, right) => left.number - right.number))
+function hexColor(value: number) { return `#${value.toString(16).padStart(6, '0')}` }
+function pocketColor(id: string, index: number) { return hexColor(POCKET_COLORS[numberForPocket(id, index) - 1] ?? POCKET_COLORS[0]!) }
+function ballChipStyle(id: string | number) {
+  const number = Number(id)
+  const color = BALL_COLORS[number > 8 ? number - 8 : number] ?? '#fffdf4'
+  return number > 8 ? { background: `linear-gradient(#fffdf4 0 26%, ${color} 26% 74%, #fffdf4 74%)` } : { background: color }
+}
+function selectBall(id: string) { calledBall.value = calledBall.value === id ? '' : id }
+function selectPocket(id: string) { calledPocket.value = calledPocket.value === id ? '' : id }
+/** Drag on the cue-ball face: x/y are the cue-tip offset in ball radii (pooltool a/b). */
+function spinPointer(event: PointerEvent) {
+  if (!canShoot.value || (event.type === 'pointermove' && !(event.buttons & 1))) return
+  const target = event.currentTarget as SVGSVGElement
+  if (event.type === 'pointerdown') target.setPointerCapture(event.pointerId)
+  const rect = target.getBoundingClientRect()
+  let a = ((event.clientX - rect.left) / rect.width * 120 - 60) / 50
+  let b = -((event.clientY - rect.top) / rect.height * 120 - 60) / 50
+  const length = Math.hypot(a, b)
+  if (length > 0.8) { a *= 0.8 / length; b *= 0.8 / length }
+  aim.value = { ...aim.value, a: Math.round(a * 100) / 100, b: Math.round(b * 100) / 100 }
+  updateAim()
+}
+function resetSpin() { aim.value = { ...aim.value, a: 0, b: 0 }; updateAim() }
+function showToast(value: NonNullable<typeof toast.value>) {
+  toast.value = value
+  clearTimeout(toastTimer)
+  toastTimer = window.setTimeout(() => { toast.value = null }, 4000)
+}
+/** One-line outcome of the shot that just finished playing. */
+function summarizeShot(shot: ShotResult) {
+  const players = match.value?.players || []
+  const shooter = players.find((p) => p.id === shot.playerId)
+  const lines: string[] = []
+  for (const item of shot.potted || []) {
+    const pocketIndex = match.value?.snapshot.table.pockets.findIndex((p) => String(p.id) === item.pocket) ?? 0
+    const pocketNumber = numberForPocket(item.pocket, Math.max(0, pocketIndex))
+    lines.push(item.ball === 'cue' ? `Биток упал в лузу ${pocketNumber}` : `Шар ${item.ball} → луза ${pocketNumber}`)
+  }
+  const rules = shot.rules || {}
+  if (rules.foul) lines.push(`Фол: ${foulReasons[rules.foulReason || ''] || rules.foulReason || 'нарушение правил'}`)
+  if (!lines.length) lines.push('Ни один шар не забит')
+  if (rules.winner == null && typeof rules.nextPlayer === 'number') {
+    const next = players[rules.nextPlayer]
+    lines.push(next?.id === shot.playerId ? `${next?.displayName || 'Игрок'} продолжает` : `Ход переходит: ${next?.displayName || 'соперник'}`)
+  }
+  const pottedOwn = (shot.potted || []).some((item) => item.ball !== 'cue')
+  showToast({ title: shooter ? `Удар: ${shooter.displayName}` : 'Удар', lines, tone: rules.foul ? 'bad' : pottedOwn ? 'good' : 'neutral' })
+}
 function formatTime(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` }
 function groupLabel(group?: string) { return group === 'solids' ? 'Цельные' : group === 'stripes' ? 'Полосатые' : 'Группа не определена' }
 function groupAt(index: number): string | undefined { const groups = match.value?.snapshot.groups; return Array.isArray(groups) ? groups[index] || undefined : undefined }
@@ -251,6 +322,7 @@ function receiveMatch(value: Match, result?: ShotResult) {
     if (shotKey !== lastPlayedShot && start + shot.duration * 1000 > Date.now()) {
       lastPlayedShot = shotKey
       playbackBusy.value = true
+      pendingSummary = shot
       const trajectory = expandTrajectory(shot.trajectory)
       void nextTick(() => { ensureScene(); scene?.setState(shot.initialState); scene?.playShot(trajectory, start) })
     } else if (!playbackBusy.value) scene?.setState(value.snapshot)
@@ -286,14 +358,22 @@ function ensureScene() {
       onShoot: (value) => { void shoot(value) },
       onPlaceCueBall: ([x, y]) => { void sendCommand('placeCueBall', { x, y }) },
       onSelectBall: (id) => { if (id !== 'cue') calledBall.value = id },
-      onSelectPocket: (id) => { calledPocket.value = id; scene?.setCalledPocket(id) },
-      onPlaybackComplete: () => { playbackBusy.value = false; if (match.value) scene?.setState(match.value.snapshot); updateInteraction() },
+      onSelectPocket: (id) => { calledPocket.value = id },
+      onCameraModeChange: (mode) => { cameraMode.value = mode },
+      onPlaybackComplete: () => {
+        playbackBusy.value = false
+        if (match.value) scene?.setState(match.value.snapshot)
+        updateInteraction()
+        if (pendingSummary) { summarizeShot(pendingSummary); pendingSummary = null }
+      },
       onError: (message) => { error.value = message; telemetry('clientError', { message: message.slice(0, 500) }) },
       onPerformance: (stats) => { telemetry('clientPerformance', stats) },
     })
     scene.setSettings(settings.value)
     scene.setState(match.value.snapshot)
     scene.setAim(aim.value)
+    scene.setCalledBall(calledBall.value || null)
+    scene.setCalledPocket(calledPocket.value || null)
     updateInteraction()
   } catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось открыть 3D-сцену' }
 }
@@ -304,6 +384,8 @@ function updateInteraction() {
 }
 watch(stage, () => { if (stage.value) ensureScene(); else { scene?.destroy(); scene = null; playbackBusy.value = false } }, { flush: 'post' })
 watch([canShoot, canPlace, isPlayer], updateInteraction)
+watch(calledBall, (id) => scene?.setCalledBall(id || null))
+watch(calledPocket, (id) => scene?.setCalledPocket(id || null))
 watch(settings, () => { scene?.setSettings(settings.value); if (user.value) { localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value)); settingsDirty.value = true } }, { deep: true })
 function updateAim() { scene?.setAim(aim.value) }
 /** One round trip on the open socket; null when the socket is not usable. */
@@ -496,18 +578,40 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
     </main>
     <main v-else-if="view === 'match' && match" class="match-screen">
       <div class="match-bar"><div v-for="(player, index) in match.players" :key="player.id" :class="{ current: index === match.currentPlayer && match.status !== 'finished' }"><strong>{{ player.displayName }}</strong><span>{{ groupLabel(groupAt(index)) }} · Осталось {{ groupBalls(index).filter(ball => !ball.pocketed).length }}</span><span class="ball-indicators"><i v-for="ball in groupBalls(index)" :key="ball.id" :class="{ pocketed: ball.pocketed }">{{ ball.id }}</i></span></div><span>Матч {{ formatTime(elapsed) }}</span><span>Ход {{ remaining }} с</span><button @click="gameMenuOpen = true">Меню</button><button @click="settingsOpen = true">Настройки</button><button v-if="isPlayer && match.status !== 'finished'" :disabled="busy" @click="sendCommand('surrender', {})">Сдаться</button><button v-else @click="leave">Выйти</button></div>
-      <div class="match-status" role="status">{{ match.status === 'finished' ? `Матч завершён. ${winnerName}` : match.status === 'calculating' || busy ? 'Сервер рассчитывает удар' : playbackBusy ? 'Воспроизведение удара' : !isPlayer ? `Наблюдение. Ходит ${currentPlayerName}` : ownTurn ? 'Ваш ход' : botTurn ? `${currentPlayerName} думает…` : `Ходит ${currentPlayerName}` }}<span v-if="canPlace"> · Установите биток кликом по столу</span></div>
+      <div class="match-status" role="status">{{ match.status === 'finished' ? `Матч завершён. ${winnerName}` : match.status === 'calculating' || busy ? 'Сервер рассчитывает удар' : playbackBusy ? 'Воспроизведение удара' : !isPlayer ? `Наблюдение. Ходит ${currentPlayerName}` : ownTurn ? 'Ваш ход' : botTurn ? `${currentPlayerName} думает…` : `Ходит ${currentPlayerName}` }}<span v-if="canPlace"> · Установите биток кликом по столу</span>
+        <span class="camera-tools" role="toolbar" aria-label="Камера"><button title="Повернуть стол влево (Q)" aria-label="Повернуть стол влево" @click="scene?.rotateCamera(-0.4)">⟲</button><button title="Повернуть стол вправо (E)" aria-label="Повернуть стол вправо" @click="scene?.rotateCamera(0.4)">⟳</button><button title="Приблизить" aria-label="Приблизить" @click="scene?.zoomCamera(0.85)">+</button><button title="Отдалить" aria-label="Отдалить" @click="scene?.zoomCamera(1.18)">−</button><button @click="scene?.resetCamera(true)">Вид сверху</button><button @click="scene?.resetCamera()">Обзор</button><button :aria-pressed="cameraMode === 'cue'" :class="{ active: cameraMode === 'cue' }" title="Вид из-за кия (V)" @click="scene?.setCameraMode(cameraMode === 'cue' ? 'free' : 'cue')">Из-за кия</button></span></div>
+      <div v-if="match.status === 'active' && match.deadline" class="turn-timer" :class="{ low: remaining <= 10 }" aria-hidden="true"><i :style="{ width: `${timerPercent}%` }"></i></div>
       <div v-for="player in offlinePlayers" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
-      <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол"></div>
+      <div class="stage-wrap">
+        <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол"></div>
+        <Transition name="toast"><div v-if="toast" class="shot-toast" :class="toast.tone" role="status"><strong>{{ toast.title }}</strong><span v-for="line in toast.lines" :key="line">{{ line }}</span></div></Transition>
+        <p class="stage-hint">ЛКМ — прицел · ПКМ или Q/E — повернуть стол · колесо — масштаб · V — вид из-за кия · пробел — удар</p>
+      </div>
       <div v-if="match.status !== 'finished'" class="shot-controls">
-        <label>Направление {{ aim.phi.toFixed(1) }}°<input v-model.number="aim.phi" type="range" min="0" max="359.9" step="0.1" :disabled="!canShoot" @input="updateAim" /></label>
-        <label>Сила {{ aim.V0.toFixed(1) }} м/с<input v-model.number="aim.V0" type="range" min="0.2" max="8" step="0.1" :disabled="!canShoot" @input="updateAim" /></label>
-        <label>Наклон {{ aim.theta }}°<input v-model.number="aim.theta" type="range" min="0" max="60" step="1" :disabled="!canShoot" @input="updateAim" /></label>
-        <label>Вращение X<input v-model.number="aim.a" type="range" min="-0.6" max="0.6" step="0.02" :disabled="!canShoot" @input="updateAim" /></label><label>Вращение Y<input v-model.number="aim.b" type="range" min="-0.6" max="0.6" step="0.02" :disabled="!canShoot" @input="updateAim" /></label>
-        <label>Заказанный шар<select v-model="calledBall" :disabled="!canShoot"><option value="">Без заказа</option><option v-for="ball in remainingBalls" :key="ball.id" :value="String(ball.id)">{{ ball.id }}</option></select></label>
-        <label>Заказанная луза<select v-model="calledPocket" :disabled="!canShoot" @change="scene?.setCalledPocket(calledPocket || null)"><option value="">Без заказа</option><option v-for="(pocket, i) in match.snapshot.table.pockets" :key="pocket.id" :value="String(pocket.id)">Луза {{ numberForPocket(String(pocket.id), i) }}</option></select></label>
-        <button class="shoot" :disabled="!canShoot || canPlace" @click="shoot()">Удар</button><button @click="scene?.resetCamera(true)">Вид сверху</button>
-        <button v-if="turnReady && match.snapshot.ballInHand && !match.snapshot.needsPlacement" @click="placingCue = !placingCue">{{ placingCue ? 'Отменить перестановку' : 'Переставить биток' }}</button>
+        <div class="control-block spin-block">
+          <span class="control-title">Точка удара по битку</span>
+          <svg class="spin-widget" :class="{ disabled: !canShoot }" viewBox="-60 -60 120 120" role="img" :aria-label="`Точка удара: ${spinLabel}. Перетащите точку или используйте клавиши A, D, R, F.`" @pointerdown="spinPointer" @pointermove="spinPointer">
+            <circle r="50" class="spin-ball" /><circle r="40" class="spin-limit" />
+            <line x1="-50" y1="0" x2="50" y2="0" class="spin-axis" /><line x1="0" y1="-50" x2="0" y2="50" class="spin-axis" />
+            <circle :cx="aim.a * 50" :cy="-aim.b * 50" r="7" class="spin-tip" />
+          </svg>
+          <span class="spin-caption">{{ spinLabel }} <button class="link-button" :disabled="!canShoot || (!aim.a && !aim.b)" @click="resetSpin">в центр</button></span>
+        </div>
+        <div class="control-block">
+          <label class="power-label">Сила {{ aim.V0.toFixed(1) }} м/с<input v-model.number="aim.V0" class="power-range" type="range" min="0.2" max="8" step="0.1" :disabled="!canShoot" @input="updateAim" /></label>
+          <label>Направление {{ aim.phi.toFixed(1) }}°<input v-model.number="aim.phi" type="range" min="0" max="359.9" step="0.1" :disabled="!canShoot" @input="updateAim" /></label>
+          <label>Наклон кия {{ aim.theta }}°<input v-model.number="aim.theta" type="range" min="0" max="60" step="1" :disabled="!canShoot" @input="updateAim" /></label>
+        </div>
+        <div class="control-block">
+          <span class="control-title">Заказ шара<em v-if="match.snapshot.callShotRequired"> · обязательно</em></span>
+          <div class="chip-row"><button v-for="ball in remainingBalls" :key="ball.id" class="ball-chip" :class="{ selected: calledBall === String(ball.id) }" :style="ballChipStyle(ball.id)" :aria-pressed="calledBall === String(ball.id)" :aria-label="`Шар ${ball.id}`" :disabled="!canShoot" @click="selectBall(String(ball.id))"><span>{{ ball.id }}</span></button></div>
+          <span class="control-title">Заказ лузы</span>
+          <div class="chip-row"><button v-for="pocket in pocketChips" :key="pocket.id" class="pocket-chip" :class="{ selected: calledPocket === pocket.id }" :style="{ background: pocket.color }" :aria-pressed="calledPocket === pocket.id" :aria-label="`Луза ${pocket.number}`" :disabled="!canShoot" @click="selectPocket(pocket.id)">{{ pocket.number }}</button></div>
+        </div>
+        <div class="control-block action-block">
+          <button class="shoot" :disabled="!canShoot || canPlace" @click="shoot()">Удар</button>
+          <button v-if="turnReady && match.snapshot.ballInHand && !match.snapshot.needsPlacement" @click="placingCue = !placingCue">{{ placingCue ? 'Отменить перестановку' : 'Переставить биток' }}</button>
+        </div>
       </div>
       <div v-else class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
     </main>

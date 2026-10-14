@@ -5,13 +5,15 @@ import { isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } 
 import {
   DEFAULT_BINDINGS,
   type AimParameters, type BallState, type BindingAction, type GameScene, type GameSnapshot,
-  type SceneCallbacks, type SceneInteraction, type SceneSettings, type ShotTrajectory, type Vec3Tuple,
+  type CameraMode, type SceneCallbacks, type SceneInteraction, type SceneSettings, type ShotTrajectory, type Vec3Tuple,
 } from './types'
 
-const POCKET_COLORS = [0xf3ab43, 0x62cfc2, 0x669bf8, 0xf26a78, 0xaa80e7, 0xf0d667]
-const BALL_COLORS = ['#fffdf4', '#edba1c', '#305db8', '#d3323b', '#803bac', '#e97727', '#239652', '#8e2637', '#191d22']
+/** Pocket marker colours by pocket number 1..6; the HUD uses the same palette. */
+export const POCKET_COLORS = [0xf3ab43, 0x62cfc2, 0x669bf8, 0xf26a78, 0xaa80e7, 0xf0d667]
+export const BALL_COLORS = ['#fffdf4', '#edba1c', '#305db8', '#d3323b', '#803bac', '#e97727', '#239652', '#8e2637', '#191d22']
 const BASIS = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2)
 const BASIS_INVERSE = BASIS.clone().invert()
+const UP = new THREE.Vector3(0, 1, 0)
 const DEFAULT_SETTINGS: SceneSettings = {
   quality: 'medium', volume: 0.5, sensitivity: 1, bindings: { ...DEFAULT_BINDINGS },
   showAimGuide: true, showPocketLabels: true,
@@ -156,7 +158,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   let measuredAt = lastTick
   let measuredFrames = 0
   let framingScale: number | null = null
-  let pointer: { id: number; x: number; y: number; moved: boolean; placement: Vec3Tuple | null } | null = null
+  let pointer: { id: number; x: number; y: number; lastX: number; moved: boolean; placement: Vec3Tuple | null } | null = null
   const activePointers = new Set<number>()
   const keys = new Set<string>()
   const audio = new GameAudio()
@@ -168,6 +170,25 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   scene.add(line)
   const contactLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xedae48, transparent: true, opacity: 0.65 }))
   scene.add(contactLine)
+  // Predicted cue-ball path after contact (or after a cushion when no ball is hit).
+  const cuePathLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color: 0x8fc8ff, dashSize: 0.02, gapSize: 0.014, transparent: true, opacity: 0.85 }))
+  scene.add(cuePathLine)
+  // Where the cue tip meets the cue ball (spin), shown on the ball itself.
+  const contactDot = new THREE.Mesh(new THREE.SphereGeometry(0.0042, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff3b3b }))
+  scene.add(contactDot)
+  function flatRing(color: number, scale: number): THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial> {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.028575 * scale, 0.0022, 8, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }))
+    ring.rotation.x = -Math.PI / 2
+    ring.visible = false
+    scene.add(ring)
+    return ring
+  }
+  const targetRing = flatRing(0xf6d365, 1.35)
+  const calledRing = flatRing(0x7ee08a, 1.6)
+  let calledBall: string | null = null
+  let predictedPocket: string | null = null
+  let cameraMode: CameraMode = 'free'
+  let cueDistance = 0.95
   const ghost = new THREE.Mesh(new THREE.SphereGeometry(0.028575, 20, 12), new THREE.MeshBasicMaterial({ color: 0xe0f5ff, transparent: true, opacity: 0.32, depthWrite: false, wireframe: true }))
   scene.add(ghost)
   const placement = new THREE.Mesh(new THREE.SphereGeometry(0.028575, 20, 12), new THREE.MeshBasicMaterial({ color: 0x87e3bd, transparent: true, opacity: 0.55, depthWrite: false }))
@@ -317,21 +338,96 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
 
   function refreshPocketSelection(): void {
     for (const [id, mesh] of pocketMeshes) {
-      mesh.material.emissiveIntensity = id === calledPocket ? 1.5 : 0.1
-      mesh.scale.setScalar(id === calledPocket ? 1.2 : 1)
+      mesh.material.emissiveIntensity = id === calledPocket ? 1.5 : id === predictedPocket ? 0.8 : 0.1
+      mesh.scale.setScalar(id === calledPocket ? 1.2 : id === predictedPocket ? 1.1 : 1)
     }
   }
 
+  function hideGuides(): void {
+    line.visible = ghost.visible = contactLine.visible = cuePathLine.visible = targetRing.visible = contactDot.visible = false
+  }
+
+  function setLine(target: THREE.Line, points: THREE.Vector3[]): void {
+    target.geometry.dispose()
+    target.geometry = new THREE.BufferGeometry().setFromPoints(points)
+    target.computeLineDistances()
+    target.visible = true
+  }
+
+  /** Distance from `origin` along flat `direction` until a ball of `radius` meets a cushion line. */
+  function railHit(origin: THREE.Vector3, direction: THREE.Vector3, radius: number): { distance: number; normal: THREE.Vector3 } {
+    const halfW = snapshot.table.width / 2 - radius
+    const halfL = snapshot.table.length / 2 - radius
+    let distance = 10
+    const normal = new THREE.Vector3()
+    const test = (value: number, limit: number, axis: 'x' | 'z') => {
+      if (Math.abs(value) < 1e-5) return
+      const bound = value > 0 ? limit : -limit
+      const travel = (bound - origin[axis]) / value
+      if (travel >= 0 && travel < distance) {
+        distance = travel
+        normal.set(0, 0, 0)
+        normal[axis] = value > 0 ? -1 : 1
+      }
+    }
+    test(direction.x, halfW, 'x')
+    test(direction.z, halfL, 'z')
+    return { distance, normal }
+  }
+
+  /** First object ball the cue ball would contact along a straight line. */
+  function firstBallHit(origin: THREE.Vector3, direction: THREE.Vector3, radius: number, limit: number, skip: string): { ball: BallState; distance: number } | null {
+    let found: { ball: BallState; distance: number } | null = null
+    for (const ball of snapshot.balls) {
+      if (String(ball.id) === skip || ball.pocketed || ball.state === 4) continue
+      const offset = toWorld(ball.position).sub(origin).setY(0)
+      const along = offset.dot(direction)
+      const separation = radius + (ball.radius ?? radius)
+      const perpendicularSquared = offset.lengthSq() - along * along
+      if (along <= 0 || perpendicularSquared >= separation * separation) continue
+      const contact = along - Math.sqrt(Math.max(0, separation * separation - perpendicularSquared))
+      if (contact >= 0 && contact < (found?.distance ?? limit)) found = { ball, distance: contact }
+    }
+    return found
+  }
+
+  /** Pocket whose mouth the object-ball path enters before the cushion, if any. */
+  function pocketOnPath(origin: THREE.Vector3, direction: THREE.Vector3, limit: number): { id: string; distance: number } | null {
+    let best: { id: string; distance: number } | null = null
+    for (const pocket of snapshot.table.pockets) {
+      const center = pocket.position ?? pocket.center
+      if (!center) continue
+      const offset = toWorld([center[0], center[1], 0]).setY(origin.y).sub(origin)
+      const along = offset.dot(direction)
+      const miss = Math.sqrt(Math.max(0, offset.lengthSq() - along * along))
+      if (along > 0 && along < limit + pocket.radius * 1.5 && miss < pocket.radius * 0.75 && along < (best?.distance ?? Infinity)) best = { id: String(pocket.id), distance: along }
+    }
+    return best
+  }
+
+  function placeRing(ring: THREE.Mesh, ball: BallState | undefined): void {
+    ring.visible = !!ball && !ball.pocketed && ball.state !== 4 && !playback
+    if (ball) ring.position.copy(toWorld([ball.position[0], ball.position[1], 0.0015]))
+  }
+
   function updateAimGuide(): void {
-    if (stroke && !playback) { cueGroup.visible = true; line.visible = ghost.visible = contactLine.visible = false; return }
+    placeRing(calledRing, calledBall ? snapshot.balls.find(ball => String(ball.id) === calledBall) : undefined)
+    const previousPrediction = predictedPocket
+    predictedPocket = null
+    if (stroke && !playback) {
+      cueGroup.visible = true
+      hideGuides()
+      contactDot.visible = true
+      if (previousPrediction) refreshPocketSelection()
+      return
+    }
     const enabled = isEnabled() || (!playback && !!interaction.showRemoteAim && !interaction.canPlaceCueBall)
     cueGroup.visible = enabled
-    line.visible = ghost.visible = enabled && settings.showAimGuide
-    contactLine.visible = false
-    if (!enabled) return
+    hideGuides()
+    if (!enabled) { if (previousPrediction) refreshPocketSelection(); return }
     const cueId = String(snapshot.cueBallId ?? 'cue')
     const cueBall = snapshot.balls.find(ball => String(ball.id) === cueId)
-    if (!cueBall || cueBall.pocketed || cueBall.state === 4) { cueGroup.visible = line.visible = ghost.visible = false; return }
+    if (!cueBall || cueBall.pocketed || cueBall.state === 4) { cueGroup.visible = false; return }
     const position = toWorld(cueBall.position)
     const radians = aim.phi * Math.PI / 180
     const direction = new THREE.Vector3(Math.cos(radians), 0, -Math.sin(radians))
@@ -339,44 +435,89 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     const backwards = direction.clone().negate()
     backwards.y = Math.tan(aim.theta * Math.PI / 180)
     backwards.normalize()
-    cueGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), backwards)
+    cueGroup.quaternion.setFromUnitVectors(UP, backwards)
     const pullback = 0.028 + aim.V0 / 8 * 0.10
-    const lateral = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(aim.a * radius)
-    cueGroup.position.copy(position).addScaledVector(backwards, 0.646 + pullback + radius).add(lateral)
+    const right = new THREE.Vector3(-direction.z, 0, direction.x)
+    cueGroup.position.copy(position).addScaledVector(backwards, 0.646 + pullback + radius).addScaledVector(right, aim.a * radius)
     cueGroup.position.y += aim.b * radius
-    let distance = 10
-    const halfW = snapshot.table.width / 2 - radius
-    const halfL = snapshot.table.length / 2 - radius
-    if (direction.x > 0.00001) distance = Math.min(distance, (halfW - position.x) / direction.x)
-    if (direction.x < -0.00001) distance = Math.min(distance, (-halfW - position.x) / direction.x)
-    if (direction.z > 0.00001) distance = Math.min(distance, (halfL - position.z) / direction.z)
-    if (direction.z < -0.00001) distance = Math.min(distance, (-halfL - position.z) / direction.z)
-    let hitBall: BallState | null = null
-    for (const ball of snapshot.balls) {
-      if (String(ball.id) === cueId || ball.pocketed || ball.state === 4) continue
-      const center = toWorld(ball.position)
-      const offset = center.clone().sub(position)
-      offset.y = 0
-      const along = offset.dot(direction)
-      const separation = radius + (ball.radius ?? radius)
-      const perpendicularSquared = offset.lengthSq() - along * along
-      if (along <= 0 || perpendicularSquared >= separation * separation) continue
-      const firstContact = along - Math.sqrt(Math.max(0, separation * separation - perpendicularSquared))
-      if (firstContact >= 0 && firstContact < distance) { distance = firstContact; hitBall = ball }
-    }
-    const end = position.clone().addScaledVector(direction, Math.max(0, distance))
-    line.geometry.dispose()
-    line.geometry = new THREE.BufferGeometry().setFromPoints([position, end])
-    line.computeLineDistances()
+    // The tip meets the sphere at (a, b) of its radius, on the face turned to the cue.
+    const depth = Math.sqrt(Math.max(0, 1 - aim.a * aim.a - aim.b * aim.b))
+    contactDot.position.copy(position).addScaledVector(direction, -radius * depth * 1.04).addScaledVector(right, aim.a * radius).addScaledVector(UP, aim.b * radius)
+    contactDot.visible = true
+    if (!settings.showAimGuide) { if (previousPrediction) refreshPocketSelection(); return }
+    const rail = railHit(position, direction, radius)
+    const hit = firstBallHit(position, direction, radius, rail.distance, cueId)
+    const end = position.clone().addScaledVector(direction, Math.max(0, hit?.distance ?? rail.distance))
+    setLine(line, [position, end])
     ghost.position.copy(end)
     ghost.scale.setScalar(radius / 0.028575)
-    if (hitBall && settings.showAimGuide) {
-      const center = toWorld(hitBall.position)
-      const targetDirection = center.clone().sub(end).setY(0).normalize()
-      contactLine.geometry.dispose()
-      contactLine.geometry = new THREE.BufferGeometry().setFromPoints([center, center.clone().addScaledVector(targetDirection, 0.22)])
-      contactLine.visible = true
+    ghost.visible = true
+    if (hit) {
+      placeRing(targetRing, hit.ball)
+      const center = toWorld(hit.ball.position)
+      const objectDirection = center.clone().sub(end).setY(0).normalize()
+      const objectRail = railHit(center, objectDirection, hit.ball.radius ?? radius)
+      const pocket = pocketOnPath(center, objectDirection, objectRail.distance)
+      predictedPocket = pocket?.id ?? null
+      const objectLength = pocket ? pocket.distance : Math.min(objectRail.distance, 0.25 + aim.V0 * 0.12)
+      setLine(contactLine, [center, center.clone().addScaledVector(objectDirection, objectLength)])
+      contactLine.material.color.set(pocket ? 0x6ee68a : 0xedae48)
+      // The cue ball leaves along the tangent line; follow (b > 0) bends it forward, draw back.
+      const after = direction.clone().addScaledVector(objectDirection, aim.b * 1.6 - direction.dot(objectDirection)).setY(0)
+      if (after.lengthSq() > 1e-4) {
+        after.normalize()
+        const afterRail = railHit(end, after, radius)
+        setLine(cuePathLine, [end, end.clone().addScaledVector(after, Math.min(afterRail.distance, 0.12 + aim.V0 * 0.07))])
+      }
+    } else if (rail.distance < 10) {
+      // No ball in the way: show the first cushion rebound.
+      const bounce = direction.clone().addScaledVector(rail.normal, -2 * direction.dot(rail.normal)).normalize()
+      const bounceRail = railHit(end, bounce, radius)
+      const bounceHit = firstBallHit(end, bounce, radius, bounceRail.distance, cueId)
+      setLine(cuePathLine, [end, end.clone().addScaledVector(bounce, Math.min(bounceHit?.distance ?? bounceRail.distance, 0.6))])
     }
+    if (previousPrediction !== predictedPocket) refreshPocketSelection()
+  }
+
+  // --- Camera ------------------------------------------------------------------------
+
+  function setCameraMode(mode: CameraMode): void {
+    if (mode === cameraMode) return
+    cameraMode = mode
+    controls.enabled = mode === 'free'
+    callbacks.onCameraModeChange?.(mode)
+  }
+
+  /** Rotate the view around the vertical axis through the target (free camera). */
+  function rotateCamera(angle: number): void {
+    if (cameraMode === 'cue') setCameraMode('free')
+    const offset = camera.position.clone().sub(controls.target).applyAxisAngle(UP, angle)
+    camera.position.copy(controls.target).add(offset)
+    controls.update()
+  }
+
+  function zoomCamera(factor: number): void {
+    if (cameraMode === 'cue') { cueDistance = Math.max(0.45, Math.min(2.4, cueDistance * factor)); return }
+    const offset = camera.position.clone().sub(controls.target)
+    const length = Math.max(controls.minDistance, Math.min(controls.maxDistance, offset.length() * factor))
+    camera.position.copy(controls.target).add(offset.setLength(length))
+    controls.update()
+  }
+
+  /** Camera behind the cue, looking along the aim; eased so aiming feels smooth. */
+  function followCue(delta: number): void {
+    if (cameraMode !== 'cue' || playback) return
+    const cueBall = snapshot.balls.find(ball => String(ball.id) === String(snapshot.cueBallId ?? 'cue'))
+    if (!cueBall || cueBall.pocketed || cueBall.state === 4) return
+    const position = toWorld(cueBall.position)
+    const radians = aim.phi * Math.PI / 180
+    const direction = new THREE.Vector3(Math.cos(radians), 0, -Math.sin(radians))
+    const desired = position.clone().addScaledVector(direction, -cueDistance).addScaledVector(UP, 0.18 + cueDistance * 0.3)
+    const target = position.clone().addScaledVector(direction, 0.35 + cueDistance * 0.4)
+    const alpha = 1 - Math.exp(-delta * 9)
+    camera.position.lerp(desired, alpha)
+    controls.target.lerp(target, alpha)
+    camera.lookAt(controls.target)
   }
 
   function setAim(partial: Partial<AimParameters>, notify = true): void {
@@ -388,6 +529,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function resetCamera(topDown = false): void {
+    setCameraMode('free')
     const length = snapshot.table.length
     const fit = framingFactor()
     controls.target.set(0, tableHeight(), 0)
@@ -494,7 +636,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     if (activePointers.size > 1) { pointer = null; placement.visible = false; return }
     if (event.button !== 0 || settings.bindings.orbit === 'Mouse0' || interaction.spectator || playback) return
     const position = pointOnTable(event)
-    pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, placement: null }
+    pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, moved: false, placement: null }
     canvas.setPointerCapture(event.pointerId)
     if (position && interaction.canPlaceCueBall) { pointer.placement = position; updatePlacement(position) }
   }
@@ -504,9 +646,14 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     pointer.moved ||= Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 4
     const position = pointOnTable(event)
     if (!position) return
+    const dx = event.clientX - pointer.lastX
+    pointer.lastX = event.clientX
     if (interaction.canPlaceCueBall && !interaction.spectator && !playback) {
       pointer.placement = position
       updatePlacement(position)
+    } else if (isEnabled() && cameraMode === 'cue') {
+      // Behind the cue the camera turns with the aim, so aim by horizontal drag instead.
+      setAim({ phi: aim.phi - dx * 0.12 * settings.sensitivity })
     } else if (isEnabled()) aimAt(position)
   }
 
@@ -531,7 +678,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     if (hit?.userData.pocketId && interaction.canShoot) callbacks.onSelectPocket?.(String(hit.userData.pocketId))
     else {
       if (hit?.userData.ballId && interaction.canShoot) callbacks.onSelectBall?.(String(hit.userData.ballId))
-      if (position && isEnabled()) aimAt(position)
+      if (position && isEnabled() && cameraMode !== 'cue') aimAt(position)
     }
   }
 
@@ -556,6 +703,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     if (action === 'shoot') { if (!event.repeat) shoot(); return }
     if (action === 'resetCamera') { resetCamera(); return }
     if (action === 'topView') { resetCamera(true); return }
+    if (action === 'cueView') { if (!event.repeat) setCameraMode(cameraMode === 'cue' ? 'free' : 'cue'); return }
     keys.add(event.code)
     if (action === 'orbit') updateOrbitButtons()
   }
@@ -563,8 +711,10 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   function clearKeys(): void { keys.clear(); updateOrbitButtons(); pointer = null; activePointers.clear(); placement.visible = false }
 
   function updateKeys(delta: number): void {
-    if (!isEnabled()) return
     const held = (action: BindingAction) => keys.has(settings.bindings[action] ?? DEFAULT_BINDINGS[action]) ? 1 : 0
+    const turn = held('cameraRight') - held('cameraLeft')
+    if (turn) rotateCamera(turn * delta * 1.3)
+    if (!isEnabled()) return
     const phi = (held('aimRight') - held('aimLeft')) * delta * 45 * settings.sensitivity
     const V0 = (held('powerUp') - held('powerDown')) * delta * 2
     const theta = (held('elevationUp') - held('elevationDown')) * delta * 25
@@ -621,7 +771,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       cueGroup.position.lerpVectors(stroke.from, stroke.to, progress * progress)
       if (progress >= 1 && !stroke.sounded) { stroke.sounded = strokeSoundPlayed = true; audio.impact('cue', aim.V0 / 8) }
     }
-    controls.update()
+    followCue(delta)
+    if (cameraMode === 'free') controls.update()
     renderer.render(scene, camera)
     measuredFrames++
     if (now - measuredAt >= 5000) {
@@ -706,7 +857,12 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     },
     setSettings,
     resetCamera,
+    setCameraMode,
+    getCameraMode: () => cameraMode,
+    rotateCamera,
+    zoomCamera,
     setCalledPocket(id) { calledPocket = id == null ? null : String(id); refreshPocketSelection() },
+    setCalledBall(id) { calledBall = id == null || id === '' ? null : String(id); updateAimGuide() },
     resize,
     destroy() {
       if (destroyed) return

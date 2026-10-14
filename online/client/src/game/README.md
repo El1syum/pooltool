@@ -33,9 +33,13 @@ Do not call `setState(finalSnapshot)` immediately after `playShot()`: it intenti
 
 - Left click/drag or one finger: aim; while ball-in-hand is active, preview/place the cue ball.
 - Right drag: orbit camera; mouse wheel: zoom. Two fingers: orbit and pinch zoom.
+- Q/E (or the HUD arrows) turn the table view; `rotateCamera(radians)` and `zoomCamera(factor)` drive the camera from UI buttons.
+- V or `setCameraMode('cue')` puts the camera behind the cue and follows the aim; there, horizontal drag aims. `resetCamera()` returns to the free camera.
 - Click an object ball or numbered pocket: select it for a called shot (caller owns rule validation).
 - Defaults: arrows aim/change power; W/S elevation; A/D horizontal spin; R/F vertical spin; Space shoots; C resets camera; T selects top view.
 - Keys are active only when the canvas has focus and ignore editable controls. `setSettings({ bindings })` remaps them using `KeyboardEvent.code`. The camera binding accepts `Mouse0`, `Mouse1` or `Mouse2`, or a keyboard modifier such as `KeyX`: hold that key and drag with the left mouse button to orbit without changing the aim. Releasing the key or leaving the window restores normal mouse bindings.
+
+Aim guide (when `showAimGuide` is on): the cue path to the first ball or cushion, a ghost ball at contact, the object-ball line (green and its pocket highlighted when it heads into a pocket), the cue ball's line after contact (tangent line bent by follow/draw) or its first cushion rebound, a ring under the ball to be hit and a red dot on the cue ball where the tip strikes (`a`/`b`). `setCalledBall(id)` rings the called ball. These are straight-line previews for orientation; the server simulation decides the real outcome.
 
 `setAim(aim, false)` changes remote/opponent aiming data without emitting the local change callback. `shoot()` applies the same local permission check as the keyboard action. UI controls should submit through that method.
 

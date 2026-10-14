@@ -103,6 +103,17 @@ the same command ID). From the reviewer's network a new HTTP request to `el1s`
 took 0.4–1 s while a socket round trip took 0.08–0.18 s; the server itself
 answers in ~2 ms, so most remote latency was the extra request.
 
+## Match screen additions
+
+The match screen has a camera toolbar (turn the table left/right, zoom, top view,
+overview, behind-the-cue view that follows the aim), a cue-ball face where the
+tip position (spin) is dragged and shown as a red dot on the 3D cue ball, a
+colour-graded power bar, ball and pocket chips for called shots, a turn-timer
+bar, and a post-shot summary (balls potted and pockets, foul reason, who plays
+next). The aim guide also predicts the object-ball line (green into a pocket),
+the cue ball's line after contact including follow/draw, and the first cushion
+rebound. These are functional placeholders until the designer's layouts arrive.
+
 ## Renderer scope
 
 Physics and rules are the real pooltool engine on the server. The browser view is

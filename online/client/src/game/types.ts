@@ -65,12 +65,17 @@ export type BindingAction =
   | 'aimLeft' | 'aimRight' | 'powerUp' | 'powerDown'
   | 'elevationUp' | 'elevationDown' | 'spinLeft' | 'spinRight'
   | 'spinUp' | 'spinDown' | 'shoot' | 'resetCamera' | 'topView' | 'orbit'
+  | 'cameraLeft' | 'cameraRight' | 'cueView'
 
 export const DEFAULT_BINDINGS: Record<BindingAction, string> = {
   aimLeft: 'ArrowLeft', aimRight: 'ArrowRight', powerUp: 'ArrowUp', powerDown: 'ArrowDown',
   elevationUp: 'KeyW', elevationDown: 'KeyS', spinLeft: 'KeyA', spinRight: 'KeyD',
   spinUp: 'KeyR', spinDown: 'KeyF', shoot: 'Space', resetCamera: 'KeyC', topView: 'KeyT', orbit: 'Mouse2',
+  cameraLeft: 'KeyQ', cameraRight: 'KeyE', cueView: 'KeyV',
 }
+
+/** 'free': orbit around the table; 'cue': follow behind the cue along the aim. */
+export type CameraMode = 'free' | 'cue'
 
 export interface SceneSettings {
   quality: 'low' | 'medium' | 'high'
@@ -103,6 +108,7 @@ export interface SceneCallbacks {
   onPlaybackComplete?: () => void
   onError?: (message: string) => void
   onPerformance?: (data: { fps: number; drawCalls: number; triangles: number }) => void
+  onCameraModeChange?: (mode: CameraMode) => void
 }
 
 export interface GameScene {
@@ -117,7 +123,14 @@ export interface GameScene {
   playShot: (trajectory: ShotTrajectory, startAt: number) => void
   setSettings: (settings: Partial<SceneSettings>) => void
   resetCamera: (topDown?: boolean) => void
+  setCameraMode: (mode: CameraMode) => void
+  getCameraMode: () => CameraMode
+  /** Radians around the vertical axis; switches the cue view to the free camera. */
+  rotateCamera: (angle: number) => void
+  /** Factor > 1 moves away, < 1 closer. */
+  zoomCamera: (factor: number) => void
   setCalledPocket: (id: string | number | null) => void
+  setCalledBall: (id: string | number | null) => void
   resize: () => void
   destroy: () => void
 }
