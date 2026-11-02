@@ -124,7 +124,7 @@ the designer's layouts.
 
 ## Deployment and remaining release work
 
-Functional preview: `http://82.25.61.116:8790`. This direct HTTP endpoint is for
+Functional preview: `http://82.47.143.103:8790` (host address updated 2026-11-02). This direct HTTP endpoint is for
 testing, not for production credentials or VK launch. The isolated service is
 `pooltool-online.service`, with release-local Python environments and persistent
 data under `/opt/pooltool-online/shared`. See `ops/README.md` for deployment,

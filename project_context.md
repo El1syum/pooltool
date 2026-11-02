@@ -39,7 +39,7 @@ shot. The accessible parameters drawer preserves numeric and keyboard controls.
 - `online/ops`: release-local runtime deployment and isolated systemd service.
 
 Local service: port 8790. Functional remote preview:
-http://82.25.61.116:8790 (SSH alias `el1s`, user `ops`). Service:
+http://82.47.143.103:8790 (current SSH alias `el1s`, user `ops`, verified 2026-11-02). Service:
 `pooltool-online.service`; releases under `/opt/pooltool-online/releases`, active
 symlink `/opt/pooltool-online/current`, persistent data/config under `shared`.
 No existing Cyberpool or other server applications are replaced.

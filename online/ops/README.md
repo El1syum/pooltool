@@ -4,6 +4,12 @@ The service is isolated from Cyberpool and other applications. It uses
 `/opt/pooltool-online`, port 8790, its own SQLite data and systemd unit.
 The operator account on the authorized `el1s` host is `ops` with passwordless sudo.
 Do not clear other applications or files to make room for this release.
+Resolve the current hostname from the `el1s` SSH configuration before publishing
+a preview link: the host address can change. Do not reuse a stale IP from an
+older delivery note. The match HUD can be updated as static frontend assets
+without restarting the Python service: back up the current frontend first,
+install hashed assets/fonts before `dist/index.html`, then verify `/ready` and
+run the live browser smoke checks. Keep old hashed chunks for already-open games.
 
 ## Deployment
 
