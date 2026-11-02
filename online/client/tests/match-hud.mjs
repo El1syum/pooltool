@@ -121,7 +121,7 @@ for (const engineName of engines) {
   assert.ok(engine, `Unknown browser engine ${engineName}`)
   const browser = await engine.launch({ headless: true,
     ...(process.env[`${engineName.toUpperCase()}_EXECUTABLE`] ? { executablePath: process.env[`${engineName.toUpperCase()}_EXECUTABLE`] } : {}),
-    ...(engineName === 'chromium' ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}) })
+    ...(engineName === 'chromium' ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', ...(process.env.DIRECT_NETWORK === '1' ? ['--no-proxy-server'] : [])] } : {}) })
   const contexts = []
   const actors = []
   const pages = []

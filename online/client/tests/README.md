@@ -52,3 +52,8 @@ network/reconnect/history/matchmaking coverage.
 against differing automatic optical-size selection: Inter's default optical
 size matches the Figma player-name boxes (94px and 122px), so the HUD explicitly
 uses `font-optical-sizing: none` while preserving real 400/500/600/700 weights.
+
+For remote Chromium verification only, `DIRECT_NETWORK=1` adds the browser's
+`--no-proxy-server` launch flag. This avoids an unrelated operating-system proxy
+returning intermittent 502 responses; it does not change the application or the
+user's proxy settings. Without the flag the normal browser network is used.

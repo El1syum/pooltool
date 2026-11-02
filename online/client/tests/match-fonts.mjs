@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
 const playwright = await import(path.isAbsolute(modulePath) ? pathToFileURL(modulePath).href : modulePath)
-const base = process.env.POOLTOOL_URL || 'http://127.0.0.1:8791'
+const base = process.env.POOLTOOL_URL || 'http://127.0.0.1:8790'
 const artifacts = process.env.ARTIFACT_DIR || path.resolve('tests/artifacts/match-hud')
 await mkdir(artifacts, { recursive: true })
 const html = await (await fetch(base)).text()
