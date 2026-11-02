@@ -349,8 +349,24 @@ for (const engineName of engines) {
     assert.equal(await shoot.isEnabled(), true)
     const beforeShot = received.get(current).length
     const shotStarted = Date.now()
-    await shoot.click()
+    // Submit through the actual contact → charge → release gesture. The
+    // explicit shot button stays covered by the full browser-smoke scenario.
+    await clickNamed(current, ['Прицелиться'])
+    await current.locator('[data-testid="match-hud"][data-shot-phase="aim"]').waitFor()
+    await current.getByRole('button', { name: 'Точка удара по битку. Нажмите для выбора силы', exact: true }).click()
+    await current.locator('[data-testid="match-hud"][data-shot-phase="power"]').waitFor()
+    const gestureBounds = await phaseCanvas.boundingBox()
+    assert.ok(gestureBounds)
+    const gestureX = gestureBounds.x + gestureBounds.width * 0.25
+    const gestureY = gestureBounds.y + gestureBounds.height * 0.4
+    const travel = Math.max(160, gestureBounds.height * 0.3) * 3 / 8
+    await current.mouse.move(gestureX, gestureY)
+    await current.mouse.down()
+    await current.mouse.move(gestureX, gestureY + travel, { steps: 8 })
+    await current.mouse.up()
     const result = await until(() => received.get(current).slice(beforeShot).find(frame => frame.type === 'match' && frame.result?.trajectory), 'Real shot trajectory was not received', 65_000)
+    assert.ok(Math.abs(result.result.strike.V0 - 3) < 0.05, 'The selected charge must reach the authoritative engine')
+    assert.ok(Math.abs(result.result.strike.phi - 90) < 0.01, 'The heading fixed before contact must reach the authoritative engine unchanged')
     const clickToResultMs = Date.now() - shotStarted
     assert.ok(Number.isFinite(result.result.wallDuration) && result.result.wallDuration >= 0, 'Actual server calculation time must be reported separately from motion duration')
     assert.ok(result.result.duration > 0 && result.result.trajectory.frames.length > 1)

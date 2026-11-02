@@ -45,6 +45,11 @@ checks 1920px Figma offsets plus 640/390/320px viewport bounds. It starts/stops
 temporary Vite on port 4314. Set `BROWSER=webkit` for WebKit; it also needs `pngjs`
 (or `PNG_MODULE` pointing at its `lib/png.js`), analogous to `PLAYWRIGHT_MODULE`.
 
+The HUD integration's real shot is submitted through contact confirmation,
+downward charge and mouse release. It checks that the authoritative result uses
+the selected 3 m/s and the unchanged 90° heading, then compares all three clients.
+The broader browser smoke also retains explicit-button/keyboard shot coverage.
+
 ```powershell
 node --test tests/hud-ssr.test.mjs
 node --test --experimental-strip-types src/game/playback.test.mjs src/game/shotWorkflow.test.mjs
