@@ -45,6 +45,14 @@ optimization does not promise every shot below one second on this shared host.
 Increasing worker count helps simultaneous games, not the execution time of an
 individual shot, so that setting was left unchanged.
 
+After deployment, the real-network reconnect/API probe passed; its dense random
+break contained 1,101 events and still took 6.798 s. The deployed Chromium HUD
+probe passed at the ordinary URL (16 textures, three matching final states,
+zero JavaScript errors), with a different break taking 1.805 s on the server and
+2.466 s from click to receipt. These random cases are not before/after pairs.
+The remaining dense-rack latency is therefore a confirmed limitation, not a
+claim that all calculation delays have been eliminated.
+
 ## Verification
 
 ```powershell
@@ -60,3 +68,8 @@ matching final states in the two players and observer.
 The default preview URL is `http://82.47.143.103:8790/`, without `?v=0.2.0`.
 Previously cached HTML may require one hard reload after the header fix; see
 `online/ops/README.md`.
+
+Verification for this change: 62 server/physics tests and 513 subtests pass;
+the real-engine API/reconnect probe passes locally and remotely; HUD checks
+pass in local Chromium/WebKit and deployed Chromium. The first remote HUD
+attempt encountered a transport-level fetch failure; the retry passed.
