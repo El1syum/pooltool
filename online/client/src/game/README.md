@@ -45,6 +45,22 @@ Aim guide (when `showAimGuide` is on): the cue path to the first ball or cushion
 
 Graphics quality controls device-pixel ratio and shadows. Volume controls procedural cue/ball/cushion/pocket sounds; Web Audio is unlocked after the first user gesture for Safari/Chrome autoplay policies. `onPerformance` reports average FPS and renderer workload every five seconds.
 
+## Optional shot workflow
+
+`setShotPhase('overview' | 'aim' | 'power' | null)` enables the match HUD's staged mouse workflow. `onShotPhaseChange(phase)` reports scene-driven transitions to the caller. `null` is the default and retains the original input behavior. The caller owns the HUD and must still call `setInteraction` whenever permissions change.
+
+- `overview`: clicking bare felt or the cue ball enters `aim`; clicking an object ball or a pocket still selects the called target. Ball-in-hand placement takes priority. Right-drag orbit remains available according to the saved camera binding.
+- `aim`: the camera follows behind the cue and targets the cue-ball centre itself, keeping the real ball under a viewport-centred HUD reticle. Unheld mouse movement changes the shot direction. A left click confirms the direction and enters `power`. A DOM cue-ball reticle can adjust spin through `setAim` without the canvas owning that widget. Legacy cue view (`phase === null`) retains its look-ahead target.
+- `power`: direction and spin (`phi/a/b`) are locked to the values at phase entry. Hold the left mouse button and pull down to set speed; sideways movement adjusts elevation relative to its starting value. Full speed is reached after `max(160px, 30% of canvas height)` of downward travel. An elevation change of 60 degrees corresponds to `max(160px, 25% of canvas width)` of sideways travel. Values are clamped to 0.2–8 m/s and 0–60 degrees.
+- Releasing after at least 8 CSS pixels of movement invokes the existing `onShoot` callback. A confirmation click or small pointer jitter does not shoot. The phase remains `power` until the caller changes it; it does not optimistically reset while the server is accepting the command.
+- By default, right click steps back `power → aim → overview`. Explicit saved mouse actions take priority over these default gestures: for example Mouse2 mapped to shoot strikes rather than stepping back, and Mouse0 mapped to top view invokes that action rather than advancing the workflow. Mouse0 orbit and the saved keyboard orbit modifier do not enter aiming from overview.
+- Ball-in-hand placement takes priority over a normal left-button shoot/orbit binding, so a player cannot become stuck after a foul. Left-button camera orbit is temporarily disabled during placement; holding an explicit keyboard orbit modifier still intentionally orbits instead of placing.
+- Camera reset or rotation also returns a staged workflow to overview. Losing input permission, entering placement, playback, state replacement, pointer cancellation or window blur cancels an unfinished gesture and prevents a late release from firing.
+
+The normal shoot binding and explicit shoot button remain accessible in every preparation phase, subject to the caller's turn, placement, modal and playback permissions. Do not gate the scene's shared `canShoot` flag only on `phase === 'power'`: that flag also permits preparation input in overview and aim. A power-phase HUD should disable its spin/direction editors so it cannot display values that the scene has locked.
+
+`shotWorkflow.test.mjs` checks the pure drag mapping. `tests/shot-workflow.mjs` tests the actual Three.js canvas in Chromium or WebKit against Vite (default port 4312), including transitions, locked parameters, cancellation, remapped mouse actions, placement/orbit priority and legacy input. It also reads the real WebGL model-view/projection uniforms to verify that a rendered ball centre is within 1.5 CSS pixels of the viewport centre in aim/power; legacy look-ahead remains distinct. It is a client input test, not a substitute for real server-physics end-to-end checks.
+
 ## Assets
 
 `public/models/balls/*.png` are copied directly from the fork's `pooltool/models/balls/pooltool_pocket/` textures (Apache-2.0 project), not screenshots. The original license is included beside the textures. Sixteen PNGs total about 0.55 MB. The table and cue geometry are generated from physical dimensions; no game-state visuals are baked into images. Generated numbered fallback textures keep the game usable when an optional texture fails to load.

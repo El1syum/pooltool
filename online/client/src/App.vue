@@ -2,10 +2,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ApiError, CLIENT_VERSION, post, request, setToken, socketUrl, timestamp } from './api'
 import type { User, Room, Match, ShotResult } from './api'
-import { BALL_COLORS, POCKET_COLORS, createGameScene } from './game/createGameScene'
+import { createGameScene } from './game/createGameScene'
 import { expandTrajectory, numberForPocket } from './game/playback'
 import { DEFAULT_BINDINGS } from './game/types'
-import type { AimState, BindingAction, CameraMode, GameScene, GameSettings } from './game/types'
+import type { AimState, BindingAction, CameraMode, GameScene, GameSettings, ShotPhase } from './game/types'
+import MatchHud from './components/MatchHud.vue'
 
 type View = 'menu' | 'play' | 'lobby' | 'search' | 'match' | 'profile'
 const view = ref<View>('menu')
@@ -26,6 +27,9 @@ const searchMode = ref<'casual' | 'ranked'>('casual')
 const botDifficulty = ref<'easy' | 'medium' | 'hard'>((localStorage.getItem('pooltool.botDifficulty') as 'easy' | 'medium' | 'hard') || 'medium')
 const settingsOpen = ref(false)
 const gameMenuOpen = ref(false)
+const rulesOpen = ref(false)
+const hudPanelOpen = ref(false)
+const shotPhase = ref<ShotPhase>('overview')
 const bindingCapture = ref<BindingAction | null>(null)
 const settingsDirty = ref(false)
 const history = ref<Array<Record<string, unknown>>>([])
@@ -70,7 +74,7 @@ function mergeSettings(value: unknown): GameSettings {
 }
 const isPlayer = computed(() => Boolean(match.value?.players.some((p) => p.id === user.value?.id)))
 const ownTurn = computed(() => match.value?.players[match.value.currentPlayer]?.id === user.value?.id)
-const turnReady = computed(() => Boolean(connected.value && ownTurn.value && match.value?.status === 'active' && !busy.value && !playbackBusy.value && !settingsOpen.value && !gameMenuOpen.value))
+const turnReady = computed(() => Boolean(connected.value && ownTurn.value && match.value?.status === 'active' && !busy.value && !playbackBusy.value && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value))
 const canShoot = computed(() => turnReady.value && !match.value?.snapshot.needsPlacement && !placingCue.value)
 const canPlace = computed(() => turnReady.value && Boolean(match.value?.snapshot.ballInHand) && (Boolean(match.value?.snapshot.needsPlacement) || placingCue.value))
 const remaining = computed(() => Math.max(0, Math.ceil((timestamp(match.value?.deadline) - now.value - serverClockOffset.value) / 1000)))
@@ -78,6 +82,7 @@ const elapsed = computed(() => Math.max(0, Math.floor(((match.value?.finishedAt 
 const isSolo = computed(() => Boolean(room.value?.settings.solo))
 const botTurn = computed(() => Boolean(match.value && match.value.status === 'active' && match.value.players[match.value.currentPlayer]?.bot))
 const currentPlayerName = computed(() => match.value?.players[match.value.currentPlayer]?.displayName || '—')
+const matchStatusText = computed(() => !match.value ? '' : match.value.status === 'finished' ? `Матч завершён. ${winnerName.value}` : match.value.status === 'calculating' || busy.value ? 'Сервер рассчитывает удар' : playbackBusy.value ? 'Воспроизведение удара' : !isPlayer.value ? `Наблюдение. Ходит ${currentPlayerName.value}` : ownTurn.value ? 'Ваш ход' : botTurn.value ? `${currentPlayerName.value} думает…` : `Ходит ${currentPlayerName.value}`)
 const winnerName = computed(() => match.value?.players.find((p) => p.id === match.value?.winnerId)?.displayName || 'Нет победителя')
 const remainingBalls = computed(() => {
   const targets = match.value?.snapshot.hittable
@@ -115,6 +120,26 @@ const offlinePlayers = computed(() => {
   }))
 })
 const cameraMode = ref<CameraMode>('free')
+let audibleVolume = 0.5
+function toggleSound() {
+  if (settings.value.volume > 0) { audibleVolume = settings.value.volume; settings.value.volume = 0 }
+  else settings.value.volume = audibleVolume || 0.5
+}
+function setShotPhase(phase: ShotPhase) { shotPhase.value = phase; scene?.setShotPhase(phase) }
+function changeCamera(action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' | 'out') {
+  if (action === 'top') { setShotPhase('overview'); scene?.resetCamera(true) }
+  else if (action === 'free') { setShotPhase('overview'); scene?.resetCamera() }
+  else if (action === 'cue') { if (canShoot.value) setShotPhase('aim'); else scene?.setCameraMode('cue') }
+  else if (action === 'left') scene?.rotateCamera(-0.4)
+  else if (action === 'right') scene?.rotateCamera(0.4)
+  else scene?.zoomCamera(action === 'in' ? 0.85 : 1.18)
+}
+function changeHudAim(value: AimState) { aim.value = { ...value }; updateAim() }
+function toggleCuePlacement() {
+  placingCue.value = !placingCue.value
+  setShotPhase('overview')
+  if (placingCue.value) scene?.resetCamera(true)
+}
 const toast = ref<{ title: string; lines: string[]; tone: 'good' | 'bad' | 'neutral' } | null>(null)
 let pendingSummary: ShotResult | null = null
 let toastTimer = 0
@@ -128,38 +153,8 @@ const foulReasons: Record<string, string> = {
   '8-ball sunk illegally (out of turn or wrong pocket)!': 'восьмёрка забита не по правилам',
   'Shot clock expired': 'истекло время хода',
 }
-const timerPercent = computed(() => Math.max(0, Math.min(100, remaining.value / (room.value?.settings.turnSeconds || 60) * 100)))
-const spinLabel = computed(() => {
-  const { a, b } = aim.value
-  const parts = [b > 0.12 ? 'накат' : b < -0.12 ? 'оттяжка' : '', a > 0.12 ? 'правый винт' : a < -0.12 ? 'левый винт' : ''].filter(Boolean)
-  return parts.length ? parts.join(', ') : 'центр'
-})
-const pocketChips = computed(() => (match.value?.snapshot.table.pockets || [])
-  .map((pocket, index) => ({ id: String(pocket.id), number: numberForPocket(String(pocket.id), index), color: pocketColor(String(pocket.id), index) }))
-  .sort((left, right) => left.number - right.number))
-function hexColor(value: number) { return `#${value.toString(16).padStart(6, '0')}` }
-function pocketColor(id: string, index: number) { return hexColor(POCKET_COLORS[numberForPocket(id, index) - 1] ?? POCKET_COLORS[0]!) }
-function ballChipStyle(id: string | number) {
-  const number = Number(id)
-  const color = BALL_COLORS[number > 8 ? number - 8 : number] ?? '#fffdf4'
-  return number > 8 ? { background: `linear-gradient(#fffdf4 0 26%, ${color} 26% 74%, #fffdf4 74%)` } : { background: color }
-}
 function selectBall(id: string) { calledBall.value = calledBall.value === id ? '' : id }
 function selectPocket(id: string) { calledPocket.value = calledPocket.value === id ? '' : id }
-/** Drag on the cue-ball face: x/y are the cue-tip offset in ball radii (pooltool a/b). */
-function spinPointer(event: PointerEvent) {
-  if (!canShoot.value || (event.type === 'pointermove' && !(event.buttons & 1))) return
-  const target = event.currentTarget as SVGSVGElement
-  if (event.type === 'pointerdown') target.setPointerCapture(event.pointerId)
-  const rect = target.getBoundingClientRect()
-  let a = ((event.clientX - rect.left) / rect.width * 120 - 60) / 50
-  let b = -((event.clientY - rect.top) / rect.height * 120 - 60) / 50
-  const length = Math.hypot(a, b)
-  if (length > 0.8) { a *= 0.8 / length; b *= 0.8 / length }
-  aim.value = { ...aim.value, a: Math.round(a * 100) / 100, b: Math.round(b * 100) / 100 }
-  updateAim()
-}
-function resetSpin() { aim.value = { ...aim.value, a: 0, b: 0 }; updateAim() }
 function showToast(value: NonNullable<typeof toast.value>) {
   toast.value = value
   clearTimeout(toastTimer)
@@ -185,10 +180,6 @@ function summarizeShot(shot: ShotResult) {
   const pottedOwn = (shot.potted || []).some((item) => item.ball !== 'cue')
   showToast({ title: shooter ? `Удар: ${shooter.displayName}` : 'Удар', lines, tone: rules.foul ? 'bad' : pottedOwn ? 'good' : 'neutral' })
 }
-function formatTime(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` }
-function groupLabel(group?: string) { return group === 'solids' ? 'Цельные' : group === 'stripes' ? 'Полосатые' : 'Группа не определена' }
-function groupAt(index: number): string | undefined { const groups = match.value?.snapshot.groups; return Array.isArray(groups) ? groups[index] || undefined : undefined }
-function groupBalls(index: number) { const group = groupAt(index); return match.value?.snapshot.balls.filter((ball) => { const id = Number(ball.id); return group === 'solids' ? id >= 1 && id <= 7 : group === 'stripes' ? id >= 9 && id <= 15 : id > 0 && id !== 8 }) || [] }
 async function perform(action: () => Promise<void>) {
   if (busy.value) return
   busy.value = true
@@ -360,6 +351,7 @@ function ensureScene() {
       onSelectBall: (id) => { if (id !== 'cue') calledBall.value = id },
       onSelectPocket: (id) => { calledPocket.value = id },
       onCameraModeChange: (mode) => { cameraMode.value = mode },
+      onShotPhaseChange: (phase) => { shotPhase.value = phase || 'overview' },
       onPlaybackComplete: () => {
         playbackBusy.value = false
         if (match.value) scene?.setState(match.value.snapshot)
@@ -372,6 +364,7 @@ function ensureScene() {
     scene.setSettings(settings.value)
     scene.setState(match.value.snapshot)
     scene.setAim(aim.value)
+    scene.setShotPhase(shotPhase.value)
     scene.setCalledBall(calledBall.value || null)
     scene.setCalledPocket(calledPocket.value || null)
     updateInteraction()
@@ -379,11 +372,15 @@ function ensureScene() {
 }
 function updateInteraction() {
   const table = match.value?.snapshot.table
-  scene?.setInteraction({ canShoot: canShoot.value, canPlaceCueBall: canPlace.value, spectator: !isPlayer.value,
+  scene?.setInteraction({ canShoot: canShoot.value && !hudPanelOpen.value, canPlaceCueBall: canPlace.value && !hudPanelOpen.value, spectator: !isPlayer.value,
     placementRegion: match.value?.snapshot.ballInHandRegion === 'behind_line' && table ? { minY: 0, maxY: table.length / 4 } : undefined })
 }
 watch(stage, () => { if (stage.value) ensureScene(); else { scene?.destroy(); scene = null; playbackBusy.value = false } }, { flush: 'post' })
 watch([canShoot, canPlace, isPlayer], updateInteraction)
+watch(hudPanelOpen, updateInteraction)
+watch([ownTurn, () => match.value?.id, () => match.value?.status, playbackBusy, canPlace, settingsOpen, gameMenuOpen, rulesOpen, hudPanelOpen], () => {
+  if (!ownTurn.value || match.value?.status !== 'active' || playbackBusy.value || canPlace.value || settingsOpen.value || gameMenuOpen.value || rulesOpen.value || hudPanelOpen.value) setShotPhase('overview')
+})
 watch(calledBall, (id) => scene?.setCalledBall(id || null))
 watch(calledPocket, (id) => scene?.setCalledPocket(id || null))
 watch(settings, () => { scene?.setSettings(settings.value); if (user.value) { localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value)); settingsDirty.value = true } }, { deep: true })
@@ -507,7 +504,7 @@ async function leave() {
     try { if (previousRoom) await post(`/api/rooms/${previousRoom}/leave`) }
     catch (error) { if (previousRoom) departedRooms.delete(previousRoom); if (previousMatch) departedMatches.delete(previousMatch); throw error }
     localStorage.removeItem('pooltool.room'); localStorage.removeItem('pooltool.match'); localStorage.removeItem('pooltool.pendingCommand')
-    room.value = null; match.value = null; lastPlayedShot = ''; gameMenuOpen.value = false; placingCue.value = false; view.value = 'menu'
+    room.value = null; match.value = null; lastPlayedShot = ''; gameMenuOpen.value = false; rulesOpen.value = false; hudPanelOpen.value = false; placingCue.value = false; shotPhase.value = 'overview'; view.value = 'menu'
   })
 }
 async function showProfile() {
@@ -524,7 +521,10 @@ async function saveSettings() {
 function captureBinding(event: KeyboardEvent | MouseEvent) {
   if (!bindingCapture.value) {
     if (event instanceof KeyboardEvent && event.code === 'Escape' && view.value === 'match' && !settingsOpen.value && !(event.target instanceof HTMLInputElement)) {
-      event.preventDefault(); gameMenuOpen.value = !gameMenuOpen.value
+      event.preventDefault()
+      if (rulesOpen.value) rulesOpen.value = false
+      else if (shotPhase.value !== 'overview') setShotPhase(shotPhase.value === 'power' ? 'aim' : 'overview')
+      else gameMenuOpen.value = !gameMenuOpen.value
     }
     return
   }
@@ -576,50 +576,43 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
       <p>Рейтинг: {{ user.elo }} · Матчей: {{ user.games }} · Побед: {{ user.wins }} · Поражений: {{ user.losses }}</p>
       <h2>История матчей</h2><p v-if="!history.length">Пока нет завершённых матчей.</p><ul class="history-list"><li v-for="item in history" :key="String(item.id || item.matchId)"><span>{{ new Date(timestamp(item.finishedAt as string || item.startedAt as string)).toLocaleString('ru-RU') }}</span><span>{{ item.opponentName ? `против ${item.opponentName}` : '' }}</span><span>{{ item.mode === 'ranked' || item.ranked ? 'Рейтинговый' : 'Обычный' }}</span><span>{{ item.winnerId === user.id ? 'Победа' : item.winnerId ? 'Поражение' : 'Матч завершён' }}</span><span v-if="item.eloDelta != null">Эло {{ Number(item.eloDelta) > 0 ? '+' : '' }}{{ item.eloDelta }}</span></li></ul><button @click="view = 'menu'">Назад</button>
     </main>
-    <main v-else-if="view === 'match' && match" class="match-screen">
-      <div class="match-bar"><div v-for="(player, index) in match.players" :key="player.id" :class="{ current: index === match.currentPlayer && match.status !== 'finished' }"><strong>{{ player.displayName }}</strong><span>{{ groupLabel(groupAt(index)) }} · Осталось {{ groupBalls(index).filter(ball => !ball.pocketed).length }}</span><span class="ball-indicators"><i v-for="ball in groupBalls(index)" :key="ball.id" :class="{ pocketed: ball.pocketed }">{{ ball.id }}</i></span></div><span>Матч {{ formatTime(elapsed) }}</span><span>Ход {{ remaining }} с</span><button @click="gameMenuOpen = true">Меню</button><button @click="settingsOpen = true">Настройки</button><button v-if="isPlayer && match.status !== 'finished'" :disabled="busy" @click="sendCommand('surrender', {})">Сдаться</button><button v-else @click="leave">Выйти</button></div>
-      <div class="match-status" role="status">{{ match.status === 'finished' ? `Матч завершён. ${winnerName}` : match.status === 'calculating' || busy ? 'Сервер рассчитывает удар' : playbackBusy ? 'Воспроизведение удара' : !isPlayer ? `Наблюдение. Ходит ${currentPlayerName}` : ownTurn ? 'Ваш ход' : botTurn ? `${currentPlayerName} думает…` : `Ходит ${currentPlayerName}` }}<span v-if="canPlace"> · Установите биток кликом по столу</span>
-        <span class="camera-tools" role="toolbar" aria-label="Камера"><button title="Повернуть стол влево (Q)" aria-label="Повернуть стол влево" @click="scene?.rotateCamera(-0.4)">⟲</button><button title="Повернуть стол вправо (E)" aria-label="Повернуть стол вправо" @click="scene?.rotateCamera(0.4)">⟳</button><button title="Приблизить" aria-label="Приблизить" @click="scene?.zoomCamera(0.85)">+</button><button title="Отдалить" aria-label="Отдалить" @click="scene?.zoomCamera(1.18)">−</button><button @click="scene?.resetCamera(true)">Вид сверху</button><button @click="scene?.resetCamera()">Обзор</button><button :aria-pressed="cameraMode === 'cue'" :class="{ active: cameraMode === 'cue' }" title="Вид из-за кия (V)" @click="scene?.setCameraMode(cameraMode === 'cue' ? 'free' : 'cue')">Из-за кия</button></span></div>
-      <div v-if="match.status === 'active' && match.deadline" class="turn-timer" :class="{ low: remaining <= 10 }" aria-hidden="true"><i :style="{ width: `${timerPercent}%` }"></i></div>
-      <div v-for="player in offlinePlayers" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
+    <main v-else-if="view === 'match' && match" class="match-screen figma-match-screen">
       <div class="stage-wrap">
         <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол"></div>
         <Transition name="toast"><div v-if="toast" class="shot-toast" :class="toast.tone" role="status"><strong>{{ toast.title }}</strong><span v-for="line in toast.lines" :key="line">{{ line }}</span></div></Transition>
-        <p class="stage-hint">ЛКМ — прицел · ПКМ или Q/E — повернуть стол · колесо — масштаб · V — вид из-за кия · пробел — удар</p>
       </div>
-      <div v-if="match.status !== 'finished'" class="shot-controls">
-        <div class="control-block spin-block">
-          <span class="control-title">Точка удара по битку</span>
-          <svg class="spin-widget" :class="{ disabled: !canShoot }" viewBox="-60 -60 120 120" role="img" :aria-label="`Точка удара: ${spinLabel}. Перетащите точку или используйте клавиши A, D, R, F.`" @pointerdown="spinPointer" @pointermove="spinPointer">
-            <circle r="50" class="spin-ball" /><circle r="40" class="spin-limit" />
-            <line x1="-50" y1="0" x2="50" y2="0" class="spin-axis" /><line x1="0" y1="-50" x2="0" y2="50" class="spin-axis" />
-            <circle :cx="aim.a * 50" :cy="-aim.b * 50" r="7" class="spin-tip" />
-          </svg>
-          <span class="spin-caption">{{ spinLabel }} <button class="link-button" :disabled="!canShoot || (!aim.a && !aim.b)" @click="resetSpin">в центр</button></span>
-        </div>
-        <div class="control-block">
-          <label class="power-label">Сила {{ aim.V0.toFixed(1) }} м/с<input v-model.number="aim.V0" class="power-range" type="range" min="0.2" max="8" step="0.1" :disabled="!canShoot" @input="updateAim" /></label>
-          <label>Направление {{ aim.phi.toFixed(1) }}°<input v-model.number="aim.phi" type="range" min="0" max="359.9" step="0.1" :disabled="!canShoot" @input="updateAim" /></label>
-          <label>Наклон кия {{ aim.theta }}°<input v-model.number="aim.theta" type="range" min="0" max="60" step="1" :disabled="!canShoot" @input="updateAim" /></label>
-        </div>
-        <div class="control-block">
-          <span class="control-title">Заказ шара<em v-if="match.snapshot.callShotRequired"> · обязательно</em></span>
-          <div class="chip-row"><button v-for="ball in remainingBalls" :key="ball.id" class="ball-chip" :class="{ selected: calledBall === String(ball.id) }" :style="ballChipStyle(ball.id)" :aria-pressed="calledBall === String(ball.id)" :aria-label="`Шар ${ball.id}`" :disabled="!canShoot" @click="selectBall(String(ball.id))"><span>{{ ball.id }}</span></button></div>
-          <span class="control-title">Заказ лузы</span>
-          <div class="chip-row"><button v-for="pocket in pocketChips" :key="pocket.id" class="pocket-chip" :class="{ selected: calledPocket === pocket.id }" :style="{ background: pocket.color }" :aria-pressed="calledPocket === pocket.id" :aria-label="`Луза ${pocket.number}`" :disabled="!canShoot" @click="selectPocket(pocket.id)">{{ pocket.number }}</button></div>
-        </div>
-        <div class="control-block action-block">
-          <button class="shoot" :disabled="!canShoot || canPlace" @click="shoot()">Удар</button>
-          <button v-if="turnReady && match.snapshot.ballInHand && !match.snapshot.needsPlacement" @click="placingCue = !placingCue">{{ placingCue ? 'Отменить перестановку' : 'Переставить биток' }}</button>
-        </div>
-      </div>
-      <div v-else class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
+      <MatchHud
+        :match="match" :user="user" :room="room" :aim="aim" :phase="shotPhase"
+        :can-shoot="canShoot" :can-place="canPlace"
+        :can-reposition="turnReady && Boolean(match.snapshot.ballInHand) && !match.snapshot.needsPlacement"
+        :placing-cue="placingCue" :connected="connected" :connection="connection"
+        :remaining="remaining" :elapsed="elapsed" :status-text="matchStatusText"
+        :volume="settings.volume" :top-view-key="settings.bindings.topView || DEFAULT_BINDINGS.topView"
+        :called-ball="calledBall" :called-pocket="calledPocket" :camera-mode="cameraMode"
+        @settings="settingsOpen = true" @menu="gameMenuOpen = true" @mute="toggleSound"
+        @rules="rulesOpen = true" @camera="changeCamera" @aim="changeHudAim"
+        @shoot="shoot()" @phase="setShotPhase" @select-ball="selectBall" @select-pocket="selectPocket"
+        @place-cue="toggleCuePlacement" @copy-code="copyCode" @panel-open="hudPanelOpen = $event"
+      />
+      <div v-for="player in offlinePlayers" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
+      <div v-if="match.status === 'finished'" class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
     </main>
     <div v-if="gameMenuOpen" class="modal-backdrop" @click.self="gameMenuOpen = false">
       <section class="settings-dialog menu" role="dialog" aria-modal="true" aria-labelledby="game-menu-title">
-        <h1 id="game-menu-title">Меню матча</h1><p>Таймер сетевого матча продолжает идти.</p>
+        <h1 id="game-menu-title">Меню матча</h1><p>{{ isPlayer && match?.status !== 'finished' ? 'Если покинуть стол во время партии, будет засчитано поражение. Таймер продолжает идти.' : 'Вы можете вернуться к столу или покинуть комнату.' }}</p>
         <button @click="gameMenuOpen = false">Вернуться в игру</button><button @click="gameMenuOpen = false; settingsOpen = true">Настройки</button>
         <button v-if="isPlayer && match?.status !== 'finished'" :disabled="busy" @click="gameMenuOpen = false; sendCommand('surrender', {})">Сдаться</button><button v-else :disabled="busy" @click="leave">В главное меню</button>
+        <button v-if="isPlayer && match?.status !== 'finished'" :disabled="busy" @click="leave">Сдаться и покинуть стол</button>
+      </section>
+    </div>
+    <div v-if="rulesOpen" class="modal-backdrop" @click.self="rulesOpen = false">
+      <section class="settings-dialog hud-rules-dialog" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+        <h1 id="rules-title">Правила 8-BALL</h1>
+        <p>После распределения групп игрок забивает свои цельные или полосатые шары. Восьмёрку нужно забить после всех семи шаров своей группы в заказанную лузу.</p>
+        <p>После разбоя перед ударом выберите заказанный шар и лузу. Ошибочный первый контакт, падение битка и другие нарушения оценивает сервер; после фола биток ставится в разрешённой зоне.</p>
+        <p>На общем виде нажмите на сукно, чтобы приблизиться к битку. Наведите прицел, выберите точку контакта и подтвердите левой кнопкой мыши. Затем оттяните кий, чтобы задать силу и наклон, и отпустите кнопку для удара. Правая кнопка возвращает на предыдущий этап.</p>
+        <p>Альтернативное управление доступно в панели «Параметры удара». Подсказка вида сверху использует вашу назначенную клавишу. Настройки и меню не останавливают таймер сетевой партии.</p>
+        <button @click="rulesOpen = false">Закрыть правила</button>
       </section>
     </div>
     <div v-if="settingsOpen" class="modal-backdrop" @click.self="saveSettings">

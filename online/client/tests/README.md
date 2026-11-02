@@ -20,3 +20,35 @@ Both Chromium and WebKit run by default. `BROWSERS=chromium` or `BROWSERS=webkit
 Screenshots are generated under `tests/artifacts/` (ignored by Git). `ARTIFACT_DIR` changes the directory. WebKit exercises the Safari rendering engine, while an actual Safari release on Apple hardware remains a separate platform check.
 
 `MOBILE_DEBUG=1` in `mobile-layout.mjs` records actual WebGL draw counts, center-pixel colour during a default-framebuffer draw, buffer/viewport dimensions and context status. This distinguishes a live renderer from a blank WebKit automation screenshot after resizing. The instrumentation is injected only by the test, never included in the application.
+
+## Figma match HUD
+
+`match-hud.mjs` checks the new full-window HUD with the real service: desktop
+1920×1080 and 1280×800, portrait 390×844, original SVG dimensions, aiming/power
+states, modal input gating, unchanged canvas instance, sound settings, spectator
+permissions, a real physical shot and matching final state in three clients.
+`VISUAL_FIXTURE=1` additionally renders a separate, noninteractive 4-vs-3 score
+example through the actual Vue component for visual review; it is explicitly a
+visual fixture, never evidence of server gameplay.
+
+`shot-workflow.mjs` uses the real Three.js renderer with an isolated scene
+fixture to check gesture transitions, no accidental click shots, remapped mouse
+controls, placement priority and actual GPU-projected cue-ball alignment.
+It starts and stops its own temporary Vite instance; it does not need a backend.
+
+```powershell
+node --test tests/hud-ssr.test.mjs
+node --test --experimental-strip-types src/game/playback.test.mjs src/game/shotWorkflow.test.mjs
+node tests/shot-workflow.mjs
+node tests/match-hud.mjs
+```
+
+The SSR tests verify group ownership, open-table counts, pocketed flags, original
+player indices after card reordering, timers and mapped key labels. The full
+`browser-smoke.mjs` also uses the new parameters drawer while preserving its
+network/reconnect/history/matchmaking coverage.
+
+`match-fonts.mjs` checks the self-hosted variable fonts in both engines. It guards
+against differing automatic optical-size selection: Inter's default optical
+size matches the Figma player-name boxes (94px and 122px), so the HUD explicitly
+uses `font-optical-sizing: none` while preserving real 400/500/600/700 weights.

@@ -23,6 +23,18 @@ async function api(page, endpoint, body, method = 'POST') {
   }, { endpoint, body, method })
 }
 
+async function openControls(page) {
+  const panel = page.locator('#hud-controls')
+  if (!await panel.isVisible()) await page.getByRole('button', { name: 'Параметры удара', exact: true }).click()
+  await panel.waitFor({ state: 'visible' })
+}
+
+async function closeControls(page) {
+  const panel = page.locator('#hud-controls')
+  if (await panel.isVisible()) await page.getByRole('button', { name: 'Закрыть параметры удара', exact: true }).click()
+  await panel.waitFor({ state: 'hidden' })
+}
+
 for (const engineName of engines) {
   const engine = playwright[engineName]
   assert.ok(engine, `Unknown browser engine: ${engineName}`)
@@ -114,8 +126,10 @@ for (const engineName of engines) {
     const currentPage = currentMatch.players[currentMatch.currentPlayer].id === firstUser.id ? first : second
     const otherPage = currentPage === first ? second : first
     if (currentMatch.snapshot.ballInHand) {
+      await openControls(currentPage)
       const reposition = currentPage.getByRole('button', { name: 'Переставить биток', exact: true })
       if (await reposition.count()) await reposition.click()
+      await closeControls(currentPage)
       await currentPage.getByRole('button', { name: 'Вид сверху', exact: true }).click()
       const placementBounds = await currentPage.locator('.game-stage canvas').boundingBox()
       assert.ok(placementBounds)
@@ -127,6 +141,7 @@ for (const engineName of engines) {
       currentMatch = placed.match
       initialRevision = currentMatch.revision
     }
+    for (const page of [currentPage, otherPage, spectator]) await openControls(page)
     assert.equal(await currentPage.getByRole('button', { name: 'Удар', exact: true }).isEnabled(), true)
     assert.equal(await otherPage.getByRole('button', { name: 'Удар', exact: true }).isEnabled(), false)
     assert.equal(await spectator.getByRole('button', { name: 'Удар', exact: true }).isEnabled(), false)
@@ -152,8 +167,12 @@ for (const engineName of engines) {
     await first.getByRole('dialog').locator('.binding-grid label').filter({ hasText: /^Удар/ }).getByRole('button').filter({ hasText: /^KeyG$/ }).waitFor()
     await first.getByRole('dialog').getByRole('button', { name: 'Сохранить и закрыть', exact: true }).click()
     await first.getByRole('dialog').waitFor({ state: 'hidden' })
+    await openControls(first)
+    const orbitAim = await first.getByLabel('Направление удара', { exact: true }).inputValue()
+    await closeControls(first)
+    await first.bringToFront()
     await first.locator('.game-stage canvas').focus()
-    const orbitAim = await first.getByLabel(/^Направление /).inputValue()
+    await first.waitForFunction(() => Array.isArray(window.__qaViewMatrix))
     const beforeOrbit = await first.evaluate(() => window.__qaViewMatrix)
     const orbitBounds = await first.locator('.game-stage canvas').boundingBox()
     assert.ok(orbitBounds)
@@ -166,7 +185,9 @@ for (const engineName of engines) {
     await first.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     const afterOrbit = await first.evaluate(() => window.__qaViewMatrix)
     assert.ok(beforeOrbit && afterOrbit && beforeOrbit.some((value, index) => Math.abs(value - afterOrbit[index]) > 0.001), `A remapped keyboard modifier must orbit the camera with left drag (${JSON.stringify({ before: beforeOrbit, after: afterOrbit })})`)
-    assert.equal(await first.getByLabel(/^Направление /).inputValue(), orbitAim, 'Orbit modifier must not change aim')
+    await openControls(first)
+    assert.equal(await first.getByLabel('Направление удара', { exact: true }).inputValue(), orbitAim, 'Orbit modifier must not change aim')
+    await closeControls(first)
     const denied = await api(spectator, `/api/matches/${currentMatch.id}/commands`, {
       commandId: `spectator-${Date.now()}`, expectedRevision: initialRevision,
       type: 'shot', payload: { phi: 90, V0: 2.5, theta: 0, a: 0, b: 0 },
@@ -174,9 +195,9 @@ for (const engineName of engines) {
     assert.ok([403, 409].includes(denied.status), `Spectator must be refused by the server, got ${denied.status}`)
     const bounds = await currentPage.locator('.game-stage canvas').boundingBox()
     assert.ok(bounds && bounds.width > 100 && bounds.height > 100)
-    await currentPage.locator('.game-stage canvas').click({ position: { x: bounds.width * 0.55, y: bounds.height * 0.5 } })
-    await currentPage.getByLabel(/^Направление /).evaluate(input => { input.value = '90'; input.dispatchEvent(new Event('input', { bubbles: true })) })
-    await currentPage.getByLabel(/^Сила /).evaluate(input => { input.value = '3'; input.dispatchEvent(new Event('input', { bubbles: true })) })
+    await openControls(currentPage)
+    await currentPage.getByLabel('Направление удара', { exact: true }).evaluate(input => { input.value = '90'; input.dispatchEvent(new Event('input', { bubbles: true })) })
+    await currentPage.getByLabel('Сила удара', { exact: true }).evaluate(input => { input.value = '3'; input.dispatchEvent(new Event('input', { bubbles: true })) })
     await currentPage.getByRole('button', { name: 'Вид сверху', exact: true }).click()
     await currentPage.screenshot({ path: path.join(artifactDir, `${engineName}-desktop-initial.png`), fullPage: true })
     await spectator.screenshot({ path: path.join(artifactDir, `${engineName}-mobile-spectator.png`), fullPage: true })
@@ -203,9 +224,12 @@ for (const engineName of engines) {
     assert.ok(currentMatch.revision > initialRevision)
     assert.deepEqual(currentMatch.snapshot.balls, finalOther.snapshot.balls)
     assert.deepEqual(currentMatch.snapshot.balls, finalSpectator.snapshot.balls)
+    await openControls(spectator)
     assert.equal(await spectator.getByRole('button', { name: 'Удар', exact: true }).isEnabled(), false)
+    await closeControls(spectator)
     const spectatorLeave = spectator.waitForResponse(response => response.url().endsWith(`/api/rooms/${code}/leave`) && response.request().method() === 'POST')
-    await spectator.getByRole('button', { name: 'Выйти', exact: true }).click()
+    await spectator.getByRole('button', { name: 'Покинуть стол', exact: true }).click()
+    await spectator.getByRole('dialog').getByRole('button', { name: 'В главное меню', exact: true }).click()
     assert.equal((await spectatorLeave).status(), 200)
     await spectator.getByRole('button', { name: 'Играть', exact: true }).click()
     await spectator.getByLabel('Код комнаты').fill(code)
@@ -213,7 +237,9 @@ for (const engineName of engines) {
     await spectator.locator('.game-stage canvas').waitFor({ timeout: 30_000 })
     const rejoinedObserver = (await api(spectator, '/api/me/current', undefined, 'GET')).data.match
     assert.equal(rejoinedObserver.id, currentMatch.id, 'A spectator can explicitly rejoin the same room')
+    await openControls(spectator)
     assert.equal(await spectator.getByRole('button', { name: 'Удар', exact: true }).isEnabled(), false)
+    await closeControls(spectator)
     await spectator.screenshot({ path: path.join(artifactDir, `${engineName}-spectator-rejoined.png`), fullPage: true })
     assert.ok(textures.size >= 16, `Original textures must load, got ${textures.size}`)
     assert.ok(performanceSamples.some(sample => sample.drawCalls > 20 && sample.triangles > 10000), 'Renderer must draw actual nonempty game geometry')

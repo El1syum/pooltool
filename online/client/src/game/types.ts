@@ -77,6 +77,9 @@ export const DEFAULT_BINDINGS: Record<BindingAction, string> = {
 /** 'free': orbit around the table; 'cue': follow behind the cue along the aim. */
 export type CameraMode = 'free' | 'cue'
 
+/** Match UI workflow; null on GameScene keeps the original unrestricted controls. */
+export type ShotPhase = 'overview' | 'aim' | 'power'
+
 export interface SceneSettings {
   quality: 'low' | 'medium' | 'high'
   volume: number
@@ -109,6 +112,7 @@ export interface SceneCallbacks {
   onError?: (message: string) => void
   onPerformance?: (data: { fps: number; drawCalls: number; triangles: number }) => void
   onCameraModeChange?: (mode: CameraMode) => void
+  onShotPhaseChange?: (phase: ShotPhase | null) => void
 }
 
 export interface GameScene {
@@ -125,6 +129,8 @@ export interface GameScene {
   resetCamera: (topDown?: boolean) => void
   setCameraMode: (mode: CameraMode) => void
   getCameraMode: () => CameraMode
+  /** null restores legacy input; phase changes cancel any unfinished pointer gesture. */
+  setShotPhase: (phase: ShotPhase | null) => void
   /** Radians around the vertical axis; switches the cue view to the free camera. */
   rotateCamera: (angle: number) => void
   /** Factor > 1 moves away, < 1 closer. */

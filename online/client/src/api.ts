@@ -1,6 +1,6 @@
 import type { GameSnapshot, ShotTrajectory } from './game/types'
 
-export const CLIENT_VERSION = '0.1.0'
+export const CLIENT_VERSION = '0.2.0'
 export const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
 
 export interface User {

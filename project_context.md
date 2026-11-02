@@ -14,6 +14,19 @@ On 2026-10-14 the user deferred VK publication and final visual design until the
 designer completes the layouts. New reference file, for that later design phase:
 https://www.figma.com/design/jYFDUnxQsPJT0gD9mQ0tTP/?node-id=1809-29096
 
+On 2026-11-02 the user started the match-interface design implementation with
+the new Figma file below and `Интерфейсное решение PoolTool.pdf`. The active
+reference is its `Дизайн\База` section: base frame `73:73`, aiming/power states
+`73:172`, `73:294`, `73:327`. New 3D models are explicitly deferred; retain the
+interactive procedural scene rather than using the reference table screenshot.
+https://www.figma.com/design/qLURhvhuM4AZ0xibHYelU8/?node-id=73-73
+
+The match HUD lives in `online/client/src/components/MatchHud.vue`, with the
+Figma SVG exports in `public/ui/figma-match`, self-hosted Inter/Lora fonts and
+scoped `match-hud.css`. App.vue remains the network/state authority. Preparation
+phases are overview → aim → power; the server still validates and simulates the
+shot. The accessible parameters drawer preserves numeric and keyboard controls.
+
 ## Implementation
 
 - `online/server`: FastAPI, SQLite persistence, authenticated HTTP/WebSocket,

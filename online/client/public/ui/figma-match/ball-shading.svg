@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle id="Spherical shading" cx="13" cy="13" r="13" fill="url(#paint0_radial_0_14)"/>
+<defs>
+<radialGradient id="paint0_radial_0_14" cx="0" cy="0" r="1" gradientTransform="matrix(15.08 18.2 -18.72 14.3 8.32 6.5)" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0.333333"/>
+<stop offset="0.35" stop-color="white" stop-opacity="0"/>
+<stop offset="0.8" stop-opacity="0.0823529"/>
+<stop offset="1" stop-opacity="0.533333"/>
+</radialGradient>
+</defs>
+</svg>

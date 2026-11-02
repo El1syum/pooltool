@@ -1,6 +1,6 @@
 {
   "name": "pooltool-online-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "three": "0.186.1"
   },
   "devDependencies": {
+    "@vue/server-renderer": "3.5.44",
     "@vitejs/plugin-vue": "6.0.10",
     "@types/three": "0.186.0",
     "typescript": "5.9.3",

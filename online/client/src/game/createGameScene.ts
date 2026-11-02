@@ -2,10 +2,11 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GameAudio } from './audio'
 import { isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } from './playback'
+import { isMeaningfulPowerDrag, powerDragAim, previousShotPhase } from './shotWorkflow'
 import {
   DEFAULT_BINDINGS,
   type AimParameters, type BallState, type BindingAction, type GameScene, type GameSnapshot,
-  type CameraMode, type SceneCallbacks, type SceneInteraction, type SceneSettings, type ShotTrajectory, type Vec3Tuple,
+  type CameraMode, type SceneCallbacks, type SceneInteraction, type SceneSettings, type ShotPhase, type ShotTrajectory, type Vec3Tuple,
 } from './types'
 
 /** Pocket marker colours by pocket number 1..6; the HUD uses the same palette. */
@@ -159,6 +160,10 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   let measuredFrames = 0
   let framingScale: number | null = null
   let pointer: { id: number; x: number; y: number; lastX: number; moved: boolean; placement: Vec3Tuple | null } | null = null
+  let shotPhase: ShotPhase | null = null
+  let lockedShot: Pick<AimParameters, 'phi' | 'a' | 'b'> | null = null
+  let aimHoverX: number | null = null
+  let powerDrag: { id: number; x: number; y: number; dx: number; dy: number; aim: AimParameters; width: number; height: number } | null = null
   const activePointers = new Set<number>()
   const keys = new Set<string>()
   const audio = new GameAudio()
@@ -490,6 +495,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
 
   /** Rotate the view around the vertical axis through the target (free camera). */
   function rotateCamera(angle: number): void {
+    if (shotPhase !== null && shotPhase !== 'overview') setShotPhase('overview')
     if (cameraMode === 'cue') setCameraMode('free')
     const offset = camera.position.clone().sub(controls.target).applyAxisAngle(UP, angle)
     camera.position.copy(controls.target).add(offset)
@@ -513,15 +519,19 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     const radians = aim.phi * Math.PI / 180
     const direction = new THREE.Vector3(Math.cos(radians), 0, -Math.sin(radians))
     const desired = position.clone().addScaledVector(direction, -cueDistance).addScaledVector(UP, 0.18 + cueDistance * 0.3)
-    const target = position.clone().addScaledVector(direction, 0.35 + cueDistance * 0.4)
+    const centered = shotPhase === 'aim' || shotPhase === 'power'
+    const target = centered ? position : position.clone().addScaledVector(direction, 0.35 + cueDistance * 0.4)
     const alpha = 1 - Math.exp(-delta * 9)
     camera.position.lerp(desired, alpha)
-    controls.target.lerp(target, alpha)
+    // The HUD reticle is centered in the viewport. Keep the actual cue-ball
+    // centre underneath it throughout the camera transition, not just at rest.
+    if (centered) controls.target.copy(target)
+    else controls.target.lerp(target, alpha)
     camera.lookAt(controls.target)
   }
 
   function setAim(partial: Partial<AimParameters>, notify = true): void {
-    const next = normalizeAim({ ...aim, ...partial })
+    const next = normalizeAim({ ...aim, ...partial, ...(shotPhase === 'power' ? lockedShot : null) })
     if (Object.keys(next).every(key => next[key as keyof AimParameters] === aim[key as keyof AimParameters])) return
     aim = next
     updateAimGuide()
@@ -529,6 +539,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function resetCamera(topDown = false): void {
+    if (shotPhase !== null && shotPhase !== 'overview') setShotPhase('overview')
     setCameraMode('free')
     const length = snapshot.table.length
     const fit = framingFactor()
@@ -541,7 +552,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   function framingFactor(): number {
     // Perspective makes the near corner wider than the far one. Keep every pocket label
     // inside a narrow canvas rather than fitting only the table's centre rectangle.
-    return Math.max(1, 0.6 / Math.max(0.15, camera.aspect)) * (container.clientWidth < 640 ? 1.18 : 1)
+    // The match canvas now fills portrait screens rather than a short panel.
+    return Math.max(1, 0.85 / Math.max(0.15, camera.aspect)) * (container.clientWidth < 640 ? 1.18 : 1)
   }
 
   function resize(): void {
@@ -590,9 +602,51 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function updateOrbitButtons(): void {
-    controls.mouseButtons.LEFT = settings.bindings.orbit === 'Mouse0' || orbitModifierHeld() ? THREE.MOUSE.ROTATE : undefined
-    controls.mouseButtons.RIGHT = settings.bindings.orbit === 'Mouse2' ? THREE.MOUSE.ROTATE : undefined
-    controls.mouseButtons.MIDDLE = settings.bindings.orbit === 'Mouse1' ? THREE.MOUSE.ROTATE : THREE.MOUSE.DOLLY
+    const canOrbit = shotPhase === null || shotPhase === 'overview'
+    const modifierOrbit = orbitModifierHeld()
+    controls.mouseButtons.LEFT = canOrbit && (modifierOrbit || (!interaction.canPlaceCueBall && !mouseAction('Mouse0') && settings.bindings.orbit === 'Mouse0')) ? THREE.MOUSE.ROTATE : undefined
+    controls.mouseButtons.RIGHT = canOrbit && !mouseAction('Mouse2') && settings.bindings.orbit === 'Mouse2' ? THREE.MOUSE.ROTATE : undefined
+    controls.mouseButtons.MIDDLE = mouseAction('Mouse1') ? undefined : settings.bindings.orbit === 'Mouse1' ? THREE.MOUSE.ROTATE : THREE.MOUSE.DOLLY
+  }
+
+  function mouseAction(binding: string): BindingAction | undefined {
+    return (Object.keys(settings.bindings) as BindingAction[]).find(key => key !== 'orbit' && settings.bindings[key] === binding)
+  }
+
+  function cancelShotGesture(): void {
+    const id = powerDrag?.id ?? pointer?.id
+    powerDrag = null
+    pointer = null
+    aimHoverX = null
+    activePointers.clear()
+    if (id !== undefined && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id)
+  }
+
+  function setShotPhase(phase: ShotPhase | null): void {
+    if (phase === shotPhase) return
+    cancelShotGesture()
+    keys.clear()
+    shotPhase = phase
+    lockedShot = phase === 'power' ? { phi: aim.phi, a: aim.a, b: aim.b } : null
+    updateOrbitButtons()
+    if (phase === 'aim' || phase === 'power') setCameraMode('cue')
+    else if (phase === 'overview') resetCamera()
+    callbacks.onShotPhaseChange?.(phase)
+  }
+
+  function startPowerDrag(event: PointerEvent): void {
+    const rect = canvas.getBoundingClientRect()
+    powerDrag = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, dy: 0, aim: { ...aim }, width: rect.width, height: rect.height }
+    canvas.setPointerCapture(event.pointerId)
+  }
+
+  function workflowHit(event: PointerEvent): THREE.Object3D | undefined {
+    pointOnTable(event) // Updates the picking ray even when it misses the table plane.
+    return raycaster.intersectObjects([...pocketLabels, ...pocketMeshes.values(), ...[...balls.values()].map(ball => ball.mesh)], false)[0]?.object
+  }
+
+  function isFelt(position: Vec3Tuple | null): boolean {
+    return Boolean(position && position[0] >= 0 && position[0] <= snapshot.table.width && position[1] >= 0 && position[1] <= snapshot.table.length)
   }
 
   function pointOnTable(event: PointerEvent): Vec3Tuple | null {
@@ -618,19 +672,57 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   function pointerDown(event: PointerEvent): void {
     audio.unlock()
     canvas.focus({ preventScroll: true })
-    if (event.pointerType === 'mouse' && event.button === 0 && orbitModifierHeld()) return
+    // Explicit bindings take priority over the default workflow. The orbit
+    // modifier intentionally suppresses both a shot and ball-in-hand placement.
+    if (event.pointerType === 'mouse' && event.button === 0 && orbitModifierHeld()) { cancelShotGesture(); return }
+    // A normal left click must always be able to place the cue ball after a foul,
+    // even when Mouse0 is mapped to shoot or orbit in the player's saved settings.
+    if (event.button === 0 && interaction.canPlaceCueBall && !interaction.spectator && !playback) {
+      activePointers.add(event.pointerId)
+      if (activePointers.size > 1) { cancelShotGesture(); placement.visible = false; return }
+      const position = pointOnTable(event)
+      pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, moved: false, placement: position }
+      canvas.setPointerCapture(event.pointerId)
+      if (position) updatePlacement(position)
+      return
+    }
     if (event.pointerType === 'mouse') {
-      const mouseBinding = `Mouse${event.button}`
-      const action = (Object.keys(settings.bindings) as BindingAction[]).find(key => key !== 'orbit' && settings.bindings[key] === mouseBinding)
+      const binding = `Mouse${event.button}`
+      const action = mouseAction(binding)
       if (action) {
         event.preventDefault()
+        cancelShotGesture()
         canvas.setPointerCapture(event.pointerId)
         if (action === 'shoot') shoot()
         else if (action === 'resetCamera') resetCamera()
         else if (action === 'topView') resetCamera(true)
-        else keys.add(mouseBinding)
+        else if (action === 'cueView') setCameraMode(cameraMode === 'cue' ? 'free' : 'cue')
+        else keys.add(binding)
         return
       }
+      if (settings.bindings.orbit === binding && !(event.button === 2 && shotPhase !== null && shotPhase !== 'overview')) { cancelShotGesture(); return }
+    }
+    if (shotPhase !== null && event.button === 2 && shotPhase !== 'overview') {
+      event.preventDefault()
+      setShotPhase(previousShotPhase(shotPhase))
+      return
+    }
+    if (shotPhase !== null && event.button === 0 && !interaction.canPlaceCueBall) {
+      if (!isEnabled()) return
+      if (event.pointerType === 'touch' && !event.isPrimary) { cancelShotGesture(); return }
+      if (shotPhase === 'power') { event.preventDefault(); startPowerDrag(event); return }
+      const hit = workflowHit(event)
+      const isCallTarget = hit?.userData.pocketId || (hit?.userData.ballId && String(hit.userData.ballId) !== String(snapshot.cueBallId ?? 'cue'))
+      if (shotPhase === 'aim' && !isCallTarget && isFelt(pointOnTable(event))) {
+        event.preventDefault()
+        setShotPhase('power')
+        startPowerDrag(event)
+        return
+      }
+      activePointers.add(event.pointerId)
+      pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, moved: false, placement: null }
+      canvas.setPointerCapture(event.pointerId)
+      return
     }
     activePointers.add(event.pointerId)
     if (activePointers.size > 1) { pointer = null; placement.visible = false; return }
@@ -642,6 +734,21 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function pointerMove(event: PointerEvent): void {
+    if (powerDrag?.id === event.pointerId) {
+      if (!isEnabled() || shotPhase !== 'power') { cancelShotGesture(); return }
+      powerDrag.dx = event.clientX - powerDrag.x
+      powerDrag.dy = event.clientY - powerDrag.y
+      setAim(powerDragAim(powerDrag.aim, powerDrag.dx, powerDrag.dy, powerDrag.width, powerDrag.height))
+      return
+    }
+    if (shotPhase === 'aim' && !interaction.canPlaceCueBall) {
+      if (!isEnabled()) { aimHoverX = null; return }
+      if (event.pointerType === 'mouse' && event.buttons === 0) {
+        if (aimHoverX !== null) setAim({ phi: aim.phi - (event.clientX - aimHoverX) * 0.12 * settings.sensitivity })
+        aimHoverX = event.clientX
+        return
+      }
+    }
     if (!pointer || pointer.id !== event.pointerId || activePointers.size > 1) return
     pointer.moved ||= Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 4
     const position = pointOnTable(event)
@@ -651,13 +758,27 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     if (interaction.canPlaceCueBall && !interaction.spectator && !playback) {
       pointer.placement = position
       updatePlacement(position)
-    } else if (isEnabled() && cameraMode === 'cue') {
+    } else if (isEnabled() && shotPhase === null && cameraMode === 'cue') {
       // Behind the cue the camera turns with the aim, so aim by horizontal drag instead.
       setAim({ phi: aim.phi - dx * 0.12 * settings.sensitivity })
-    } else if (isEnabled()) aimAt(position)
+    } else if (isEnabled() && shotPhase === null) aimAt(position)
   }
 
   function pointerUp(event: PointerEvent): void {
+    if (powerDrag?.id === event.pointerId) {
+      const drag = powerDrag
+      powerDrag = null
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+      if (shotPhase === 'power' && isEnabled()) {
+        drag.dx = event.clientX - drag.x
+        drag.dy = event.clientY - drag.y
+        if (isMeaningfulPowerDrag(drag.dx, drag.dy)) {
+          setAim(powerDragAim(drag.aim, drag.dx, drag.dy, drag.width, drag.height))
+          shoot()
+        }
+      }
+      return
+    }
     if (event.pointerType === 'mouse') keys.delete(`Mouse${event.button}`)
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
     activePointers.delete(event.pointerId)
@@ -677,16 +798,23 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     const hit = hits[0]?.object
     if (hit?.userData.pocketId && interaction.canShoot) callbacks.onSelectPocket?.(String(hit.userData.pocketId))
     else {
-      if (hit?.userData.ballId && interaction.canShoot) callbacks.onSelectBall?.(String(hit.userData.ballId))
-      if (position && isEnabled() && cameraMode !== 'cue') aimAt(position)
+      const cueId = String(snapshot.cueBallId ?? 'cue')
+      const isObjectBall = hit?.userData.ballId && String(hit.userData.ballId) !== cueId
+      if (isObjectBall && interaction.canShoot) callbacks.onSelectBall?.(String(hit.userData.ballId))
+      if (shotPhase === 'overview' && !isObjectBall && isFelt(position) && isEnabled()) setShotPhase('aim')
+      else if (shotPhase === null && hit?.userData.ballId && interaction.canShoot && !isObjectBall) callbacks.onSelectBall?.(String(hit.userData.ballId))
+      if (position && isEnabled() && cameraMode !== 'cue' && shotPhase === null) aimAt(position)
     }
   }
 
   function cancelPointer(event: PointerEvent): void {
+    if (powerDrag?.id === event.pointerId) cancelShotGesture()
     if (event.pointerType === 'mouse') keys.delete(`Mouse${event.button}`)
     activePointers.delete(event.pointerId)
     if (pointer?.id === event.pointerId) { pointer = null; placement.visible = false }
   }
+
+  function pointerLeave(): void { aimHoverX = null }
 
   function isEditing(event: KeyboardEvent): boolean {
     const target = event.target as HTMLElement | null
@@ -708,18 +836,18 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     if (action === 'orbit') updateOrbitButtons()
   }
   function keyUp(event: KeyboardEvent): void { keys.delete(event.code); updateOrbitButtons() }
-  function clearKeys(): void { keys.clear(); updateOrbitButtons(); pointer = null; activePointers.clear(); placement.visible = false }
+  function clearKeys(): void { keys.clear(); updateOrbitButtons(); cancelShotGesture(); placement.visible = false }
 
   function updateKeys(delta: number): void {
     const held = (action: BindingAction) => keys.has(settings.bindings[action] ?? DEFAULT_BINDINGS[action]) ? 1 : 0
     const turn = held('cameraRight') - held('cameraLeft')
     if (turn) rotateCamera(turn * delta * 1.3)
     if (!isEnabled()) return
-    const phi = (held('aimRight') - held('aimLeft')) * delta * 45 * settings.sensitivity
+    const phi = shotPhase === 'power' ? 0 : (held('aimRight') - held('aimLeft')) * delta * 45 * settings.sensitivity
     const V0 = (held('powerUp') - held('powerDown')) * delta * 2
     const theta = (held('elevationUp') - held('elevationDown')) * delta * 25
-    const a = (held('spinRight') - held('spinLeft')) * delta * 0.7
-    const b = (held('spinUp') - held('spinDown')) * delta * 0.7
+    const a = shotPhase === 'power' ? 0 : (held('spinRight') - held('spinLeft')) * delta * 0.7
+    const b = shotPhase === 'power' ? 0 : (held('spinUp') - held('spinDown')) * delta * 0.7
     if (phi || V0 || theta || a || b) setAim({ phi: aim.phi + phi, V0: aim.V0 + V0, theta: aim.theta + theta, a: aim.a + a, b: aim.b + b })
   }
 
@@ -784,13 +912,16 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function handleContextLost(event: Event): void { event.preventDefault(); callbacks.onError?.('Графический контекст потерян. Обновите страницу, чтобы восстановить игру.') }
+  function resetHoverSample(): void { aimHoverX = null }
   function stopContextMenu(event: Event): void { event.preventDefault() }
   const resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(container)
   canvas.addEventListener('pointerdown', pointerDown)
   canvas.addEventListener('pointermove', pointerMove)
+  canvas.addEventListener('pointerenter', resetHoverSample)
   canvas.addEventListener('pointerup', pointerUp)
   canvas.addEventListener('pointercancel', cancelPointer)
+  canvas.addEventListener('pointerleave', pointerLeave)
   canvas.addEventListener('contextmenu', stopContextMenu)
   canvas.addEventListener('webglcontextlost', handleContextLost)
   window.addEventListener('keydown', keyDown)
@@ -803,6 +934,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
 
   return {
     setState(next) {
+      cancelShotGesture()
       const changed = dimensionsSignature(next) !== dimensionsSignature(snapshot)
       snapshot = next
       playback = null
@@ -819,6 +951,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     },
     setInteraction(next) {
       interaction = { ...interaction, ...next }
+      if (!isEnabled()) cancelShotGesture()
+      updateOrbitButtons()
       if (interaction.spectator || !interaction.canPlaceCueBall) placement.visible = false
       updateAimGuide()
     },
@@ -859,6 +993,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     resetCamera,
     setCameraMode,
     getCameraMode: () => cameraMode,
+    setShotPhase,
     rotateCamera,
     zoomCamera,
     setCalledPocket(id) { calledPocket = id == null ? null : String(id); refreshPocketSelection() },
@@ -876,8 +1011,10 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       window.removeEventListener('blur', clearKeys)
       canvas.removeEventListener('pointerdown', pointerDown)
       canvas.removeEventListener('pointermove', pointerMove)
+      canvas.removeEventListener('pointerenter', resetHoverSample)
       canvas.removeEventListener('pointerup', pointerUp)
       canvas.removeEventListener('pointercancel', cancelPointer)
+      canvas.removeEventListener('pointerleave', pointerLeave)
       canvas.removeEventListener('contextmenu', stopContextMenu)
       canvas.removeEventListener('webglcontextlost', handleContextLost)
       disposeGroup(scene)
