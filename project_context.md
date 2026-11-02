@@ -27,6 +27,13 @@ scoped `match-hud.css`. App.vue remains the network/state authority. Preparation
 phases are overview → aim → power; the server still validates and simulates the
 shot. The accessible parameters drawer preserves numeric and keyboard controls.
 
+The default preview `/` now sends `Cache-Control: no-store` for HTML (including
+HEAD/304), so a version query is not required. Existing pre-fix cached tabs may
+need one hard reload. Shot playback preparation uses scalar quaternion math and
+a vectorized unchanged-sample mask; upstream collision physics is unchanged.
+See `online/docs/SHOT_LATENCY.md` for remote before/after timings and the
+remaining CPU-bound dense-break limitation.
+
 ## Implementation
 
 - `online/server`: FastAPI, SQLite persistence, authenticated HTTP/WebSocket,

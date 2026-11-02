@@ -54,23 +54,23 @@ def _vec(values: Any) -> list[float]:
 
 def _quaternion_step(q: list[float], angular_velocity: Any, dt: float) -> list[float]:
     """Integrate world angular velocity; return Three.js [x,y,z,w]."""
-    omega = np.asarray(angular_velocity, dtype=float)
-    speed = float(np.linalg.norm(omega))
+    # This runs for every moving ball at 60 Hz. Three scalar components avoid
+    # allocating several tiny NumPy arrays for every playback sample.
+    ox, oy, oz = float(angular_velocity[0]), float(angular_velocity[1]), float(angular_velocity[2])
+    speed = math.sqrt(ox * ox + oy * oy + oz * oz)
     if speed < 1e-10 or dt <= 0:
         return q
     half_angle = speed * dt / 2
-    axis = omega / speed * math.sin(half_angle)
+    scale = math.sin(half_angle) / speed
     x, y, z, w = q
-    dx, dy, dz = axis
+    dx, dy, dz = ox * scale, oy * scale, oz * scale
     dw = math.cos(half_angle)
-    result = np.array([
-        dw * x + dx * w + dy * z - dz * y,
-        dw * y - dx * z + dy * w + dz * x,
-        dw * z + dx * y - dy * x + dz * w,
-        dw * w - dx * x - dy * y - dz * z,
-    ])
-    result /= np.linalg.norm(result)
-    return _vec(result)
+    rx = dw * x + dx * w + dy * z - dz * y
+    ry = dw * y - dx * z + dy * w + dz * x
+    rz = dw * z + dx * y - dy * x + dz * w
+    rw = dw * w - dx * x - dy * y - dz * z
+    length = math.sqrt(rx * rx + ry * ry + rz * rz + rw * rw)
+    return [round(rx / length, 9), round(ry / length, 9), round(rz / length, 9), round(rw / length, 9)]
 
 
 def _serialize_constraints(constraints: ShotConstraints) -> dict[str, Any]:
@@ -434,26 +434,41 @@ class PhysicsEngine:
         a rendered frame can show; resting balls are not repeated every 1/60 s.
         """
         balls = sorted(system.balls.values(), key=lambda ball: ball.id)
-        frames = []
-        last_time = 0.0
-        emitted: dict[str, tuple] = {}
-        for index in range(len(balls[0].history_cts)):
-            timestamp = float(balls[0].history_cts[index].t)
-            frame_balls = []
-            for ball in balls:
-                current = ball.history_cts[index]
+        timestamps = [float(state.t) for state in balls[0].history_cts]
+        frames = [{"t": round(timestamp, 5), "balls": []} for timestamp in timestamps]
+        # Work one ball at a time. The engine copies even resting rvw arrays,
+        # so object identity cannot identify idle spans. Compare those spans in
+        # NumPy once, then visit only samples that can change a visible delta.
+        # This does not change the 60 Hz sample times or collision simulation.
+        for ball in balls:
+            history = list(ball.history_cts)
+            rvws = np.asarray([state.rvw for state in history])
+            states = np.asarray([state.s for state in history])
+            include = np.ones(len(history), dtype=bool)
+            include[1:] = ~(
+                (states[1:] == states[:-1])
+                & np.all(rvws[1:, 0] == rvws[:-1, 0], axis=1)
+                & np.all(rvws[1:, 2] == 0, axis=1)
+                & np.all(rvws[:-1, 2] == 0, axis=1)
+            )
+            emitted = None
+            for sample in np.flatnonzero(include):
+                index = int(sample)
+                timestamp = timestamps[index]
+                current = history[index]
                 if index:
-                    previous = ball.history_cts[index - 1]
-                    omega = (previous.rvw[2] + current.rvw[2]) / 2
-                    quaternions[ball.id] = _quaternion_step(quaternions[ball.id], omega, timestamp - last_time)
+                    previous = history[index - 1]
+                    before, after = previous.rvw[2], current.rvw[2]
+                    omega = ((float(before[0]) + float(after[0])) / 2,
+                             (float(before[1]) + float(after[1])) / 2,
+                             (float(before[2]) + float(after[2])) / 2)
+                    quaternions[ball.id] = _quaternion_step(quaternions[ball.id], omega, timestamp - timestamps[index - 1])
                 position = [round(float(value), 5) for value in current.rvw[0]]
                 quaternion = [round(float(value), 4) for value in quaternions[ball.id]]
                 key = (tuple(position), tuple(quaternion), int(current.s))
-                if emitted.get(ball.id) != key:
-                    emitted[ball.id] = key
-                    frame_balls.append([ball.id, *position, int(current.s), *quaternion])
-            frames.append({"t": round(timestamp, 5), "balls": frame_balls})
-            last_time = timestamp
+                if emitted != key:
+                    emitted = key
+                    frames[index]["balls"].append([ball.id, *position, int(current.s), *quaternion])
         return {"duration": round(float(system.t), 9), "dt": PLAYBACK_DT, "encoding": "delta", "frames": frames}
 
     @staticmethod

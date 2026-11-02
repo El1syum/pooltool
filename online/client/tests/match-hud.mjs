@@ -12,6 +12,9 @@ const engines = (process.env.BROWSERS || 'chromium,webkit').split(',')
 const artifacts = process.env.ARTIFACT_DIR || path.resolve('tests/artifacts/match-hud')
 const networkDelay = Math.max(0, Number(process.env.NETWORK_DELAY_MS) || 0)
 await mkdir(artifacts, { recursive: true })
+const defaultDocument = await fetch(new URL('/', base))
+assert.equal(defaultDocument.status, 200, 'The ordinary preview URL must serve the current client')
+assert.equal(defaultDocument.headers.get('cache-control'), 'no-store', 'The default HTML must not keep an old build cached')
 
 async function api(actor, endpoint, body, method = 'POST', allowed = [200]) {
   const response = await fetch(base + endpoint, {
@@ -329,8 +332,11 @@ for (const engineName of engines) {
     const shoot = current.getByRole('button', { name: 'Удар', exact: true })
     assert.equal(await shoot.isEnabled(), true)
     const beforeShot = received.get(current).length
+    const shotStarted = Date.now()
     await shoot.click()
     const result = await until(() => received.get(current).slice(beforeShot).find(frame => frame.type === 'match' && frame.result?.trajectory), 'Real shot trajectory was not received', 65_000)
+    const clickToResultMs = Date.now() - shotStarted
+    assert.ok(Number.isFinite(result.result.wallDuration) && result.result.wallDuration >= 0, 'Actual server calculation time must be reported separately from motion duration')
     assert.ok(result.result.duration > 0 && result.result.trajectory.frames.length > 1)
     assert.equal(result.result.initialState.balls.length, 16)
     await current.screenshot({ path: path.join(artifacts, `${engineName}-physical-playback.png`), fullPage: true })
@@ -353,7 +359,8 @@ for (const engineName of engines) {
     if (process.env.VISUAL_FIXTURE === '1') await scoreboardFixture(first, engineName)
     console.log(JSON.stringify({ engine: engineName, room: room.code, build, jsErrors: errors.length, assetGeometry, reticleGeometry, wedgeGeometry, badgeGeometry, fontMetrics, visualFixture: process.env.VISUAL_FIXTURE === '1',
       textures: textures.size, geometrySamples: workload.length, trajectoryFrames: result.result.trajectory.frames.length,
-      duration: result.result.duration, tests: 'responsive HUD, stable canvas, modal gating, mute, spectator authority, real shot and shared final state' }))
+      duration: result.result.duration, serverWallSeconds: result.result.wallDuration, clickToResultMs,
+      tests: 'uncached default URL, responsive HUD, stable canvas, modal gating, mute, spectator authority, real shot and shared final state' }))
   } catch (error) {
     for (let index = 0; index < pages.length; index++) await pages[index].screenshot({ path: path.join(artifacts, `${engineName}-failure-${index}.png`), fullPage: true }).catch(() => {})
     console.error(`${engineName}: ${error.stack || error}`)
