@@ -242,7 +242,12 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
         if request.headers.get("content-length", "0").isdigit() and int(request.headers.get("content-length", "0")) > 65536:
             return JSONResponse({"detail": "Слишком большой запрос"}, status_code=413)
         response = await call_next(request)
-        if request.url.path.startswith("/api/"):
+        path = request.url.path
+        # The entry document selects the current hashed JS/CSS bundles. Never
+        # let an old index stay fresh after a frontend-only deployment. Check
+        # the path too: StaticFiles' 304 responses omit Content-Type.
+        is_html = path == "/" or path.endswith(".html") or response.headers.get("content-type", "").startswith("text/html")
+        if path.startswith("/api/") or is_html:
             response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"

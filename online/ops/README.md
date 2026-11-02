@@ -11,6 +11,14 @@ without restarting the Python service: back up the current frontend first,
 install hashed assets/fonts before `dist/index.html`, then verify `/ready` and
 run the live browser smoke checks. Keep old hashed chunks for already-open games.
 
+The ordinary preview URL `/` serves the current frontend; a `?v=` parameter is
+not part of deployment or routing. HTML entry documents (including conditional
+304 and HEAD responses) use `Cache-Control: no-store`, while hashed assets keep
+their normal static-file behavior. Applying this header policy requires a Python
+service restart. A tab that had already cached the older HTML before this policy
+may need one hard reload; the server cannot retroactively change that cached
+response's headers.
+
 ## Deployment
 
 Build `online/client/dist`, package the repository's checked-out `pooltool`,
