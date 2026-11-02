@@ -4,6 +4,7 @@ import type { Match, Room, User } from '../api'
 import type { AimState, CameraMode, ShotPhase } from '../game/types'
 import { normalizeAim, numberForPocket } from '../game/playback'
 import FigmaBallBadge from './FigmaBallBadge.vue'
+import ShotPowerGauge from './ShotPowerGauge.vue'
 
 const props = defineProps<{
   match: Match; user: User; room: Room | null; aim: AimState; phase: ShotPhase
@@ -26,6 +27,7 @@ const compact = computed(() => props.phase !== 'overview')
 const keyHint = computed(() => props.topViewKey.replace(/^Key/, '').replace(/^Digit/, '').replace('Space', 'Пробел'))
 const showStatus = computed(() => props.canPlace || !props.connected || props.match.status === 'calculating' || props.statusText === 'Воспроизведение удара' || !props.match.players.some(player => player.id === props.user.id))
 const power = computed(() => Math.round(props.aim.V0 / 8 * 100))
+const powerFraction = computed(() => Math.max(0, Math.min(1, props.aim.V0 / 8)))
 const formatTime = (seconds: number) => `${String(Math.floor(Math.max(0, seconds) / 60)).padStart(2, '0')}:${String(Math.max(0, Math.floor(seconds)) % 60).padStart(2, '0')}`
 const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(word => [...word][0] || '').join('').toUpperCase() || 'И'
 const players = computed(() => props.match.players.map((player, index) => {
@@ -45,7 +47,7 @@ const balls = computed(() => {
 const pockets = computed(() => props.match.snapshot.table.pockets.map((pocket, index) => ({ id: String(pocket.id), number: numberForPocket(String(pocket.id), index) })).sort((a, b) => a.number - b.number))
 const activeName = computed(() => props.match.players[props.match.currentPlayer]?.displayName || 'Игрок')
 const turnLabel = computed(() => props.match.status === 'finished' ? 'Матч завершён' : props.match.status === 'calculating' ? 'Расчёт удара' : props.match.players[props.match.currentPlayer]?.id === props.user.id ? 'Ваш ход' : `Ход: ${activeName.value}`)
-const phaseHint = computed(() => props.canPlace ? 'Установите биток в разрешённой зоне' : props.phase === 'aim' ? 'Выберите точку удара · ЛКМ — подтвердить · ПКМ — назад' : props.phase === 'power' ? 'Оттяните кий: вниз — сила, вбок — наклон · ПКМ — назад' : props.canShoot ? 'Нажмите на стол, чтобы прицелиться' : props.statusText)
+const phaseHint = computed(() => props.canPlace ? 'Установите биток в разрешённой зоне' : props.phase === 'aim' ? 'Направление зафиксировано · Выберите точку касания · ЛКМ — подтвердить · ПКМ — назад' : props.phase === 'power' ? 'Оттяните кий вниз для выбора силы и отпустите ЛКМ · ПКМ — назад' : props.canShoot ? 'Наведите направление · ЛКМ — зафиксировать' : props.statusText)
 function setAim(field: keyof AimState, event: Event) {
   emit('aim', normalizeAim({ ...props.aim, [field]: Number((event.target as HTMLInputElement).value) }))
 }
@@ -65,7 +67,7 @@ defineExpose({ closeControls })
 </script>
 
 <template>
-  <section class="hud-root" :class="{ 'hud-compact': compact, 'hud-offline': !connected }" :data-shot-phase="phase" data-testid="match-hud" aria-label="Интерфейс матча">
+  <section class="hud-root" :class="{ 'hud-compact': compact, 'hud-offline': !connected }" :data-shot-phase="phase" :data-aim-direction="aim.phi" data-testid="match-hud" aria-label="Интерфейс матча">
     <div class="hud-identity" aria-label="Pooltool">
       <div class="hud-seal">8</div>
       <div class="hud-wordmark"><strong>Pooltool</strong><span>BILLIARDS • МАТЧ {{ formatTime(elapsed) }}</span></div>
@@ -105,9 +107,9 @@ defineExpose({ closeControls })
         <img class="hud-reticle-center" :src="asset('reticle-center')" alt="" :style="{ transform: `translate(${aim.a * 158}px, ${-aim.b * 158}px)` }" />
       </button>
       <div v-if="phase === 'power'" class="hud-charge" aria-live="polite">
-        <img class="hud-power-wedge" :src="asset('power-wedge')" alt="" />
-        <img class="hud-elevation-wedge" :src="asset('elevation-wedge')" alt="" />
-        <span class="hud-power-number">{{ power }}%</span><span class="hud-elevation-number">{{ Math.round(aim.theta) }}°</span>
+        <ShotPowerGauge class="hud-percent-wedge" :fraction="powerFraction" unit="percent" label="Сила удара в процентах" />
+        <ShotPowerGauge class="hud-speed-wedge" :fraction="powerFraction" unit="speed" label="Скорость удара в метрах в секунду" />
+        <span class="hud-power-number">{{ power }}%</span><span class="hud-speed-number">{{ aim.V0.toFixed(1) }} м/с</span>
       </div>
     </div>
 
@@ -122,7 +124,7 @@ defineExpose({ closeControls })
       <div class="hud-controls-heading"><h2>Параметры удара</h2><button type="button" aria-label="Закрыть параметры удара" @click="closeControls">×</button></div>
       <div class="hud-camera-actions" role="toolbar" aria-label="Управление камерой"><button type="button" @click="emit('camera', 'left')" aria-label="Повернуть стол влево">↶</button><button type="button" @click="emit('camera', 'right')" aria-label="Повернуть стол вправо">↷</button><button type="button" @click="emit('camera', 'in')" aria-label="Приблизить">+</button><button type="button" @click="emit('camera', 'out')" aria-label="Отдалить">−</button><button type="button" @click="emit('camera', 'free')">Обзор</button><button type="button" :aria-pressed="cameraMode === 'cue'" @click="emit('camera', 'cue')">Из-за кия</button></div>
       <label>Сила {{ power }}%<input aria-label="Сила удара" type="range" min="0.2" max="8" step="0.1" :value="aim.V0" :disabled="!canShoot" @input="setAim('V0', $event)" /></label>
-      <label>Направление {{ aim.phi.toFixed(1) }}°<input aria-label="Направление удара" type="range" min="0" max="359.9" step="0.1" :value="aim.phi" :disabled="!canShoot" @input="setAim('phi', $event)" /></label>
+      <label>Направление {{ aim.phi.toFixed(1) }}°<input aria-label="Направление удара" type="range" min="0" max="359.9" step="0.1" :value="aim.phi" :disabled="!canShoot || phase !== 'overview'" @input="setAim('phi', $event)" /></label>
       <label>Наклон кия {{ Math.round(aim.theta) }}°<input aria-label="Наклон кия" type="range" min="0" max="60" step="1" :value="aim.theta" :disabled="!canShoot" @input="setAim('theta', $event)" /></label>
       <label>Вращение X<input aria-label="Вращение X" type="range" min="-0.8" max="0.8" step="0.02" :value="aim.a" :disabled="!canShoot" @input="setAim('a', $event)" /></label>
       <label>Вращение Y<input aria-label="Вращение Y" type="range" min="-0.8" max="0.8" step="0.02" :value="aim.b" :disabled="!canShoot" @input="setAim('b', $event)" /></label>

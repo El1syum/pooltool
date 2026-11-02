@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GameAudio } from './audio'
 import { isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } from './playback'
-import { isMeaningfulPowerDrag, powerDragAim, previousShotPhase } from './shotWorkflow'
+import { applyShotPhaseLocks, isMeaningfulPowerDrag, powerDragAim, previousShotPhase } from './shotWorkflow'
 import {
   DEFAULT_BINDINGS,
   type AimParameters, type BallState, type BindingAction, type GameScene, type GameSnapshot,
@@ -531,7 +531,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function setAim(partial: Partial<AimParameters>, notify = true): void {
-    const next = normalizeAim({ ...aim, ...partial, ...(shotPhase === 'power' ? lockedShot : null) })
+    const next = normalizeAim(applyShotPhaseLocks({ ...aim, ...partial }, shotPhase, lockedShot))
     if (Object.keys(next).every(key => next[key as keyof AimParameters] === aim[key as keyof AimParameters])) return
     aim = next
     updateAimGuide()
@@ -627,7 +627,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     cancelShotGesture()
     keys.clear()
     shotPhase = phase
-    lockedShot = phase === 'power' ? { phi: aim.phi, a: aim.a, b: aim.b } : null
+    lockedShot = phase === 'aim' || phase === 'power' ? { phi: aim.phi, a: aim.a, b: aim.b } : null
     updateOrbitButtons()
     if (phase === 'aim' || phase === 'power') setCameraMode('cue')
     else if (phase === 'overview') resetCamera()
@@ -741,10 +741,17 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       setAim(powerDragAim(powerDrag.aim, powerDrag.dx, powerDrag.dy, powerDrag.width, powerDrag.height))
       return
     }
-    if (shotPhase === 'aim' && !interaction.canPlaceCueBall) {
-      if (!isEnabled()) { aimHoverX = null; return }
+    // Choose direction before the first click. Once the contact reticle opens,
+    // phi is locked and its own pointer handler edits only the cue tip's a/b.
+    if (shotPhase === 'overview' && !interaction.canPlaceCueBall) {
+      if (!isEnabled() || orbitModifierHeld()) { aimHoverX = null; return }
       if (event.pointerType === 'mouse' && event.buttons === 0) {
-        if (aimHoverX !== null) setAim({ phi: aim.phi - (event.clientX - aimHoverX) * 0.12 * settings.sensitivity })
+        if (cameraMode === 'cue') {
+          if (aimHoverX !== null) setAim({ phi: aim.phi - (event.clientX - aimHoverX) * 0.12 * settings.sensitivity })
+        } else {
+          const position = pointOnTable(event)
+          if (position) aimAt(position)
+        }
         aimHoverX = event.clientX
         return
       }
@@ -801,7 +808,11 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       const cueId = String(snapshot.cueBallId ?? 'cue')
       const isObjectBall = hit?.userData.ballId && String(hit.userData.ballId) !== cueId
       if (isObjectBall && interaction.canShoot) callbacks.onSelectBall?.(String(hit.userData.ballId))
-      if (shotPhase === 'overview' && !isObjectBall && isFelt(position) && isEnabled()) setShotPhase('aim')
+      if (shotPhase === 'overview' && !isObjectBall && isFelt(position) && isEnabled()) {
+        // Touch has no hover: a tap selects the heading before it is locked.
+        if (event.pointerType !== 'mouse' && position) aimAt(position)
+        setShotPhase('aim')
+      }
       else if (shotPhase === null && hit?.userData.ballId && interaction.canShoot && !isObjectBall) callbacks.onSelectBall?.(String(hit.userData.ballId))
       if (position && isEnabled() && cameraMode !== 'cue' && shotPhase === null) aimAt(position)
     }
@@ -843,7 +854,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     const turn = held('cameraRight') - held('cameraLeft')
     if (turn) rotateCamera(turn * delta * 1.3)
     if (!isEnabled()) return
-    const phi = shotPhase === 'power' ? 0 : (held('aimRight') - held('aimLeft')) * delta * 45 * settings.sensitivity
+    const phi = shotPhase === 'aim' || shotPhase === 'power' ? 0 : (held('aimRight') - held('aimLeft')) * delta * 45 * settings.sensitivity
     const V0 = (held('powerUp') - held('powerDown')) * delta * 2
     const theta = (held('elevationUp') - held('elevationDown')) * delta * 25
     const a = shotPhase === 'power' ? 0 : (held('spinRight') - held('spinLeft')) * delta * 0.7

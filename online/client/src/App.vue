@@ -384,7 +384,13 @@ watch([ownTurn, () => match.value?.id, () => match.value?.status, playbackBusy, 
 watch(calledBall, (id) => scene?.setCalledBall(id || null))
 watch(calledPocket, (id) => scene?.setCalledPocket(id || null))
 watch(settings, () => { scene?.setSettings(settings.value); if (user.value) { localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value)); settingsDirty.value = true } }, { deep: true })
-function updateAim() { scene?.setAim(aim.value) }
+function updateAim() {
+  if (!scene) return
+  scene.setAim(aim.value)
+  // The scene owns phase locks. A rejected direction-only edit must not linger
+  // in HUD state and later bypass the lock when its explicit shot button fires.
+  aim.value = { ...scene.getAim() }
+}
 /** One round trip on the open socket; null when the socket is not usable. */
 function commandViaSocket(matchId: string, command: Record<string, unknown>): Promise<CommandResponse> | null {
   const current = socket
@@ -432,7 +438,7 @@ async function resumePendingCommand() {
     if (e instanceof ApiError && e.status < 500) localStorage.removeItem('pooltool.pendingCommand')
   }
 }
-async function shoot(value = aim.value) {
+async function shoot(value = scene?.getAim() ?? aim.value) {
   if (!canShoot.value || canPlace.value) return
   if (match.value?.snapshot.callShotRequired && (!calledBall.value || !calledPocket.value)) { error.value = 'Выберите заказанный шар и лузу перед ударом.'; return }
   scene?.strike()

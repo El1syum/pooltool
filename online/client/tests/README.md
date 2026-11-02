@@ -35,12 +35,22 @@ visual fixture, never evidence of server gameplay.
 fixture to check gesture transitions, no accidental click shots, remapped mouse
 controls, placement priority and actual GPU-projected cue-ball alignment.
 It starts and stops its own temporary Vite instance; it does not need a backend.
+It also checks heading hover before the first click, a locked contact-phase
+heading, contact editing, and sideways/upward pull cancellation.
+
+`power-gauges.mjs` is an isolated visual component check, not gameplay evidence.
+It renders the actual Vue HUD and original external Figma SVG in Chromium/WebKit,
+counts gold pixels at 0/25/50/100%, verifies both units share the same fill and
+checks 1920px Figma offsets plus 640/390/320px viewport bounds. It starts/stops
+temporary Vite on port 4314. Set `BROWSER=webkit` for WebKit; it also needs `pngjs`
+(or `PNG_MODULE` pointing at its `lib/png.js`), analogous to `PLAYWRIGHT_MODULE`.
 
 ```powershell
 node --test tests/hud-ssr.test.mjs
 node --test --experimental-strip-types src/game/playback.test.mjs src/game/shotWorkflow.test.mjs
 node tests/shot-workflow.mjs
 node tests/match-hud.mjs
+node tests/power-gauges.mjs
 ```
 
 The SSR tests verify group ownership, open-table counts, pocketed flags, original

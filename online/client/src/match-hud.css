@@ -67,11 +67,12 @@
 .hud-root .hud-reticle:hover { background: transparent; }
 .hud-reticle-ring { position: absolute; left: 0; top: 0; }
 .hud-reticle-center { position: absolute; left: 127px; top: 127px; }
-.hud-power-wedge { position: absolute; left: 252px; top: 12px; }
-.hud-elevation-wedge { position: absolute; left: 69.5px; top: 173px; transform: rotate(180deg); }
-.hud-power-number, .hud-elevation-number { position: absolute; font-size: 29px; line-height: 35px; font-weight: 500; color: #fff; white-space: nowrap; }
-.hud-power-number { left: -132px; top: 123px; }
-.hud-elevation-number { left: 377px; top: 160px; }
+.hud-power-gauge { position: absolute; overflow: visible; }
+.hud-speed-wedge { left: 252px; top: 12px; transform: rotate(180deg); }
+.hud-percent-wedge { left: -181px; top: 173px; }
+.hud-power-number, .hud-speed-number { position: absolute; font-size: 29px; line-height: 35px; font-weight: 500; color: #fff; white-space: nowrap; }
+.hud-power-number { left: -101px; top: 123px; transform: translateX(-50%); }
+.hud-speed-number { left: 413px; top: 160px; transform: translateX(-50%); }
 .hud-phase-hint { position: absolute; left: 50%; bottom: 108px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); text-align: center; margin: 0; padding: 6px 12px; font-size: 11px; color: var(--hud-muted); border-radius: 4px; background: #1b211caa; }
 .hud-controls { position: absolute; right: 24px; bottom: 66px; width: 328px; max-width: calc(100% - 32px); max-height: calc(100% - 180px); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; padding: 20px; border: 1px solid #6f6246; border-radius: 12px; background: #1b211cf5; box-shadow: 0 12px 48px #0007; }
 .hud-controls-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
@@ -146,6 +147,9 @@
   .hud-footer-actions { gap: 7px; }
   .hud-controls { right: 16px; bottom: 68px; }
 }
+@media (min-width: 621px) and (max-width: 760px) {
+  .hud-target { transform: translate(-50%, -50%) scale(.84); }
+}
 @media (max-width: 620px) {
   .hud-identity, .hud-compact .hud-identity { left: 14px; top: 17px; gap: 8px; }
   .hud-wordmark span { font-size: 8px; line-height: 10px; }
@@ -184,11 +188,14 @@
   .hud-compact .hud-clock-digits { font-size: 30px; }
   .hud-compact .hud-turn-label { justify-self: auto; max-width: 150px; }
   .hud-target { transform: translate(-50%, -50%) scale(.76); }
-  .hud-power-number { left: -32px; top: 100px; font-size: 23px; }
-  .hud-elevation-number { left: 294px; top: 192px; font-size: 23px; }
-  .hud-power-wedge { left: 175px; top: -16px; transform: scale(.75); transform-origin: left bottom; }
-  .hud-elevation-wedge { left: -32px; top: 193px; transform: rotate(180deg) scale(.75); transform-origin: center; }
+  .hud-power-number { left: -32px; top: 100px; font-size: 23px; transform: none; }
+  .hud-speed-number { left: 240px; top: 192px; font-size: 23px; transform: none; }
+  .hud-speed-wedge { left: 175px; top: -16px; transform: rotate(180deg) scale(.75); transform-origin: center; }
+  .hud-percent-wedge { left: -109px; top: 193px; transform: scale(.75); transform-origin: center; }
   .hud-controls { left: 12px; right: 12px; bottom: 72px; width: auto; max-width: none; max-height: min(62vh, calc(100% - 142px)); padding: 16px; }
+}
+@media (max-width: 360px) {
+  .hud-target { transform: translate(-50%, -50%) scale(.64); }
 }
 @media (max-height: 600px) and (min-width: 621px) {
   .hud-scoreboard { top: 72px; height: 90px; }

@@ -24,8 +24,11 @@ https://www.figma.com/design/qLURhvhuM4AZ0xibHYelU8/?node-id=73-73
 The match HUD lives in `online/client/src/components/MatchHud.vue`, with the
 Figma SVG exports in `public/ui/figma-match`, self-hosted Inter/Lora fonts and
 scoped `match-hud.css`. App.vue remains the network/state authority. Preparation
-phases are overview → aim → power; the server still validates and simulates the
-shot. The accessible parameters drawer preserves numeric and keyboard controls.
+phases are overview (heading before first LMB) → aim (heading fixed, cue-contact
+selection only) → power (heading/contact fixed, downward pull sets V0). Both
+dynamic Figma wedge gauges show V0 as percent and m/s, not elevation. The server
+still validates and simulates the shot. The accessible parameters drawer
+preserves numeric and keyboard controls.
 
 The default preview `/` now sends `Cache-Control: no-store` for HTML (including
 HEAD/304), so a version query is not required. Existing pre-fix cached tabs may
