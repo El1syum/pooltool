@@ -2,10 +2,66 @@
 
 Run from repository root: `uvicorn online.server.app:app --port 8790`.
 All dates are UTC ISO 8601, except explicitly named epoch-millisecond playback
-timestamps. HTTP authentication is `Authorization: Bearer <token>`.
+timestamps. Player HTTP authentication is `Authorization: Bearer <token>`.
 Session tokens are opaque, stored only as SHA-256 hashes, and expire after 30 days.
 No desktop utility is required. The browser renders trajectories; pooltool physics
 and eight-ball rule decisions run on the server.
+
+## Shared cosmetic model library
+
+The library is public to read. Its administration has an independent login;
+player bearer tokens or nicknames never authorize a library mutation.
+
+| Method/path | Body | Response |
+|---|---|---|
+| GET `/api/assets/library` | — | `{version,assets,profile:{tableId,environmentId},updatedAt}` |
+| GET `/api/assets/library?includeDisabled=true` | admin cookie | same, includes disabled models |
+| GET/HEAD `/models/library/{id}.glb` | — | immutable `model/gltf-binary` file; disabled/missing = 404 |
+| POST `/api/assets/admin/login` | `{username,password}` | `{authenticated:true,username,csrfToken,expiresAt}` + HttpOnly cookie |
+| GET `/api/assets/admin/session` | — | `{authenticated,configured,username?,csrfToken?,expiresAt?}` |
+| POST `/api/assets/admin/logout` | — | `{authenticated:false}` |
+| POST `/api/assets/models?name=...&role=table` | raw GLB bytes | `{asset,version}` |
+| PATCH `/api/assets/models/{id}` | `{name?,role?,enabled?,config?,expectedVersion?}` | `{asset,version}` |
+| DELETE `/api/assets/models/{id}` | — | `{asset,version}` (soft disable) |
+| PUT `/api/assets/library/profile` | `{tableId,environmentId,configs?,expectedVersion?}` | library snapshot |
+
+`asset = {id,name,role,bytes,sha256,enabled,config,url,createdAt,updatedAt}`.
+Roles are `table` and `environment`; each selected ID must be an enabled model of
+that role. IDs are server-generated lowercase hex, never user-provided paths.
+Upload content type must be `model/gltf-binary` or `application/octet-stream`;
+uploads are raw bodies, not multipart. Files are capped at 50 MiB and must be
+self-contained GLB 2 without external URIs or required Draco/Meshopt/KTX2 decoders.
+
+`config` contains `position:[x,y,z]` (metres), `rotation:[x,y,z]` (XYZ degrees),
+`scale:[x,y,z]`, `replaceProcedural:boolean`, `material`, `materials` (overrides by
+material name), and `hiddenNodes` (node names). The origin is the authoritative
+cloth centre and the renderer uses Y-up glTF coordinates. Material overrides
+support `color`, `roughness`, `metalness`, `emissive`, `emissiveIntensity`; colours
+are `#RRGGBB`. Position is limited to ±100 m, rotation to ±3600°, scale to
+0.0001–1000, roughness/metalness to 0–1, emissive intensity to 0–10. Values must
+be finite. Unknown fields are rejected. PATCH merges supplied config fields with
+the existing config; a supplied material/map field replaces that field.
+
+Profile `configs?:Record<selected-id,config>` publishes both slots and their full
+draft configs atomically. An optional `expectedVersion` guards against concurrent
+edits and returns 409 if stale. Every successful mutation increments the global
+integer version. Disabling or changing the role of a selected model clears that
+slot; restoring with `enabled:true` preserves its ID, metadata and file. No endpoint
+permanently deletes files. With null slots the renderer keeps its procedural art.
+
+Administrator cookies are `pooltool_asset_admin`, HttpOnly, SameSite Strict,
+path `/api/assets`, eight-hour TTL, Secure only on HTTPS. Every authenticated
+mutation, including logout, requires `X-Asset-CSRF` from login/session in addition
+to the cookie. GET session does not require CSRF and restores the token after a
+reload. A supplied Origin must be the actual same origin; an omitted Origin is
+allowed only with valid cookie and CSRF for writes. Errors use `{detail:string}` or
+`{detail:[{loc,msg,type}]}` without echoing passwords. Unconfigured credentials
+return 503; missing/expired auth = 401, CSRF/origin = 403, oversized body = 413,
+invalid MIME = 415, invalid model/config = 422, login rate limit = 429.
+
+Administrator HTTP access is allowed only for the user's explicitly accepted
+testing preview; it is unencrypted and requires a unique testing-only password.
+Library objects are cosmetic and do not modify server-authoritative physics.
 
 ## Authentication and profile
 
@@ -84,6 +140,15 @@ startedAt,finishedAt,winnerId,winner,reason,ranked,snapshot,lastShot,playbackUnt
 serverTime,turnRemainingSeconds,disconnectedPlayers,ratings?}`. Status is active/calculating/finished.
 `disconnectedPlayers` maps an offline player ID to the UTC time their forfeit
 takes effect; it is broadcast as soon as the socket drops and cleared on reconnect.
+
+The browser derives its ranked aim-guide presentation rule from this server-owned
+`match.ranked`, never from personal preferences or the selected search mode. While
+a ranked match is active/calculating (including reconnect), the aim line is forced
+off and its settings control is disabled for players and spectators. The saved
+casual `showAimGuide` preference is not overwritten and is restored after a
+confirmed finish or leaving the match. This is a client presentation rule, not a
+claim that a modified renderer is a tamper-proof anti-cheat boundary.
+
 `snapshot` holds public balls/table/rule constraints; internal simulation state
 is never sent to the client. `result` includes trajectory, events, potted,
 initialState, finalState, duration (simulated seconds), wallDuration (real compute

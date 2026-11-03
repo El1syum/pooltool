@@ -16,7 +16,7 @@ def client(tmp_path):
     (static / "assets" / "current.js").write_text("console.log('current')", encoding="utf-8")
     # No match is created by these transport tests; do not initialize physics.
     application = create_app(database=str(tmp_path / "game.db"), engine=object(), process_pool=False, background=False)
-    application.router.routes = [route for route in application.router.routes if route.name != "client"]
+    application.router.routes = [route for route in application.router.routes if getattr(route, "name", None) != "client"]
     application.mount("/", StaticFiles(directory=static, html=True), name="client")
     with TestClient(application) as client:
         yield client

@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .auth import verify_vk_launch_params
+from .assets import AssetLibrary, MAX_MODEL_BYTES, asset_router
 from .service import GameService
 from .storage import Store, encode
 
@@ -193,13 +194,16 @@ class RateLimiter:
             self.entries = defaultdict(deque, {k: v for k, v in self.entries.items() if v and v[-1] > now - 60})
 
 
-def create_app(*, database=None, engine=None, process_pool=True, now=time.time, background=True):
+def create_app(*, database=None, engine=None, process_pool=True, now=time.time, background=True, assets_root=None):
     hub = Hub()
     limiter = RateLimiter()
 
     @asynccontextmanager
     async def lifespan(application):
-        store = Store(database or os.getenv("POOLTOOL_DB", "online/data/pooltool.sqlite3"))
+        database_path = database or os.getenv("POOLTOOL_DB", "online/data/pooltool.sqlite3")
+        store = Store(database_path)
+        model_root = assets_root or os.getenv("POOLTOOL_ASSET_ROOT") or (Path(database_path).resolve().parent / "assets")
+        application.state.asset_library = AssetLibrary(store, Path(model_root), now=now)
         service = None
         application.state.engine_error = None
         try:
@@ -232,6 +236,7 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
             store.close()
 
     application = FastAPI(title="Pooltool Online", version="1.0.0", lifespan=lifespan)
+    application.include_router(asset_router())
     application.add_middleware(GZipMiddleware, minimum_size=1000)
     origins = [value.strip() for value in os.getenv("CORS_ORIGINS", "").split(",") if value.strip()]
     if origins:
@@ -239,7 +244,10 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
 
     @application.middleware("http")
     async def safe_headers(request, call_next):
-        if request.headers.get("content-length", "0").isdigit() and int(request.headers.get("content-length", "0")) > 65536:
+        # Only the authenticated GLB stream has a larger limit. Its route checks
+        # authentication/CSRF before reading and also bounds chunked bodies.
+        maximum = MAX_MODEL_BYTES if request.method == "POST" and request.url.path == "/api/assets/models" else 65536
+        if request.headers.get("content-length", "0").isdigit() and int(request.headers.get("content-length", "0")) > maximum:
             return JSONResponse({"detail": "Слишком большой запрос"}, status_code=413)
         response = await call_next(request)
         path = request.url.path

@@ -13,6 +13,7 @@ python="$release/.venv/bin/python"
 "$python" -m pip install --no-cache-dir --extra-index-url https://archive.panda3d.org/simple/ -r "$release/online/runtime-requirements.txt"
 "$python" -m pip install --no-deps -e "$release"
 install -d -o ops -g ops "$app_root/shared/data" "$app_root/shared/cache" "$app_root/shared/home"
+install -d -m 700 -o ops -g ops "$app_root/shared/assets"
 if ! test -f "$app_root/shared/server.env"; then
   install -m 600 -o ops -g ops "$release/online/ops/server.env.example" "$app_root/shared/server.env"
 fi

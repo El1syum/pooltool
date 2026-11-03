@@ -47,6 +47,70 @@ Runtime configuration: `/opt/pooltool-online/shared/server.env` (mode 600).
 Use HTTPS/WSS behind a reverse proxy before VK integration or public production
 authentication. The direct HTTP port is intended for functional testing.
 
+## Shared visual model library
+
+The model workshop uses a separate administrator login, not the guest player's
+nickname or game token. Configure `ASSET_ADMIN_USERNAME` and
+`ASSET_ADMIN_PASSWORD_HASH` in the private server environment. Empty or malformed
+credentials fail closed: the public library remains readable but no administrator
+can log in. Generate a hash without placing a plaintext password on a command line:
+
+For an initial handoff, use the credential helper instead: it creates a unique
+password in a private Markdown file and a separate hash-only environment fragment.
+Both output paths are required, must be outside every Git worktree, and must not
+already exist. Files use mode 0600 on POSIX or a current-user-only Windows ACL,
+applied before secrets are written. Nothing secret is printed. For example:
+
+```powershell
+.venv\Scripts\python.exe -m online.ops.create_asset_admin --output C:/Users/User/.codex/secrets/pooltool-model-admin-20261103.md --env-output C:/Users/User/.codex/secrets/pooltool-model-admin-20261103.env
+```
+
+The default username is `model-admin`; override it with `--username`. Use
+`--prompt-password` for hidden manual input instead of generation. This helper
+does not upload credentials or restart the service. For a hash-only manual setup:
+
+```bash
+.venv/bin/python -c 'from getpass import getpass; from online.server.assets import hash_admin_password; print(hash_admin_password(getpass("Unique model-admin password: ")))'
+```
+
+The stored format is `scrypt$16384$8$1$<salt>$<digest>`. Copy the hash literally;
+do not expand its `$` characters in a shell. Store no plaintext password in Git.
+Changing either credential invalidates prior administrator sessions after the
+service restarts. Sessions expire after eight hours and only their SHA-256 token
+hashes are stored in SQLite. Login is rate-limited by client IP and username.
+Writes require the HttpOnly/SameSite=Strict cookie plus an `X-Asset-CSRF` token;
+the session restore endpoint returns that token without requiring a CSRF header.
+
+The user explicitly permits administrator login over the current HTTP testing
+preview. HTTP does not encrypt credentials, cookies, or model uploads: use a unique
+testing-only password and do not reuse production credentials. The cookie is
+automatically Secure on actual HTTPS. This exception does not change the HTTPS
+requirement for a later public/VK production deployment.
+
+Set `POOLTOOL_ASSET_ROOT=/opt/pooltool-online/shared/assets`; without it the
+directory defaults to `assets` alongside the configured SQLite database. This
+directory must be persistent across releases, readable/writable by the service,
+and not a source-code/static-build directory. Back up both this directory and the
+database. The database stores public selection/configuration, metadata, and
+administrator session hashes; files are immutable GLBs with server-generated IDs.
+
+Only self-contained GLB 2 files are accepted, at most 50 MiB each, 500 records and
+2 GiB total (including disabled records). Uploads stream to bounded temporary
+files, are validated before publication, hashed and atomically renamed. External
+URIs, malformed container/geometry ranges, excessive geometry/node counts, cycles
+and required external decoder extensions are rejected. Clients also enforce their
+renderer resource limits. Disabling a model is reversible and clears its selected
+slot; it does not delete its file. Permanent purge is deliberately not exposed in
+the workshop. An empty library keeps the procedural table/environment fallback.
+Visual assets never change authoritative physics geometry.
+
+The existing HTTP preview can keep the generated hash-only values in
+`/opt/pooltool-online/shared/asset-admin.env` (mode 600, service-owned). Install
+`asset-library-preview.conf` as a service drop-in to load this separate file;
+the main `server.env` and migration guard stay unchanged. Run daemon-reload and
+restart once, then verify `/ready` and `/api/assets/admin/session` before use.
+The plaintext handoff stays outside Git on the operator's computer.
+
 ## Persistence and recovery
 
 Back up the database with SQLite's online backup API rather than copying an
