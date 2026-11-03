@@ -60,6 +60,10 @@ It starts and stops its own temporary Vite instance; it does not need a backend.
 It also checks heading hover before the first click, a locked contact-phase
 heading, contact editing, and sideways/upward pull cancellation.
 
+Free-scene confirmation additionally covers clicks outside the felt, rays that
+miss the table plane entirely, preserved heading/contact, a separate power press,
+UI-button exclusion, ball/pocket call-selection priority and permission gating.
+
 `power-gauges.mjs` is an isolated visual component check, not gameplay evidence.
 It renders the actual Vue HUD and original external Figma SVG in Chromium/WebKit,
 counts gold pixels at 0/25/50/100%, verifies both units share the same fill and

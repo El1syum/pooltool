@@ -282,9 +282,15 @@ for (const engineName of engines) {
     assert.ok([403, 409].includes(denied.status))
 
     // Exercise the Figma's compact aiming and charging states without sending a shot.
-    await clickNamed(current, ['Параметры удара'])
-    await clickNamed(current, ['Прицелиться'])
+    const confirmationCanvas = current.locator('.game-stage canvas')
+    const confirmationBounds = await confirmationCanvas.boundingBox()
+    assert.ok(confirmationBounds)
+    const confirmationPoint = { x: confirmationBounds.x + confirmationBounds.width * 0.02, y: confirmationBounds.y + confirmationBounds.height * 0.35 }
+    await current.mouse.move(confirmationPoint.x, confirmationPoint.y)
+    const backgroundHeading = await current.getByTestId('match-hud').getAttribute('data-aim-direction')
+    await current.mouse.click(confirmationPoint.x, confirmationPoint.y)
     await current.locator('[data-testid="match-hud"][data-shot-phase="aim"]').waitFor()
+    assert.equal(await current.getByTestId('match-hud').getAttribute('data-aim-direction'), backgroundHeading, 'A background click confirms the current heading without requiring a cue-ball hit')
     await current.locator('.hud-reticle-ring').waitFor()
     const heading = await current.getByTestId('match-hud').getAttribute('data-aim-direction')
     const contact = current.locator('.hud-reticle')
@@ -304,8 +310,10 @@ for (const engineName of engines) {
       return { name: image.src.split('/').pop(), natural: [image.naturalWidth, image.naturalHeight], rendered: [rect.width, rect.height] }
     }))
     assert.ok(reticleGeometry.every(asset => asset.natural[0] > 0 && asset.rendered[0] > 0 && asset.rendered[1] > 0))
-    await current.getByRole('button', { name: 'Точка удара по битку. Нажмите для выбора силы', exact: true }).click()
+    const beforeBackgroundConfirm = sent.get(current).filter(frame => frame.type === 'command' && frame.command?.type === 'shot').length
+    await current.mouse.click(confirmationPoint.x, confirmationPoint.y)
     await current.locator('[data-testid="match-hud"][data-shot-phase="power"]').waitFor()
+    assert.equal(sent.get(current).filter(frame => frame.type === 'command' && frame.command?.type === 'shot').length, beforeBackgroundConfirm, 'A second background confirmation must not shoot')
     assert.equal(await current.getByTestId('alt-assist').count(), 0, 'Extra instruments are hidden without Alt')
     await current.keyboard.down('Alt')
     await current.getByTestId('alt-assist').waitFor()

@@ -42,6 +42,13 @@ dynamic Figma wedge gauges show V0 as percent and m/s, not elevation. The server
 still validates and simulates the shot. The accessible parameters drawer
 preserves numeric and keyboard controls.
 
+LMB confirmation accepts any free point of the canvas, including background and
+rays missing the felt/table plane. Overview→aim and aim→power confirm on release;
+the power pull requires a separate press, preventing one confirming click/drag
+from immediately firing. Ball/pocket clicks retain call-selection priority;
+UI controls, placement, remapped bindings, opponent/spectator and playback gates
+remain unchanged.
+
 The shared model library is cosmetic only: `online/server/assets.py`, public
 `/api/assets/library`, admin APIs under `/api/assets`, GLB files under
 `/models/library/`. `ModelWorkshop` supports local previews, transforms,

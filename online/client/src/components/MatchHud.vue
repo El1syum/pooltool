@@ -116,7 +116,7 @@ defineExpose({ closeControls })
 
     <footer class="hud-footer">
       <div class="hud-footer-actions"><button type="button" @click="emit('camera', 'top')" aria-label="Вид сверху">{{ keyHint }} · вид сверху</button><button type="button" @click="emit('camera', 'free')">Обзор стола</button><button type="button" class="hud-control-toggle" :aria-expanded="controlsOpen" aria-controls="hud-controls" @click="controlsOpen = !controlsOpen">Параметры удара</button></div>
-      <span class="hud-footer-instruction">{{ phase === 'aim' ? 'ЛКМ · подтвердить точку контакта' : phase === 'power' ? 'Отпустите ЛКМ · выполнить удар' : 'Колесо мыши · приблизиться к битку' }}</span>
+      <span class="hud-footer-instruction">{{ phase === 'aim' ? 'ЛКМ по сцене · подтвердить точку контакта' : phase === 'power' ? 'Зажмите ЛКМ · оттяните вниз и отпустите' : canShoot ? 'ЛКМ по сцене · подтвердить направление' : 'Колесо мыши · приблизиться к битку' }}</span>
       <div class="hud-footer-right"><button class="hud-room-code" type="button" :title="room ? 'Скопировать код комнаты' : ''" :disabled="!room" @click="emit('copyCode')">{{ room ? `Комната ${room.code}` : 'Стол' }}</button><span>·</span><button class="hud-rules" type="button" aria-label="Правила" @click="emit('rules')">Правила 8-ball</button><button class="hud-touch-assist" type="button" :aria-pressed="Boolean(showAssist)" @click="emit('toggleAssist')">Помощь</button></div>
     </footer>
     <p v-if="canPlace" class="hud-phase-hint">{{ phaseHint }}</p>

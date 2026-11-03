@@ -21,6 +21,11 @@ try {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
+  // Use the exact optimized Three.js module instance used by the renderer;
+  // the inline fixture itself is fulfilled by Playwright, not transformed by Vite.
+  const sceneModule = await (await fetch(base + '/src/game/createGameScene.ts')).text()
+  const threeModule = sceneModule.match(/import\s+\*\s+as\s+THREE\s+from\s+["']([^"']+)["']/)?.[1]
+  assert.ok(threeModule, 'The real renderer Three.js module must be discoverable')
   await page.addInitScript(() => {
     window.ballCenters = []
     const clear = WebGL2RenderingContext.prototype.clear
@@ -46,17 +51,26 @@ try {
     }
   })
   await page.route('**/workflow-fixture', route => route.fulfill({ contentType: 'text/html', body: `
-    <style>body{margin:0}#stage{width:100vw;height:100vh}</style><div id="stage"></div>
+    <style>body{margin:0}#stage{width:100vw;height:100vh}#fixture-ui{position:fixed;right:12px;bottom:12px;z-index:2}</style><div id="stage"></div><button id="fixture-ui">UI control</button>
     <script type="module">
       import { createGameScene } from '/src/game/createGameScene.ts';
       import { DEFAULT_BINDINGS } from '/src/game/types.ts';
+      import * as THREE from ${JSON.stringify(threeModule)};
+      const beforeRender = THREE.Scene.prototype.onBeforeRender;
+      THREE.Scene.prototype.onBeforeRender = function(renderer,scene,camera,...rest) { window.renderScene=this;window.renderCamera=camera;return beforeRender?.call(this,renderer,scene,camera,...rest); };
+      const intersectPlane = THREE.Ray.prototype.intersectPlane;
+      THREE.Ray.prototype.intersectPlane = function(plane,target) { const result=intersectPlane.call(this,plane,target);if(plane.normal.y===1&&plane.constant===-.8)window.tableRay=result?.toArray()??null;return result; };
+      window.projectTarget = (kind,id) => { let target;window.renderScene.updateMatrixWorld(true);window.renderCamera.updateMatrixWorld(true);window.renderScene.traverse(object=>{if((kind==='ball'&&object.userData.ballId===id)||(kind==='pocket'&&object.isSprite&&object.userData.pocketId===id))target=object;});if(!target)return null;const point=target.getWorldPosition(new THREE.Vector3()).project(window.renderCamera);return{x:(point.x+1)*innerWidth/2,y:(1-point.y)*innerHeight/2}; };
       window.defaults = DEFAULT_BINDINGS;
-      window.events = { phases: [], shots: [], aims: [], placements: [] };
+      window.events = { phases: [], shots: [], aims: [], placements: [], balls: [], pockets: [] };
+      document.querySelector('#fixture-ui').onclick=()=>window.uiClicks=(window.uiClicks||0)+1;
       window.game = createGameScene(document.querySelector('#stage'), {
         onShotPhaseChange: phase => { window.phase = phase; window.events.phases.push(phase); },
         onAimChange: aim => window.events.aims.push(aim),
         onShoot: aim => window.events.shots.push(aim),
         onPlaceCueBall: position => window.events.placements.push(position),
+        onSelectBall: id => window.events.balls.push(id),
+        onSelectPocket: id => window.events.pockets.push(id),
       });
       window.snapshot = {
         cueBallId: 'cue',
@@ -74,16 +88,25 @@ try {
       window.ready = true;
     </script>` }))
   await page.goto(base + '/workflow-fixture')
-  await page.waitForFunction(() => window.ready === true)
+  await page.waitForFunction(() => window.ready === true && window.renderCamera).catch(failure=>{throw new Error(`${failure.message}; page errors: ${JSON.stringify(errors)}`)})
   const canvas = page.locator('canvas[role=application]')
+  await page.getByRole('button',{name:'UI control',exact:true}).click()
+  assert.equal(await page.evaluate(()=>window.phase),'overview','UI controls outside the canvas never confirm the shot workflow')
+  const objectTarget=await page.evaluate(()=>window.projectTarget('ball','1'))
+  assert.ok(objectTarget)
+  await page.mouse.click(objectTarget.x,objectTarget.y)
+  assert.deepEqual(await page.evaluate(()=>window.events.balls),['1'],'Object-ball call selection keeps priority over free-point confirmation')
+  assert.equal(await page.evaluate(()=>window.phase),'overview')
   await page.mouse.move(500, 350)
   const overviewHeading = await page.evaluate(() => window.game.getAim().phi)
   await page.mouse.move(550, 350)
   assert.notEqual(await page.evaluate(() => window.game.getAim().phi), overviewHeading, 'Unheld mouse movement chooses direction before the first click')
-  await page.mouse.move(500, 350)
+  await page.mouse.move(8, 8)
   const confirmedHeading = await page.evaluate(() => window.game.getAim().phi)
-  await canvas.click({ position: { x: 500, y: 350 } })
-  assert.equal(await page.evaluate(() => window.phase), 'aim', 'The first bare-felt click locks direction and opens cue contact')
+  await canvas.click({ position: { x: 8, y: 8 } })
+  const backgroundIntersection=await page.evaluate(()=>window.tableRay)
+  assert.ok(!backgroundIntersection||Math.abs(backgroundIntersection[0])>.635||Math.abs(backgroundIntersection[2])>1.27,'Regression click must really be outside the felt')
+  assert.equal(await page.evaluate(() => window.phase), 'aim', 'The first background click locks direction and opens cue contact')
   assert.equal(await page.evaluate(() => window.game.getAim().phi), confirmedHeading)
   await page.waitForFunction(() => window.ballCenters.some(([x,y]) => Math.hypot(x*500,y*350) < 1.5))
   await page.mouse.move(100, 250)
@@ -102,6 +125,9 @@ try {
   }))
   await page.keyboard.up('ArrowRight')
   assert.equal(await page.evaluate(() => window.game.getAim().phi), confirmedHeading, 'Direction keys are locked in the contact phase')
+  await page.getByRole('button',{name:'UI control',exact:true}).click()
+  assert.equal(await page.evaluate(()=>window.phase),'aim','UI controls never confirm contact')
+  await canvas.focus()
   await page.keyboard.down('a')
   await page.evaluate(() => new Promise(resolve => {
     let frames = 0
@@ -111,8 +137,16 @@ try {
   await page.keyboard.up('a')
   assert.notEqual(await page.evaluate(() => window.game.getAim().a), contactAim.a, 'Contact keyboard bindings remain usable')
   assert.equal(await page.evaluate(() => window.game.getAim().phi), confirmedHeading)
-  await canvas.click({ position: { x: 500, y: 350 } })
-  assert.equal(await page.evaluate(() => window.phase), 'power', 'An aim confirmation click enters power')
+  const beforeContactConfirmation=await page.evaluate(()=>window.game.getAim())
+  await page.mouse.move(8,8)
+  await page.mouse.down()
+  await page.mouse.move(8,24)
+  await page.mouse.up()
+  assert.equal(await page.evaluate(()=>window.phase),'aim','A dragged contact press is not a confirmation or a charge gesture')
+  assert.equal(await page.evaluate(()=>window.events.shots.length),0,'Dragging the contact confirmation press cannot fire a shot')
+  await canvas.click({ position: { x: 8, y: 8 } })
+  assert.equal(await page.evaluate(() => window.phase), 'power', 'A background contact confirmation click enters power')
+  assert.deepEqual(await page.evaluate(()=>window.game.getAim()),beforeContactConfirmation,'Background confirmation preserves direction and selected contact')
   await page.waitForFunction(() => window.ballCenters.some(([x,y]) => Math.hypot(x*500,y*350) < 1.5))
   assert.equal(await page.evaluate(() => window.events.shots.length), 0, 'A confirmation click must not shoot')
   await page.evaluate(() => window.game.setAim({a:0.6,b:0.4,phi:222}))
@@ -165,6 +199,49 @@ try {
   const unlockedHeading = await page.evaluate(() => window.game.getAim().phi)
   await page.mouse.move(350, 300)
   assert.notEqual(await page.evaluate(() => window.game.getAim().phi), unlockedHeading, 'Returning to overview unlocks heading selection')
+
+  // A high background pixel can miss the horizontal table plane entirely in
+  // the shallow cue camera. Confirmation is about the selected state, not a ray hit.
+  await page.evaluate(() => {
+    window.game.setShotPhase('overview');window.game.setCameraMode('cue');window.game.zoomCamera(100)
+  })
+  await page.evaluate(() => new Promise(resolve => {
+    let frames=0;const settle=()=>++frames>=60?resolve():requestAnimationFrame(settle);requestAnimationFrame(settle)
+  }))
+  await page.mouse.move(8,8)
+  await page.evaluate(() => {window.game.setAim({phi:123,a:.2,b:-.25});window.tableRay='unset'})
+  const noHitHeading=await page.evaluate(()=>window.game.getAim().phi)
+  await page.mouse.click(8,8)
+  assert.equal(await page.evaluate(()=>window.tableRay),null,'The overview regression ray must actually miss the table plane')
+  assert.equal(await page.evaluate(()=>window.phase),'aim','A background click without any table-plane hit still confirms direction')
+  assert.equal(await page.evaluate(()=>window.game.getAim().phi),noHitHeading)
+  await page.evaluate(() => new Promise(resolve => {
+    let frames=0;const settle=()=>++frames>=60?resolve():requestAnimationFrame(settle);requestAnimationFrame(settle)
+  }))
+  await page.evaluate(() => {window.game.setAim({a:.25,b:-.3});window.tableRay='unset'})
+  const noHitContact=await page.evaluate(()=>window.game.getAim())
+  await page.mouse.click(8,8)
+  assert.equal(await page.evaluate(()=>window.tableRay),null,'The contact regression ray must actually miss the table plane')
+  assert.equal(await page.evaluate(()=>window.phase),'power','A background click without any table-plane hit still confirms contact')
+  assert.deepEqual(await page.evaluate(()=>window.game.getAim()),noHitContact)
+  assert.equal(await page.evaluate(()=>window.events.shots.length),shots,'Both no-hit confirmations must not fire')
+  await page.mouse.click(8,8,{button:'right'})
+  assert.equal(await page.evaluate(()=>window.phase),'aim','Right click still reverses a background-confirmed power phase')
+  await page.mouse.click(8,8,{button:'right'})
+  assert.equal(await page.evaluate(()=>window.phase),'overview')
+
+  for(const interaction of [{canShoot:false,spectator:false},{canShoot:true,spectator:true}]) {
+    await page.evaluate(value=>window.game.setInteraction(value),interaction)
+    await page.mouse.click(8,8)
+    assert.equal(await page.evaluate(()=>window.phase),'overview','Opponent/modal/spectator input cannot confirm a background click')
+    assert.equal(await page.evaluate(()=>window.events.shots.length),shots)
+  }
+  await page.evaluate(()=>{window.game.setInteraction({canShoot:true,spectator:false});window.game.resetCamera(true)})
+  const pocketTarget=await page.evaluate(()=>window.projectTarget('pocket','lb'))
+  assert.ok(pocketTarget)
+  await page.mouse.click(pocketTarget.x,pocketTarget.y)
+  assert.deepEqual(await page.evaluate(()=>window.events.pockets),['lb'],'Pocket call selection keeps priority over confirmation')
+  assert.equal(await page.evaluate(()=>window.phase),'overview')
 
   await page.evaluate(() => window.game.setShotPhase('power'))
   await page.mouse.move(400, 300)
@@ -240,7 +317,7 @@ try {
   await page.waitForFunction(() => window.ballCenters.length > 0 && window.ballCenters.every(([x,y]) => Math.hypot(x*500,y*350) > 10))
   assert.deepEqual(errors, [])
   await page.evaluate(() => window.game.destroy())
-  console.log(JSON.stringify({engine:engineName,phaseTransitions:true,overviewHoverDirection:true,contactHeadingLocked:true,contactKeyboard:true,powerDrag:true,lockedAim:true,permissionCancellation:true,placementPriority:true,playbackCancellation:true,legacy:true,centeredCueProjection:true,mouseRemapping:true,orbitModifier:true,jsErrors:errors.length}))
+  console.log(JSON.stringify({engine:engineName,phaseTransitions:true,backgroundConfirmation:true,noPlaneHitConfirmation:true,callTargetPriority:true,uiClickIsolation:true,contactPressNoCharge:true,blockedConfirmation:true,overviewHoverDirection:true,contactHeadingLocked:true,contactKeyboard:true,powerDrag:true,lockedAim:true,permissionCancellation:true,placementPriority:true,playbackCancellation:true,legacy:true,centeredCueProjection:true,mouseRemapping:true,orbitModifier:true,jsErrors:errors.length}))
 } finally {
   await browser?.close()
   await viteServer?.close()

@@ -11,7 +11,7 @@ const asset = (name: string, extension = 'svg') => `${import.meta.env.BASE_URL |
 const power = computed(() => Math.round(props.aim.V0 / 8 * 100))
 const contactText = computed(() => `${props.aim.a >= 0 ? 'Вправо' : 'Влево'} ${Math.round(Math.abs(props.aim.a) * 100)}% · ${props.aim.b >= 0 ? 'Вверх' : 'Вниз'} ${Math.round(Math.abs(props.aim.b) * 100)}%`)
 const stage = computed(() => props.phase === 'aim'
-  ? { number: '03 / 04 · ВРАЩЕНИЕ', title: 'Точка контакта', text: 'Направление сохранено. Выберите точку касания кия с битком и подтвердите ЛКМ.' }
+  ? { number: '03 / 04 · ВРАЩЕНИЕ', title: 'Точка контакта', text: 'Направление сохранено. Выберите точку касания кия с битком и подтвердите ЛКМ по свободному месту сцены.' }
   : props.phase === 'power'
     ? { number: '04 / 04 · УДАР', title: 'Почувствуйте силу', text: 'Оттяните кий вниз и отпустите ЛКМ для удара. Точка контакта сохранена.' }
     : { number: '01 / 04 · ОБЗОР', title: 'Ваш ход', text: 'Оцените стол. Мышь выбирает направление, первый ЛКМ фиксирует его.' })

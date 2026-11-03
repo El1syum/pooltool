@@ -565,7 +565,9 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function setAim(partial: Partial<AimParameters>, notify = true): void {
-    const next = normalizeAim(applyShotPhaseLocks({ ...aim, ...partial }, shotPhase, lockedShot))
+    // Locked values already came from a valid aim. Normalize editable values
+    // first so modulo/radial rounding cannot move a confirmed heading/contact.
+    const next = applyShotPhaseLocks(normalizeAim({ ...aim, ...partial }), shotPhase, lockedShot)
     if (Object.keys(next).every(key => next[key as keyof AimParameters] === aim[key as keyof AimParameters])) return
     aim = next
     updateAimGuide()
@@ -674,11 +676,6 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     canvas.setPointerCapture(event.pointerId)
   }
 
-  function workflowHit(event: PointerEvent): THREE.Object3D | undefined {
-    pointOnTable(event) // Updates the picking ray even when it misses the table plane.
-    return raycaster.intersectObjects([...pocketLabels, ...pocketMeshes.values(), ...[...balls.values()].map(ball => ball.mesh)], false)[0]?.object
-  }
-
   function isFelt(position: Vec3Tuple | null): boolean {
     return Boolean(position && position[0] >= 0 && position[0] <= snapshot.table.width && position[1] >= 0 && position[1] <= snapshot.table.length)
   }
@@ -745,14 +742,9 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       if (!isEnabled()) return
       if (event.pointerType === 'touch' && !event.isPrimary) { cancelShotGesture(); return }
       if (shotPhase === 'power') { event.preventDefault(); startPowerDrag(event); return }
-      const hit = workflowHit(event)
-      const isCallTarget = hit?.userData.pocketId || (hit?.userData.ballId && String(hit.userData.ballId) !== String(snapshot.cueBallId ?? 'cue'))
-      if (shotPhase === 'aim' && !isCallTarget && isFelt(pointOnTable(event))) {
-        event.preventDefault()
-        setShotPhase('power')
-        startPowerDrag(event)
-        return
-      }
+      // Confirmation is a click anywhere on the scene, not a hit on the felt or
+      // cue ball. Wait for pointerup so this same press cannot also charge/fire.
+      event.preventDefault()
       activePointers.add(event.pointerId)
       pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, moved: false, placement: null }
       canvas.setPointerCapture(event.pointerId)
@@ -842,11 +834,13 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       const cueId = String(snapshot.cueBallId ?? 'cue')
       const isObjectBall = hit?.userData.ballId && String(hit.userData.ballId) !== cueId
       if (isObjectBall && interaction.canShoot) callbacks.onSelectBall?.(String(hit.userData.ballId))
-      if (shotPhase === 'overview' && !isObjectBall && isFelt(position) && isEnabled()) {
-        // Touch has no hover: a tap selects the heading before it is locked.
-        if (event.pointerType !== 'mouse' && position) aimAt(position)
+      if (shotPhase === 'overview' && !isObjectBall && isEnabled()) {
+        // Touch has no hover. A felt tap chooses heading; a background tap only
+        // confirms the existing heading, just like a mouse click outside felt.
+        if (event.pointerType !== 'mouse' && position && isFelt(position)) aimAt(position)
         setShotPhase('aim')
       }
+      else if (shotPhase === 'aim' && !isObjectBall && isEnabled()) setShotPhase('power')
       else if (shotPhase === null && hit?.userData.ballId && interaction.canShoot && !isObjectBall) callbacks.onSelectBall?.(String(hit.userData.ballId))
       if (position && isEnabled() && cameraMode !== 'cue' && shotPhase === null) aimAt(position)
     }
