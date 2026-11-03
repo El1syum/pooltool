@@ -78,7 +78,7 @@ remaining CPU-bound dense-break limitation.
 - `online/ops`: release-local runtime deployment and isolated systemd service.
 
 Local service: port 8790. Functional remote preview:
-http://82.47.143.103:8790 (current SSH alias `el1s`, user `ops`, verified 2026-11-02). Service:
+http://82.47.143.103:8790 (SSH alias `el1s`, service user `ops`, verified 2026-11-03). Service:
 `pooltool-online.service`; releases under `/opt/pooltool-online/releases`, active
 symlink `/opt/pooltool-online/current`, persistent data/config under `shared`.
 No existing Cyberpool or other server applications are replaced.
@@ -91,6 +91,17 @@ Read `online/README.md`, `online/server/API_CONTRACT.md`,
 `online/DELIVERY.md` and `online/ops/README.md` for commands and verified scope.
 Native Safari/device certification, a production load SLA, final 3D art/audio
 and VK publication are explicitly not claimed complete.
+
+The November 3 deployment contains commits `d1989c0` (server library/auth) and
+`8e280af` (UI/workshop). Active client assets are `index-d1pvhN-W.js` and
+`index-BKWKzaFU.css`; HTML remains no-store. The server was restarted once after
+an online SQLite backup; existing 38 completed matches were preserved. The
+runtime/database backup is `/opt/pooltool-online/shared/backup-nov3-8e280af`.
+Credentials are loaded by `asset-library-preview.conf` from a separate mode-600
+`shared/asset-admin.env`; no plaintext password is deployed or committed.
+Background room/match/profile fetch failures are handled rather than escaping
+as unhandled promise rejections; a real-server browser test injects snapshot
+HTTP 502 responses while preserving real WebSocket state and physical shots.
 
 ## Git identity
 

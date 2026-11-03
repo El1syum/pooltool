@@ -94,3 +94,10 @@ For remote Chromium verification only, `DIRECT_NETWORK=1` adds the browser's
 `--no-proxy-server` launch flag. This avoids an unrelated operating-system proxy
 returning intermittent 502 responses; it does not change the application or the
 user's proxy settings. Without the flag the normal browser network is used.
+
+`INJECT_MATCH_FETCH_502=1` in `match-hud.mjs` returns one explicit HTTP 502 for a
+background snapshot GET in each browser context. Game commands, WebSocket state
+and physics still use the real service. The scenario must finish without an
+unhandled promise rejection; departed rooms and already-received authoritative
+snapshots do not surface stale background-fetch errors. CSS/JS/WebP failures are
+also recorded, so a network stylesheet failure cannot masquerade as a gesture bug.

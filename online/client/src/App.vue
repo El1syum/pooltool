@@ -288,7 +288,7 @@ function connect() {
       else if (message.type === 'match') receiveMatch(message.match, message.result)
       else if (message.type === 'matchmaking') {
         if (message.room) receiveRoom(message.room)
-        if (message.matchId) void loadMatch(message.matchId)
+        if (message.matchId) loadMatchInBackground(message.matchId)
       } else if (message.type === 'commandResult') {
         const pending = socketCommands.get(String(message.commandId))
         if (pending) {
@@ -315,7 +315,7 @@ function receiveRoom(value: Room | null) {
   if (!value || departedRooms.has(value.code)) return
   room.value = value
   localStorage.setItem('pooltool.room', value.code)
-  if (value.matchId) void loadMatch(value.matchId)
+  if (value.matchId) { if (value.matchId !== match.value?.id) loadMatchInBackground(value.matchId) }
   else if (value.status !== 'closed') view.value = 'lobby'
 }
 function receiveMatch(value: Match, result?: ShotResult) {
@@ -340,7 +340,13 @@ function receiveMatch(value: Match, result?: ShotResult) {
     } else if (!playbackBusy.value) scene?.setState(value.snapshot)
   } else if (!playbackBusy.value) scene?.setState(value.snapshot)
   updateInteraction()
-  if (value.status === 'finished') { gameMenuOpen.value = false; void refreshUser() }
+  if (value.status === 'finished') { gameMenuOpen.value = false; void refreshUser().catch(reportBackgroundError) }
+}
+function reportBackgroundError(failure: unknown) {
+  if (!disposed) error.value = failure instanceof Error ? failure.message : 'Не удалось обновить данные. Текущее состояние партии сохранено.'
+}
+function loadMatchInBackground(id: string) {
+  void loadMatch(id).catch(failure => { if (!departedMatches.has(id) && match.value?.id !== id) reportBackgroundError(failure) })
 }
 async function loadMatch(id: string) {
   if (departedMatches.has(id)) return

@@ -29,6 +29,17 @@
   and actual shared-library API, ranked queue/settings/reconnect policy.
 - A table-rebuild regression checks multiple authoritative table heights: one
   procedural bed, raycast hits the cue ball, and the ball is actually visible.
+- Network resilience: failed background snapshot/profile fetches are caught;
+  already-received authoritative match data and departed rooms ignore stale
+  failures. Fault-injection integration explicitly returns snapshot HTTP 502
+  while keeping commands, WebSocket synchronization and physics real.
+
+The November 3 HTTP preview was updated after an online SQLite backup (38
+completed matches preserved). Readiness, the current default HTML/no-store,
+original WebP, administrator login/session restoration/logout and remote WebKit
+gameplay were verified. The public Chromium test observed intermittent 502 on
+HTTP resources; isolated Chromium/WebKit gameplay and injected-failure checks
+passed. No production load or network availability guarantee is inferred.
 
 ## Limits and operation
 

@@ -134,6 +134,7 @@ for (const engineName of engines) {
   const badAssets = []
   const textures = new Set()
   const workload = []
+  let injectedFailures = 0
   let room
   try {
     if (process.env.FIXTURE_ONLY === '1') {
@@ -162,6 +163,16 @@ for (const engineName of engines) {
         localStorage.setItem('pooltool.token', token)
         localStorage.setItem('pooltool.name', name)
       }, { token: actors[index].token, name: actors[index].user.displayName })
+      if (process.env.INJECT_MATCH_FETCH_502 === '1') {
+        let injected = false
+        await context.route('**/api/matches/*', async route => {
+          if (!injected && route.request().method() === 'GET') {
+            injected = true
+            injectedFailures++
+            await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ detail: 'Injected transient snapshot fetch failure' }) })
+          } else await route.continue()
+        })
+      }
       if (networkDelay) await context.route('**/api/**', async route => {
         await new Promise(resolve => setTimeout(resolve, networkDelay))
         await route.continue()
@@ -178,7 +189,7 @@ for (const engineName of engines) {
       page.on('response', response => {
         const pathname = new URL(response.url()).pathname
         if (/\/models\/balls\/[^/]+\.png$/.test(pathname) && response.ok()) textures.add(pathname)
-        if (/\.(svg|woff2?|ttf|png)$/.test(pathname) && !response.ok()) badAssets.push(`${response.status()} ${pathname}`)
+        if (/\.(css|js|svg|woff2?|ttf|png|webp)$/.test(pathname) && !response.ok()) badAssets.push(`${response.status()} ${pathname}`)
       })
       page.on('request', request => {
         if (request.method() !== 'POST' || !request.url().endsWith('/api/telemetry/events')) return
@@ -187,6 +198,7 @@ for (const engineName of engines) {
       await page.goto(base)
       await page.locator('.game-stage canvas').waitFor({ timeout: 30_000 })
       await page.locator('[data-testid="match-hud"]').waitFor()
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('[data-testid="match-hud"]')).position === 'absolute')
       await page.evaluate(() => document.fonts.ready)
       await page.waitForFunction(() => [...document.querySelectorAll('[data-testid="match-hud"] img')].every(image => image.complete && image.naturalWidth > 0))
     }
@@ -401,10 +413,11 @@ for (const engineName of engines) {
     assert.ok(textures.size >= 16, `Original ball textures must load; got ${textures.size}`)
     assert.deepEqual(badAssets, [], 'Static HUD assets/fonts must not return HTTP errors')
     assert.deepEqual(errors, [], 'No uncaught JavaScript errors are expected')
+    if (process.env.INJECT_MATCH_FETCH_502 === '1') assert.ok(injectedFailures > 0, 'The network-failure path must really be exercised')
     assert.ok(workload.some(sample => sample.drawCalls > 20 && sample.triangles > 10_000), 'Actual nonempty 3D geometry must be rendered')
     const build = await first.locator('script[type="module"][src]').first().getAttribute('src')
     if (process.env.VISUAL_FIXTURE === '1') await scoreboardFixture(first, engineName)
-    console.log(JSON.stringify({ engine: engineName, room: room.code, build, jsErrors: errors.length, assetGeometry, reticleGeometry, wedgeGeometry, badgeGeometry, fontMetrics, visualFixture: process.env.VISUAL_FIXTURE === '1',
+    console.log(JSON.stringify({ engine: engineName, room: room.code, build, jsErrors: errors.length, injectedFailures, assetGeometry, reticleGeometry, wedgeGeometry, badgeGeometry, fontMetrics, visualFixture: process.env.VISUAL_FIXTURE === '1',
       textures: textures.size, geometrySamples: workload.length, trajectoryFrames: result.result.trajectory.frames.length,
       duration: result.result.duration, serverWallSeconds: result.result.wallDuration, clickToResultMs,
       tests: 'uncached default URL, responsive HUD, stable canvas, modal gating, mute, spectator authority, real shot and shared final state' }))
