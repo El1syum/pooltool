@@ -49,6 +49,13 @@ from immediately firing. Ball/pocket clicks retain call-selection priority;
 UI controls, placement, remapped bindings, opponent/spectator and playback gates
 remain unchanged.
 
+Free-scene confirmation deployment: `adf6dfc`, client
+`/assets/index-DaVx5Gts.js`, CSS unchanged (`index-CsNN5j3a.css`). Applied as a
+static update with HTML installed last and old chunks retained; service PID
+3089804 stayed unchanged (no backend restart). 58 client checks plus isolated
+and real three-client Chromium/WebKit shot scenarios passed. The isolated test
+also proves null table-plane ray confirmation and call-selection/UI priorities.
+
 The shared model library is cosmetic only: `online/server/assets.py`, public
 `/api/assets/library`, admin APIs under `/api/assets`, GLB files under
 `/models/library/`. `ModelWorkshop` supports local previews, transforms,
