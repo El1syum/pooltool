@@ -1,0 +1,43 @@
+.appearance-dialog { position: fixed; inset: 0; z-index: 80; overflow: auto; padding: 32px; background: #101815f5; color: #f1ede1; font-family: 'Pooltool Inter', sans-serif; backdrop-filter: blur(12px); }
+.appearance-dialog * { box-sizing: border-box; }
+.appearance-content { width: min(1320px, 100%); margin: 0 auto; }
+.appearance-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 16px; }
+.appearance-eyebrow { margin: 0 0 8px; color: #c7aa72; font-size: 10px; letter-spacing: 2px; }
+.appearance-header h1 { margin: 0; font: 400 38px/1.25 'Pooltool Lora', serif; }
+.appearance-dialog button { color: #f1ede1; font: 12px/1.4 'Pooltool Inter', sans-serif; padding: 10px 14px; border: 1px solid #465048; border-radius: 6px; background: #252f29; cursor: pointer; }
+.appearance-dialog button:hover:not(:disabled) { background: #344137; }
+.appearance-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.appearance-dialog button:focus-visible, .appearance-dialog select:focus-visible { outline: 2px solid #c7aa72; outline-offset: 4px; }
+.appearance-dialog .appearance-back { display: inline-flex; align-items: center; gap: 9px; }
+.appearance-back img { width: 20px; height: 20px; }
+.appearance-scope { margin: 0 0 24px; color: #a5aea6; font-size: 13px; line-height: 1.6; }
+.appearance-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 390px); gap: 24px; align-items: start; }
+.appearance-preview-column { min-width: 0; }
+.appearance-preview-frame { position: relative; overflow: hidden; border: 1px solid #465048; border-radius: 10px; background: #141c1b; }
+.appearance-preview { height: clamp(320px, 57vh, 640px); min-width: 0; touch-action: none; }
+.appearance-preview canvas { display: block; }
+.appearance-preview-loading { position: absolute; top: 14px; left: 14px; padding: 8px 12px; border: 1px solid #465048; border-radius: 6px; background: #141c1be8; color: #c7aa72; font-size: 12px; pointer-events: none; }
+.appearance-camera { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+.appearance-camera button { min-height: 38px; }
+.appearance-caption { margin: 10px 0; color: #a5aea6; font-size: 11px; line-height: 1.6; }
+.appearance-options { min-width: 0; padding: 24px; background: #1b231f; border: 1px solid #465048; border-radius: 10px; }
+.appearance-options-heading { padding-bottom: 18px; margin-bottom: 4px; border-bottom: 1px solid #3c463d; }
+.appearance-options-heading h2 { margin: 0 0 6px; font: 400 24px/1.3 'Pooltool Lora', serif; }
+.appearance-options-heading > span { color: #c7aa72; font-size: 11px; }
+.appearance-role { padding: 18px 0; border-bottom: 1px solid #3c463d; }
+.appearance-role label { display: block; margin: 0 0 8px; color: #f1ede1; font-size: 13px; }
+.appearance-role select { display: block; width: 100%; min-width: 0; max-width: 100%; margin: 0; padding: 11px 10px; border: 1px solid #566252; border-radius: 5px; color: #f1ede1; background: #141c1b; font: 12px/1.5 'Pooltool Inter', sans-serif; text-overflow: ellipsis; }
+.appearance-dialog .appearance-role-note, .appearance-choice-detail { margin: 9px 0 0; color: #a5aea6; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.appearance-choice-detail { color: #f1ede1; }
+.appearance-choice-detail span { display: block; color: #a5aea6; }
+.appearance-dialog .appearance-notice, .appearance-dialog .appearance-warning { margin: 12px 0; padding: 10px 12px; border: 1px solid #465048; border-radius: 6px; color: #bfc8bb; background: #233027; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.appearance-dialog .appearance-warning { border-color: #8b7057; color: #ead3b9; background: #352a21; }
+.appearance-secondary-actions, .appearance-apply-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+.appearance-secondary-actions button { flex: 1 1 130px; background: transparent; font-size: 11px; }
+.appearance-apply-actions button { flex: 1 1 110px; min-height: 46px; }
+.appearance-dialog .appearance-primary { color: #1b211c; background: #c7aa72; border-color: #c7aa72; font-weight: 600; }
+.appearance-dialog .appearance-primary:hover { background: #dcc28e; }
+.appearance-dialog .appearance-save-note { margin: 12px 0 18px; color: #a5aea6; font-size: 11px; line-height: 1.6; }
+.appearance-dialog .appearance-manage { display: block; width: 100%; border-color: transparent; background: transparent; color: #c7aa72; padding: 8px 0; font-size: 11px; }
+@media(max-width: 900px) { .appearance-dialog { padding: 24px; } .appearance-layout { grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; } .appearance-options { padding: 18px; } }
+@media(max-width: 700px) { .appearance-dialog { padding: 20px 14px; } .appearance-header { gap: 12px; margin-bottom: 12px; } .appearance-header h1 { font-size: 30px; } .appearance-eyebrow { font-size: 8px; letter-spacing: 1.5px; } .appearance-scope { font-size: 12px; margin-bottom: 18px; } .appearance-layout { display: flex; flex-direction: column; gap: 16px; } .appearance-preview-column, .appearance-options { width: 100%; } .appearance-preview { height: 290px; } .appearance-options { padding: 18px; } .appearance-camera { gap: 6px; } .appearance-camera button { padding: 9px 11px; font-size: 11px; } }

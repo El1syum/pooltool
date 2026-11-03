@@ -103,6 +103,43 @@ Background room/match/profile fetch failures are handled rather than escaping
 as unhandled promise rejections; a real-server browser test injects snapshot
 HTTP 502 responses while preserving real WebSocket state and physical shots.
 
+## Prepared tables and personal appearance (2026-11-03)
+
+The user supplied an AI GLB and an untextured Sketchfab-rip OBJ archive. The AI
+source was 84.9MB / 1.5M triangles and had warped cloth and closed pocket cups.
+The hybrid retains its decorative shell/UV detail but rebuilds the cloth, exact
+cushion/jaw segments, six open pockets and legs. Checked-in output:
+`online/assets/prepared/AI-Hybrid-Playable.glb` (3,235,040 bytes, 81,003 triangles,
+67,503 vertices, seven material groups); source file in Downloads is unchanged.
+SHA256: `33e07b296b63d9d8dbf6083854bfbeb394d7f14a40c27c4336a7018f159326ce`.
+
+Actual current EightBall geometry is 0.9906×1.9812m, cloth height 0.708m. Earlier
+workshop's 1.27×2.54m assumption was wrong; the workshop now gets the actual
+engine snapshot from public `/api/assets/table-reference` (cached, no room or
+match is created). `previewSnapshot.ts` has an explicitly labelled offline
+fallback with correct dimensions. No collision physics was changed.
+
+`Настройки → Оформление` is a separate personal picker with 3D preview and
+independent table/environment modes: shared default, procedural, enabled asset.
+Preferences store IDs/modes per user on the device only, never URLs/admin state.
+Apply/Cancel do not publish the global scene. A failed catalogue does not erase
+saved IDs; confirmed disabled/missing IDs return to shared default. The admin
+workshop always receives the shared profile, not personal overrides. Runtime
+model failures show a fallback/retry notice. Optional GLB extras
+`pooltoolCastShadow:false` / `pooltoolReceiveShadow:false` control cosmetic shadow
+hints; defaults remain enabled.
+
+The archive's commercial Sketchfab pack was identified; no license was provided
+yet. One repaired classic table (500,884 bytes) is delivered locally under
+`C:/Users/User/Downloads/Pooltool Prepared Models`, not committed or uploaded
+publicly until permission is confirmed. Missing textures do not grant a license.
+
+Read `DESIGN.md`, `online/docs/ASSET_INTAKE_20261103.md`, and the reproducible
+`online/tools/model_intake` / `online/tools/asset_pack` instructions. Isolated
+tool dependencies are not application dependencies. Verification: 99 Python
+tests +513 subtests, 58 client tests, personal-selection API/UI checks, actual
+model geometric/runtime checks and real three-client shots in Chromium/WebKit.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

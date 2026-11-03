@@ -11,7 +11,7 @@ const props = withDefaults(defineProps<{
 }>(), { user: null })
 const emit = defineEmits<{
   'update:settings': [value: GameSettings]; capture: [action: BindingAction]
-  reset: []; save: []; close: []; models: []
+  reset: []; save: []; close: []; models: []; appearance: []
 }>()
 type Tab = 'index' | 'graphics' | 'sound' | 'controls'
 const tab = ref<Tab>('index')
@@ -66,6 +66,7 @@ onBeforeUnmount(() => { window.removeEventListener('resize', updateWindow); docu
             <button class="club-action" @click="tab = 'graphics'"><img :src="asset('monitor')" alt="" /><span>Графика</span><img :src="asset('chevron-gold')" alt="" /></button>
             <button class="club-action" @click="tab = 'sound'"><img :src="asset('volume')" alt="" /><span>Звук</span><img :src="asset('chevron-gold')" alt="" /></button>
             <button class="club-action" @click="tab = 'controls'"><img :src="asset('mouse')" alt="" /><span>Управление</span><img :src="asset('chevron-gold')" alt="" /></button>
+            <button class="club-action" @click="emit('appearance')"><img :src="asset('monitor')" alt="" /><span>Оформление</span><img :src="asset('chevron-gold')" alt="" /></button>
             <button class="club-action club-action-back" @click="close"><img :src="asset('arrow-left')" alt="" /><span>Назад</span></button>
           </nav><p class="club-footnote">Внешний вид, звук и точность под вашим контролем.</p>
           <button class="club-text-button" @click="emit('models')">Модели стола и окружения</button>

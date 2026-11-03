@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createGameScene } from '../game/createGameScene'
-import type { GameScene, GameSnapshot } from '../game/types'
+import type { GameScene } from '../game/types'
+import { defaultPreviewSnapshot, loadTableReference } from '../models/previewSnapshot'
 import { configurationOf, libraryAssetForSlot, profileFromLibrary, selectionFromProfile, slotForLibraryAsset } from '../models/libraryProfile'
 import { deleteLocalModel, exportVisualAssetProfile, getLocalModel, importLocalModel, importVisualAssetProfile,
   listLocalModels, loadVisualAssetProfile, saveVisualAssetProfile } from '../models/store'
@@ -37,17 +38,8 @@ const axes = ['X', 'Y', 'Z']
 const roleLabel = (value: ModelRole) => value === 'table' ? 'Стол' : 'Окружение'
 const sizeLabel = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} МБ`
 
-const calibrationSnapshot: GameSnapshot = {
-  cueBallId: 'cue', table: { width: 1.27, length: 2.54, height: 0.8, renderHeight: 0.8, pockets: [
-    { id: 'lb', center: [0, 0, 0], radius: 0.065 }, { id: 'lc', center: [0, 1.27, 0], radius: 0.065 },
-    { id: 'lt', center: [0, 2.54, 0], radius: 0.065 }, { id: 'rt', center: [1.27, 2.54, 0], radius: 0.065 },
-    { id: 'rc', center: [1.27, 1.27, 0], radius: 0.065 }, { id: 'rb', center: [1.27, 0, 0], radius: 0.065 },
-  ] }, balls: [
-    { id: 'cue', position: [0.635, 0.635, 0.028575], radius: 0.028575 },
-    { id: '1', position: [0.635, 1.98, 0.028575], radius: 0.028575 },
-    { id: '8', position: [0.3, 1.9, 0.028575], radius: 0.028575 },
-  ],
-}
+const referenceSource = ref<'server' | 'fallback'>('fallback')
+const referenceSnapshot = ref(defaultPreviewSnapshot())
 
 async function refreshPreview() {
   if (!preview) return
@@ -221,9 +213,12 @@ onMounted(async () => {
   if (stage.value) {
     preview = createGameScene(stage.value)
     preview.setSettings({ quality: 'low', volume: 0, showAimGuide: false, showPocketLabels: true })
-    preview.setState(calibrationSnapshot)
+    preview.setState(referenceSnapshot.value)
     preview.setInteraction({ canShoot: false, canPlaceCueBall: false, spectator: true })
     preview.setCalibrationOverlay(true)
+    void loadTableReference().then(reference => {
+      if (!disposed && preview) { referenceSnapshot.value = reference.snapshot; preview.setState(reference.snapshot); referenceSource.value = reference.source }
+    })
   }
   await action(async () => {
     await refreshLibrary()
@@ -247,7 +242,7 @@ onBeforeUnmount(() => { disposed = true; clearTimeout(refreshTimer); previewGene
       <section class="model-preview-column" aria-label="Калибровочный предпросмотр">
         <div ref="stage" class="model-preview-stage"></div>
         <div class="model-preview-toolbar"><button @click="preview?.resetCamera()">Общий вид</button><button @click="preview?.resetCamera(true)">Сверху</button><button @click="preview?.rotateCamera(-0.4)">↶</button><button @click="preview?.rotateCamera(0.4)">↷</button><button @click="preview?.zoomCamera(0.8)">+</button><button @click="preview?.zoomCamera(1.25)">−</button><label><input v-model="calibration" type="checkbox" /> Физические границы</label></div>
-        <p class="model-preview-caption">Калибровка, не матч · поле 1,27 × 2,54 м · высота сукна 0,8 м · ПКМ — вращать, колесо — масштаб.</p>
+        <p class="model-preview-caption">Калибровка, не матч · поле {{ referenceSnapshot.table.width }} × {{ referenceSnapshot.table.length }} м · высота сукна {{ referenceSnapshot.table.renderHeight ?? referenceSnapshot.table.height }} м · {{ referenceSource === 'server' ? 'эталон игрового сервера' : 'локальный эталон, сервер недоступен' }}.</p>
         <p class="model-preview-caption">Жёлтый контур — реальное игровое поле. Начало координат стола — центр сукна; X поперёк, Y вверх, Z вдоль. Окружение начинается на полу.</p>
         <p v-if="loading" class="model-message" role="status">Загрузка модели и проверка ресурсов…</p>
         <p v-for="(text, target) in report.errors" :key="target" class="model-message model-error" role="alert">{{ roleLabel(target as ModelRole) }}: {{ text }}. Показана стандартная геометрия.</p>

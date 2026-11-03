@@ -15,6 +15,7 @@ player bearer tokens or nicknames never authorize a library mutation.
 | Method/path | Body | Response |
 |---|---|---|
 | GET `/api/assets/library` | — | `{version,assets,profile:{tableId,environmentId},updatedAt}` |
+| GET `/api/assets/table-reference` | — | `{snapshot}`: detached cached initial geometry from the actual game engine; no room/match is created |
 | GET `/api/assets/library?includeDisabled=true` | admin cookie | same, includes disabled models |
 | GET/HEAD `/models/library/{id}.glb` | — | immutable `model/gltf-binary` file; disabled/missing = 404 |
 | POST `/api/assets/admin/login` | `{username,password}` | `{authenticated:true,username,csrfToken,expiresAt}` + HttpOnly cookie |

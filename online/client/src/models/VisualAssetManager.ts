@@ -108,7 +108,10 @@ async function loadAsset(slot: VisualAssetSlot, signal: AbortSignal): Promise<Lo
       if (!(node instanceof THREE.Mesh)) return
       info.meshes++
       info.vertices += (node.geometry.getAttribute('position')?.count ?? 0) * (node instanceof THREE.InstancedMesh ? node.count : 1)
-      node.castShadow = node.receiveShadow = true
+      // Optional authoring hints for cosmetic meshes, e.g. a flat cloth should
+      // receive ball shadows without casting a redundant self-shadow.
+      node.castShadow = node.userData.pooltoolCastShadow !== false
+      node.receiveShadow = node.userData.pooltoolReceiveShadow !== false
       // Model meshes are cosmetic only. Picking still uses server-driven balls,
       // physical pocket markers and the authoritative table plane.
       node.userData = { ...node.userData, pooltoolCosmetic: true }

@@ -11,10 +11,13 @@ import ClubMenu from './components/ClubMenu.vue'
 import ClubSettings from './components/ClubSettings.vue'
 import ModelWorkshop from './components/ModelWorkshop.vue'
 import ModelAdminLogin from './components/ModelAdminLogin.vue'
+import PlayerAppearance from './components/PlayerAppearance.vue'
 import { applyMatchVisualPolicy, getAimGuidePolicy } from './game/matchPolicy'
 import { createServerModelLibrary } from './models/serverLibrary'
 import { profileFromLibrary } from './models/libraryProfile'
-import { emptyVisualAssetProfile, type VisualAssetProfile } from './models/types'
+import { emptyVisualAssetProfile, type ModelLibrarySnapshot, type VisualAssetProfile } from './models/types'
+import { defaultPlayerAssetSelection, readPlayerAssetSelection, reconcilePlayerAssetSelection, resolvePlayerAssets,
+  writePlayerAssetSelection, type PlayerAssetSelection } from './models/playerSelection'
 
 type View = 'menu' | 'play' | 'lobby' | 'search' | 'match' | 'profile' | 'models'
 const view = ref<View>('menu')
@@ -54,9 +57,18 @@ const defaults = (): GameSettings => ({ quality: 'medium', volume: 0.5, sensitiv
 const settings = ref<GameSettings>(defaults())
 const aimGuidePolicy = computed(() => getAimGuidePolicy(match.value))
 const effectiveSettings = computed(() => applyMatchVisualPolicy(settings.value, match.value))
-const showAssist = computed(() => (altHeld.value || assistPinned.value) && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !bindingCapture.value)
+const showAssist = computed(() => (altHeld.value || assistPinned.value) && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !appearanceOpen.value && !modelNavigationBusy.value && !bindingCapture.value)
 const modelLibrary = createServerModelLibrary()
 const modelProfile = ref<VisualAssetProfile>(emptyVisualAssetProfile())
+const modelCatalogue = ref<ModelLibrarySnapshot | null>(null)
+const modelCatalogueLoading = ref(false)
+const modelCatalogueError = ref('')
+const playerAssets = ref<PlayerAssetSelection>(defaultPlayerAssetSelection())
+const effectiveModelProfile = computed(() => resolvePlayerAssets(playerAssets.value, modelCatalogue.value).profile)
+const appearanceOpen = ref(false)
+const modelNavigationBusy = ref(false)
+const modelSceneLoading = ref(false)
+const modelSceneErrors = ref<string[]>([])
 const modelAdminOpen = ref(false)
 const modelAdminBusy = ref(false)
 const modelAdminError = ref('')
@@ -75,6 +87,8 @@ let telemetryFlush = false
 let authSentAt = 0
 let clockCalibrated = false
 let lifecycleGeneration = 0
+let modelCatalogueGeneration = 0
+let modelSceneGeneration = 0
 type CommandResponse = { match: Match; result?: ShotResult }
 class SocketUnavailable extends Error {}
 // Commands sent over the open socket, keyed by commandId (resolved by commandResult).
@@ -95,7 +109,7 @@ function mergeSettings(value: unknown): GameSettings {
 }
 const isPlayer = computed(() => Boolean(match.value?.players.some((p) => p.id === user.value?.id)))
 const ownTurn = computed(() => match.value?.players[match.value.currentPlayer]?.id === user.value?.id)
-const turnReady = computed(() => Boolean(connected.value && ownTurn.value && match.value?.status === 'active' && !busy.value && !playbackBusy.value && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value))
+const turnReady = computed(() => Boolean(connected.value && ownTurn.value && match.value?.status === 'active' && !busy.value && !playbackBusy.value && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !appearanceOpen.value && !modelNavigationBusy.value))
 const canShoot = computed(() => turnReady.value && !match.value?.snapshot.needsPlacement && !placingCue.value)
 const canPlace = computed(() => turnReady.value && Boolean(match.value?.snapshot.ballInHand) && (Boolean(match.value?.snapshot.needsPlacement) || placingCue.value))
 const remaining = computed(() => Math.max(0, Math.ceil((timestamp(match.value?.deadline) - now.value - serverClockOffset.value) / 1000)))
@@ -394,7 +408,7 @@ function ensureScene() {
     scene.setShotPhase(shotPhase.value)
     scene.setCalledBall(calledBall.value || null)
     scene.setCalledPocket(calledPocket.value || null)
-    void scene.setVisualAssets(modelProfile.value)
+    void applySceneModels()
     updateInteraction()
   } catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось открыть 3D-сцену' }
 }
@@ -406,15 +420,19 @@ function updateInteraction() {
 watch(stage, () => { if (stage.value) ensureScene(); else { scene?.destroy(); scene = null; playbackBusy.value = false } }, { flush: 'post' })
 watch([canShoot, canPlace, isPlayer], updateInteraction)
 watch(hudPanelOpen, updateInteraction)
-watch([ownTurn, () => match.value?.id, () => match.value?.status, playbackBusy, canPlace, settingsOpen, gameMenuOpen, rulesOpen, hudPanelOpen], () => {
-  if (!ownTurn.value || match.value?.status !== 'active' || playbackBusy.value || canPlace.value || settingsOpen.value || gameMenuOpen.value || rulesOpen.value || hudPanelOpen.value) setShotPhase('overview')
+watch([ownTurn, () => match.value?.id, () => match.value?.status, playbackBusy, canPlace, settingsOpen, gameMenuOpen, rulesOpen, appearanceOpen, modelNavigationBusy, hudPanelOpen], () => {
+  if (!ownTurn.value || match.value?.status !== 'active' || playbackBusy.value || canPlace.value || settingsOpen.value || gameMenuOpen.value || rulesOpen.value || appearanceOpen.value || modelNavigationBusy.value || hudPanelOpen.value) setShotPhase('overview')
 })
 watch(calledBall, (id) => scene?.setCalledBall(id || null))
 watch(calledPocket, (id) => scene?.setCalledPocket(id || null))
 watch(effectiveSettings, value => scene?.setSettings(value), { deep: true })
 watch(settings, () => { if (user.value) { localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value)); settingsDirty.value = true } }, { deep: true })
 watch(view, value => { if (value !== 'match') { altHeld.value = false; assistPinned.value = false } })
-watch(modelProfile, value => { void scene?.setVisualAssets(value) }, { deep: true })
+watch(effectiveModelProfile, () => { void applySceneModels() }, { deep: true })
+watch(() => user.value?.id, id => {
+  playerAssets.value = reconcilePlayerAssetSelection(readPlayerAssetSelection(localStorage, id), modelCatalogue.value)
+}, { flush: 'sync' })
+watch(playerAssets, value => { writePlayerAssetSelection(localStorage, user.value?.id, value) }, { deep: true })
 watch(() => match.value?.id, (id, previous) => { if (id && id !== previous) void loadModelLibrary() })
 function updateAim() {
   if (!scene) return
@@ -565,15 +583,45 @@ function navigate(value: 'menu' | 'play' | 'profile' | 'match') {
   view.value = value
 }
 async function loadModelLibrary() {
-  try { modelProfile.value = profileFromLibrary(await modelLibrary.adapter.load()) }
-  catch { /* An unavailable art library must never prevent a playable table. */ }
+  const generation = ++modelCatalogueGeneration
+  modelCatalogueLoading.value = true; modelCatalogueError.value = ''
+  try {
+    const catalogue = await modelLibrary.adapter.load()
+    if (generation !== modelCatalogueGeneration) return
+    modelCatalogue.value = catalogue
+    modelProfile.value = profileFromLibrary(catalogue)
+    playerAssets.value = reconcilePlayerAssetSelection(playerAssets.value, catalogue)
+  } catch { if (generation === modelCatalogueGeneration) modelCatalogueError.value = 'Не удалось обновить каталог. Сохранённый выбор не изменён.' }
+  finally { if (generation === modelCatalogueGeneration) modelCatalogueLoading.value = false }
+}
+async function applySceneModels() {
+  const current = scene, generation = ++modelSceneGeneration
+  if (!current) return
+  const profile = effectiveModelProfile.value
+  modelSceneLoading.value = Boolean(profile.table || profile.environment); modelSceneErrors.value = []
+  try {
+    const report = await current.setVisualAssets(profile)
+    if (generation === modelSceneGeneration && current === scene) modelSceneErrors.value = Object.entries(report.errors).map(([role, message]) => `${role === 'table' ? 'Стол' : 'Окружение'}: ${message}`)
+  } catch { if (generation === modelSceneGeneration && current === scene) modelSceneErrors.value = ['Не удалось загрузить оформление.'] }
+  finally { if (generation === modelSceneGeneration && current === scene) modelSceneLoading.value = false }
+}
+function openAppearance() { settingsOpen.value = false; gameMenuOpen.value = false; bindingCapture.value = null; appearanceOpen.value = true; void loadModelLibrary() }
+function closeAppearance() { appearanceOpen.value = false; settingsOpen.value = true }
+function applyPlayerAssets(value: PlayerAssetSelection) {
+  playerAssets.value = reconcilePlayerAssetSelection(value, modelCatalogue.value)
+  if (!writePlayerAssetSelection(localStorage, user.value?.id, playerAssets.value)) error.value = 'Оформление применено, но браузер не разрешил сохранить выбор на устройстве.'
+  closeAppearance()
 }
 async function openModels() {
+  if (modelNavigationBusy.value) return
+  modelNavigationBusy.value = true
   modelReturnView.value = view.value === 'models' ? 'menu' : view.value
-  settingsOpen.value = false; gameMenuOpen.value = false
-  await modelLibrary.refreshSession().catch(() => {})
-  await loadModelLibrary()
-  view.value = 'models'
+  settingsOpen.value = false; gameMenuOpen.value = false; appearanceOpen.value = false; bindingCapture.value = null
+  try {
+    await modelLibrary.refreshSession().catch(() => {})
+    await loadModelLibrary()
+    view.value = 'models'
+  } finally { modelNavigationBusy.value = false }
 }
 async function loginModelAdmin(credentials: { username: string; password: string }) {
   modelAdminBusy.value = true; modelAdminError.value = ''
@@ -587,12 +635,12 @@ async function logoutModelAdmin() {
   try { await modelLibrary.logout(); workshopKey.value++ }
   catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось завершить сеанс' }
 }
-function applyModels(value: VisualAssetProfile) { modelProfile.value = value }
+function applyModels(value: VisualAssetProfile) { modelProfile.value = value; void loadModelLibrary() }
 function releaseAlt() { altHeld.value = false }
 function handleAssistKey(event: KeyboardEvent) {
   if (event.key !== 'Alt') return
   if (event.type === 'keyup') { releaseAlt(); return }
-  if (view.value === 'match' && !bindingCapture.value && !settingsOpen.value && !(event.target instanceof HTMLInputElement)) {
+  if (view.value === 'match' && !bindingCapture.value && !settingsOpen.value && !appearanceOpen.value && !modelNavigationBusy.value && !(event.target instanceof HTMLInputElement)) {
     event.preventDefault(); altHeld.value = true
   }
 }
@@ -607,7 +655,7 @@ async function surrender() {
 }
 function captureBinding(event: KeyboardEvent | MouseEvent) {
   if (!bindingCapture.value) {
-    if (event instanceof KeyboardEvent && event.code === 'Escape' && view.value === 'match' && !settingsOpen.value && !(event.target instanceof HTMLInputElement)) {
+    if (event instanceof KeyboardEvent && event.code === 'Escape' && view.value === 'match' && !settingsOpen.value && !appearanceOpen.value && !modelNavigationBusy.value && !(event.target instanceof HTMLInputElement)) {
       event.preventDefault()
       if (surrenderConfirmation.value) surrenderConfirmation.value = false
       else if (rulesOpen.value) rulesOpen.value = false
@@ -637,6 +685,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
       <span v-if="user">{{ user.displayName }} · Эло {{ user.elo }}</span>
     </header>
     <div v-if="error" class="error-banner" role="alert">{{ error }} <button @click="error = ''" aria-label="Закрыть ошибку">×</button></div>
+    <div v-if="modelNavigationBusy" class="model-game-notice" role="status">Открываем мастерскую…</div>
     <main v-if="loading" class="panel" aria-busy="true"><h1>Загрузка игры</h1><p>Подключаемся к серверу и восстанавливаем профиль.</p></main>
     <main v-else-if="!user" class="panel"><h1>Соединение недоступно</h1><p>Проверьте подключение и повторите попытку.</p><button @click="authenticate">Повторить</button></main>
     <main v-else-if="view === 'models'" class="model-library-page">
@@ -648,6 +697,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
       <div class="stage-wrap">
         <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол" @wheel.capture="elevationWheel"></div>
         <Transition name="toast"><div v-if="toast" class="shot-toast" :class="toast.tone" role="status"><strong>{{ toast.title }}</strong><span v-for="line in toast.lines" :key="line">{{ line }}</span></div></Transition>
+        <div v-if="(modelSceneLoading || modelSceneErrors.length) && !settingsOpen && !appearanceOpen && !gameMenuOpen" class="model-game-notice" role="status"><span v-if="modelSceneLoading">Загружаем оформление…</span><template v-else><span>Оформление не загрузилось — используется базовая геометрия.</span><small v-for="message in modelSceneErrors" :key="message">{{ message }}</small><button @click="applySceneModels">Повторить загрузку</button></template></div>
       </div>
       <MatchHud
         :match="match" :user="user" :room="room" :aim="aim" :phase="shotPhase"
@@ -690,7 +740,8 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
         <button @click="rulesOpen = false">Закрыть правила</button>
       </section>
     </div>
-    <ClubSettings v-if="settingsOpen" :settings="effectiveSettings" :binding-capture="bindingCapture" :capture-labels="captureLabels" :binding-conflicts="bindingConflicts" :aim-guide-locked="aimGuidePolicy.locked" :in-match="view === 'match'" :user="user" :client-version="CLIENT_VERSION" @update:settings="updateSettings" @capture="bindingCapture = $event" @reset="settings = defaults()" @save="saveSettings" @close="settingsOpen = false; bindingCapture = null" @models="openModels" />
+    <ClubSettings v-if="settingsOpen" :settings="effectiveSettings" :binding-capture="bindingCapture" :capture-labels="captureLabels" :binding-conflicts="bindingConflicts" :aim-guide-locked="aimGuidePolicy.locked" :in-match="view === 'match'" :user="user" :client-version="CLIENT_VERSION" @update:settings="updateSettings" @capture="bindingCapture = $event" @reset="settings = defaults()" @save="saveSettings" @close="settingsOpen = false; bindingCapture = null" @models="openModels" @appearance="openAppearance" />
+    <PlayerAppearance v-if="appearanceOpen" :library="modelCatalogue" :selection="playerAssets" :snapshot="match?.snapshot" :loading="modelCatalogueLoading" :error="modelCatalogueError" @apply="applyPlayerAssets" @close="closeAppearance" @retry="loadModelLibrary" @manage="openModels" />
     <ModelAdminLogin v-if="modelAdminOpen" :busy="modelAdminBusy" :error="modelAdminError" :configured="modelLibrary.session.value.configured" @submit="loginModelAdmin" @close="modelAdminOpen = false; modelAdminError = ''" />
   </div>
 </template>

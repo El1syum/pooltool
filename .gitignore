@@ -161,6 +161,7 @@ errors.txt
 
 # Browser multiplayer runtime
 online/client/node_modules/
+online/tools/**/node_modules/
 online/client/dist/
 online/client/tests/artifacts/
 online/data/

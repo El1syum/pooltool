@@ -15,6 +15,12 @@ await mkdir(artifacts, { recursive: true })
 const defaultDocument = await fetch(new URL('/', base))
 assert.equal(defaultDocument.status, 200, 'The ordinary preview URL must serve the current client')
 assert.equal(defaultDocument.headers.get('cache-control'), 'no-store', 'The default HTML must not keep an old build cached')
+const requiredTable = process.env.REQUIRE_CUSTOM_TABLE === '1' ? await (async () => {
+  const library = await (await fetch(new URL('/api/assets/library', base))).json()
+  const asset = library.assets.find(item => item.id === library.profile.tableId && item.enabled && item.role === 'table')
+  assert.ok(asset, 'A published real table asset is required for this scenario')
+  return asset
+})() : null
 
 async function api(actor, endpoint, body, method = 'POST', allowed = [200]) {
   const response = await fetch(base + endpoint, {
@@ -134,6 +140,7 @@ for (const engineName of engines) {
   const badAssets = []
   const textures = new Set()
   const workload = []
+  const customModelsLoaded = new Set()
   let injectedFailures = 0
   let room
   try {
@@ -189,6 +196,7 @@ for (const engineName of engines) {
       page.on('response', response => {
         const pathname = new URL(response.url()).pathname
         if (/\/models\/balls\/[^/]+\.png$/.test(pathname) && response.ok()) textures.add(pathname)
+        if (requiredTable && pathname === requiredTable.url && response.ok()) customModelsLoaded.add(index)
         if (/\.(css|js|svg|woff2?|ttf|png|webp)$/.test(pathname) && !response.ok()) badAssets.push(`${response.status()} ${pathname}`)
       })
       page.on('request', request => {
@@ -415,10 +423,14 @@ for (const engineName of engines) {
     assert.deepEqual(errors, [], 'No uncaught JavaScript errors are expected')
     if (process.env.INJECT_MATCH_FETCH_502 === '1') assert.ok(injectedFailures > 0, 'The network-failure path must really be exercised')
     assert.ok(workload.some(sample => sample.drawCalls > 20 && sample.triangles > 10_000), 'Actual nonempty 3D geometry must be rendered')
+    if (requiredTable) {
+      assert.equal(customModelsLoaded.size, 3, 'All three real clients must load the published model')
+      assert.ok(workload.some(sample => sample.triangles > 80_000), 'The prepared AI geometry must actually render, not silently fall back to a stock table')
+    }
     const build = await first.locator('script[type="module"][src]').first().getAttribute('src')
     if (process.env.VISUAL_FIXTURE === '1') await scoreboardFixture(first, engineName)
     console.log(JSON.stringify({ engine: engineName, room: room.code, build, jsErrors: errors.length, injectedFailures, assetGeometry, reticleGeometry, wedgeGeometry, badgeGeometry, fontMetrics, visualFixture: process.env.VISUAL_FIXTURE === '1',
-      textures: textures.size, geometrySamples: workload.length, trajectoryFrames: result.result.trajectory.frames.length,
+      textures: textures.size, customTable: requiredTable ? { id: requiredTable.id, clients: customModelsLoaded.size } : null, geometrySamples: workload.length, trajectoryFrames: result.result.trajectory.frames.length,
       duration: result.result.duration, serverWallSeconds: result.result.wallDuration, clickToResultMs,
       tests: 'uncached default URL, responsive HUD, stable canvas, modal gating, mute, spectator authority, real shot and shared final state' }))
   } catch (error) {

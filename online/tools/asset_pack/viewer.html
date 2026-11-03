@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#151c20;color:#eee;font:20px system-ui}canvas{display:block}#labels{position:absolute;inset:0;pointer-events:none;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr)}#labels>span{padding:20px}</style></head><body><div id="labels"></div><script type="module">
+import * as THREE from '/node_modules/three/src/Three.js'
+import {OBJLoader} from '/node_modules/three/examples/jsm/loaders/OBJLoader.js'
+import {GLTFExporter} from '/node_modules/three/examples/jsm/exporters/GLTFExporter.js'
+import {GLTFLoader} from '/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
+import {mergeGeometries,mergeVertices} from '/node_modules/three/examples/jsm/utils/BufferGeometryUtils.js'
+const hybrid=new URLSearchParams(location.search).has('hybrid')
+const prepared=hybrid||new URLSearchParams(location.search).has('prepared')
+const helper=hybrid?await import('../model_intake/playable_surface.mjs'):null
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true})
+renderer.setSize(1800,1200);renderer.setPixelRatio(1);renderer.outputColorSpace=THREE.SRGBColorSpace
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2
+document.body.append(renderer.domElement)
+const scenes=[],cameras=[],models=[]
+const ids=[1267,1268,1269,1270,1271,1272]
+const loader=new OBJLoader()
+for(let i=0;i<6;i++){
+ const scene=new THREE.Scene();scene.background=new THREE.Color('#1d262a')
+ scene.add(new THREE.HemisphereLight(0xddeeff,0x65604b,2.1))
+ const key=new THREE.DirectionalLight(0xfff1d8,3.3);key.position.set(3,5,2);scene.add(key)
+ const fill=new THREE.DirectionalLight(0xddeaff,1.3);fill.position.set(-3,2,-2);scene.add(fill)
+ const group=prepared?(await new GLTFLoader().loadAsync(`/tests/artifacts/model-intake/pack/candidates/pack-table-${i+1}-review.glb`)).scene:await loader.loadAsync(`/tests/artifacts/model-intake/pack/source/PoolTable_${i+1}_PoolTable_${i+1}_Mat_0_${ids[i]}.obj`)
+ if(hybrid){
+  const meshes=[];group.traverse(node=>{if(node.isMesh)meshes.push(node)})
+  const cabinetMaterial=meshes.find(mesh=>mesh.material.name.startsWith('Cabinet')).material;cabinetMaterial.roughness=.82
+  for(const mesh of meshes){
+   const name=mesh.material.name||''
+   if(name.startsWith('Cloth and cushions')||name.startsWith('Pocket fittings')){mesh.removeFromParent();continue}
+   if(name.startsWith('Pocket liners'))mesh.material=cabinetMaterial
+   const inner={halfX:.555,halfZ:1.05,minY:-.01}
+   const original=mesh.geometry;mesh.geometry=helper.clipGeometry(THREE,original,{inner,holes:helper.pocketHoles(helper.TABLE_REFERENCE,.006),circleSegments:32});original.dispose();mesh.name=`Retained_Pack_Cabinet_${i+1}_${name}`
+  }
+  const surface=helper.buildPlayingSurface(THREE,helper.TABLE_REFERENCE,{bedHalfX:.5986,bedHalfZ:1.0949});group.add(surface)
+  // The source's smaller pocket cut-outs leave crescent gaps after calibration.
+  // Rebuild only the upper cabinet rim/apron, preserving the original lower
+  // cabinet, leg silhouettes and support bars, then cut the six actual holes.
+  const ox=.6006,oz=1.0969,ix=.548,iz=1.0433,top=.038,bottom=-.23
+  for(const[x,z,sx,sz]of[[-(ox+ix)/2,0,ox-ix,2*oz],[(ox+ix)/2,0,ox-ix,2*oz],[0,-(oz+iz)/2,2*ix,oz-iz],[0,(oz+iz)/2,2*ix,oz-iz]]){
+   const raw=new THREE.BoxGeometry(sx,top-bottom,sz);raw.translate(x,(top+bottom)/2,z)
+   const repaired=helper.clipGeometry(THREE,raw,{holes:helper.pocketHoles(helper.TABLE_REFERENCE,.006),circleSegments:32});raw.dispose();const strip=new THREE.Mesh(repaired,cabinetMaterial);strip.name='Repaired_Upper_Wood_Rim';group.add(strip)
+  }
+  group.updateMatrixWorld(true)
+  const batches=new Map();group.traverse(node=>{if(!node.isMesh)return;const key=node.material.name;let entry=batches.get(key);if(!entry){entry={material:node.material,geometry:[],noCastShadow:false};batches.set(key,entry)}if(node.userData.pooltoolCastShadow===false)entry.noCastShadow=true;let geometry=node.geometry.clone().applyMatrix4(node.matrixWorld);if(geometry.index)geometry=geometry.toNonIndexed();entry.geometry.push(geometry)})
+  group.clear()
+  for(const[name,batch]of batches){const merged=mergeVertices(mergeGeometries(batch.geometry,false),1e-6);const mesh=new THREE.Mesh(merged,batch.material);mesh.name=name.startsWith('Cabinet')?'Retained_Original_Cabinet_And_Legs':name;if(batch.noCastShadow)mesh.userData.pooltoolCastShadow=false;group.add(mesh)}
+  group.userData={source:'User-supplied asset pack; local-only evaluation',rights:'Unverified; no publication authorized',preparation:'Original cabinet/legs with repaired, engine-aligned flat bed, cushions and six open pocket wells.'}
+ }
+ const box=new THREE.Box3().setFromObject(group),center=box.getCenter(new THREE.Vector3())
+ if(!prepared){group.traverse(node=>{if(!node.isMesh)return;node.material=new THREE.MeshStandardMaterial({color:0xbeb9ab,roughness:.7,metalness:.05,side:THREE.DoubleSide})});group.position.set(-center.x*.01,0,-center.z*.01);group.scale.setScalar(.01)}
+ else group.position.y=.708
+ const pivot=new THREE.Group();pivot.add(group);pivot.rotation.y=prepared?0:Math.PI/2;scene.add(pivot)
+ models.push(group)
+ const overlay=new THREE.Group();overlay.name='physical-pocket-overlay';overlay.visible=false;scene.add(overlay)
+ for(const[x,z,r]of[[-.524786,-1.020086,.062],[-.5638,0,.0645],[-.524786,1.020086,.062],[.524786,-1.020086,.062],[.5638,0,.0645],[.524786,1.020086,.062]]){const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.002,8,64),new THREE.MeshBasicMaterial({color:0xff9933,depthTest:false}));ring.rotation.x=Math.PI/2;ring.position.set(x,.71,z);ring.renderOrder=100;overlay.add(ring)}
+ const floor=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshStandardMaterial({color:0x242e30,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=-.005;scene.add(floor)
+ const camera=new THREE.PerspectiveCamera(35,1.5,.01,30);camera.position.set(2.8,2.35,3.6);camera.lookAt(0,.45,0)
+ scenes.push(scene);cameras.push(camera)
+ const label=document.createElement('span');label.textContent=`Table ${i+1} · ${hybrid?'engine-aligned hybrid (local only)':prepared?'calibrated local GLB review':'original untextured OBJ'}`;document.querySelector('#labels').append(label)
+}
+function render(){renderer.setScissorTest(true);for(let i=0;i<6;i++){const x=(i%3)*600,y=(1-Math.floor(i/3))*600;renderer.setViewport(x,y,600,600);renderer.setScissor(x,y,600,600);cameras[i].aspect=1;cameras[i].updateProjectionMatrix();renderer.render(scenes[i],cameras[i])}renderer.setScissorTest(false)}
+window.setView=mode=>{for(const camera of cameras){camera.position.set(...(mode==='top'?[0,6.2,0.001]:mode==='side'?[3.5,1.2,0]:[2.8,2.35,3.6]));camera.lookAt(0,.45,0)}render()}
+window.setOverlay=value=>{for(const scene of scenes)scene.getObjectByName('physical-pocket-overlay').visible=value;render()}
+window.focusTable=(index,view)=>{document.querySelector('#labels').style.display='none';const camera=cameras[index];camera.aspect=1.5;camera.position.set(...(view==='top'?[0,4.8,.001]:[2.4,2,2.9]));camera.lookAt(0,.38,0);camera.updateProjectionMatrix();renderer.setScissorTest(false);renderer.setViewport(0,0,1800,1200);renderer.render(scenes[index],camera)}
+window.exporter=new GLTFExporter();window.scenes=scenes
+window.exportHybrid=async index=>{const clone=models[index].clone(true);clone.position.set(0,0,0);return Array.from(new Uint8Array(await window.exporter.parseAsync(clone,{binary:true,onlyVisible:true})))}
+window.verifyHybrid=index=>{
+ const group=models[index];group.updateMatrixWorld(true);const ray=new THREE.Raycaster(),hits=[];let deviation=0,bedSamples=0,pocketSamples=0
+ ray.ray.direction.set(0,-1,0);ray.far=.5
+ for(let ix=0;ix<11;ix++)for(let iz=0;iz<21;iz++){const x=-.45+.9*ix/10,z=-.9+1.8*iz/20;ray.ray.origin.set(x,.85,z);const first=ray.intersectObject(group,true)[0];if(!first)hits.push({type:'bed-missing',x,z});else deviation=Math.max(deviation,Math.abs(first.point.y-.708));bedSamples++}
+ for(const p of helper.pocketHoles())for(const fraction of [0,.25,.5,.75,.95])for(let angle=0;angle<8;angle++){const a=angle*Math.PI/4;ray.ray.origin.set(p.x+Math.cos(a)*p.radius*fraction,.85,p.z+Math.sin(a)*p.radius*fraction);const first=ray.intersectObject(group,true)[0];if(first)hits.push({type:'pocket-blocked',id:p.id,fraction,angle,y:first.point.y,node:first.object.name});pocketSamples++}
+ let triangles=0,meshes=0;group.traverse(node=>{if(node.isMesh){meshes++;triangles+=(node.geometry.index?.count||node.geometry.attributes.position.count)/3}})
+ return{bedSamples,pocketSamples,maxBedDeviation:deviation,failures:hits,triangles,meshes}
+}
+render();window.fixtureReady=true
+</script></body></html>

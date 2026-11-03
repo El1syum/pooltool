@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "AI-Hybrid-Playable",
+  "file": "AI-Hybrid-Playable.glb",
+  "bytes": 3235040,
+  "sha256": "33e07b296b63d9d8dbf6083854bfbeb394d7f14a40c27c4336a7018f159326ce",
+  "sourceType": "user-provided AI-generated tabletop",
+  "sourceFile": "988622829db13444d3990892467e02a2.glb",
+  "sourceSha256": "51edb85ba60d1b7746df54d63a0f72dcf88972339474ee465b2056c449e3257d",
+  "sourceBytes": 84875620,
+  "triangles": 81003,
+  "vertices": 67503,
+  "meshes": 7,
+  "materials": 7,
+  "calibration": { "width": 0.9906, "length": 1.9812, "clothY": 0, "floorY": -0.708 },
+  "config": { "position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1], "replaceProcedural": true, "material": {}, "materials": {}, "hiddenNodes": [] },
+  "rebuilt": ["flat cloth", "engine-aligned cushions and jaws", "six open pocket cuts and wells", "legs and leveling feet"],
+  "retained": ["AI decorative shell and its original UV/basecolor/normal texture detail"],
+  "limitations": "Decorative AI shell retains some organic irregularities. Cosmetic art only; does not define or replace server physics."
+}

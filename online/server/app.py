@@ -197,6 +197,7 @@ class RateLimiter:
 def create_app(*, database=None, engine=None, process_pool=True, now=time.time, background=True, assets_root=None):
     hub = Hub()
     limiter = RateLimiter()
+    model_preview = None
 
     @asynccontextmanager
     async def lifespan(application):
@@ -290,6 +291,15 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
         if current is not None and warm == 0:
             return JSONResponse({"status": "warming", "physics": "pooltool", "warmWorkers": 0}, status_code=503)
         return health(request)
+
+    @application.get("/api/assets/table-reference")
+    async def table_reference(current=Depends(service)):
+        # A detached, cached reference from the same engine as real matches.
+        # Preparing cosmetic art must never guess a different table size.
+        nonlocal model_preview
+        if model_preview is None:
+            model_preview = current.engine.new_match()["snapshot"]
+        return {"snapshot": json.loads(encode(model_preview))}
 
     @application.post("/api/auth/guest")
     async def guest(body: GuestLogin, request: Request, current=Depends(service)):

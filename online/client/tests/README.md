@@ -95,6 +95,25 @@ For remote Chromium verification only, `DIRECT_NETWORK=1` adds the browser's
 returning intermittent 502 responses; it does not change the application or the
 user's proxy settings. Without the flag the normal browser network is used.
 
+## Prepared models and personal appearance
+
+`player-appearance.mjs` exercises the actual preview and draft Apply/Cancel.
+`player-appearance-integration.mjs` uses an isolated loopback service and explicit
+test administrator credentials to verify catalogue choices, per-user device
+persistence, no global publication, outage handling and stable game canvas/modal
+input gating. It restores the baseline and disables only its own fixtures.
+`src/models/playerSelection.test.mjs` tests ID-only preference validation;
+`previewSnapshot.test.mjs` guards current table geometry.
+
+`prepared-table.mjs` takes `MODEL_TABLE_PATH` and audits the real supplied GLB:
+bed height/rays, open pockets, all balls, runtime transforms, fallback and
+disposal. `MODEL_REFERENCE_URL` defaults to the actual engine endpoint at
+`http://127.0.0.1:8791/api/assets/table-reference`; it starts its own Vite fixture.
+The prepared AI asset is `../../assets/prepared/AI-Hybrid-Playable.glb` from the
+client folder. `REQUIRE_CUSTOM_TABLE=1` in `match-hud.mjs` requires all three
+clients to load the published model and render the AI-sized geometry, while
+normal physical-shot/shared-state assertions remain enabled.
+
 `INJECT_MATCH_FETCH_502=1` in `match-hud.mjs` returns one explicit HTTP 502 for a
 background snapshot GET in each browser context. Game commands, WebSocket state
 and physics still use the real service. The scenario must finish without an
