@@ -92,9 +92,10 @@ Read `online/README.md`, `online/server/API_CONTRACT.md`,
 Native Safari/device certification, a production load SLA, final 3D art/audio
 and VK publication are explicitly not claimed complete.
 
-The November 3 deployment contains commits `d1989c0` (server library/auth) and
-`8e280af` (UI/workshop). Active client assets are `index-d1pvhN-W.js` and
-`index-BKWKzaFU.css`; HTML remains no-store. The server was restarted once after
+The earlier November 3 deployment contains commits `d1989c0` (server library/auth)
+and `8e280af` (UI/workshop), then background-fetch handling. Its client assets
+remain retained for open tabs; the latest model update is recorded below.
+HTML remains no-store. The server was restarted after
 an online SQLite backup; existing 38 completed matches were preserved. The
 runtime/database backup is `/opt/pooltool-online/shared/backup-nov3-8e280af`.
 Credentials are loaded by `asset-library-preview.conf` from a separate mode-600
@@ -139,6 +140,14 @@ Read `DESIGN.md`, `online/docs/ASSET_INTAKE_20261103.md`, and the reproducible
 tool dependencies are not application dependencies. Verification: 99 Python
 tests +513 subtests, 58 client tests, personal-selection API/UI checks, actual
 model geometric/runtime checks and real three-client shots in Chromium/WebKit.
+
+Deployed model update: `5ef9e95`, default client `/assets/index-ftO2m1V7.js` and
+`/assets/index-CsNN5j3a.css`. Shared table ID `2dc5c0956a32488b86e6667aa857d910`
+is the prepared AI hybrid; environment remains the existing default. The public
+GLB download was hash-verified against the checked-in derivative. A fresh online
+SQLite/runtime backup is `/opt/pooltool-online/shared/backup-models-5ef9e95`
+(42 completed matches preserved). No passwords/config/migration guards were
+changed; the service restarted once for the new table-reference endpoint.
 
 ## Git identity
 
