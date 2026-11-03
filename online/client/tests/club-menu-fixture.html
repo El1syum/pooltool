@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Club menu test fixture</title></head><body><div id="fixture"></div><script type="module">
+import { createApp, defineComponent, h, reactive } from 'vue'
+import ClubMenu from '/src/components/ClubMenu.vue'
+import ClubSettings from '/src/components/ClubSettings.vue'
+import { DEFAULT_BINDINGS } from '/src/game/types.ts'
+import '/src/style.css'
+import '/src/match-hud.css'
+const user = { id: 'fixture-player', displayName: 'Тест Игрока', elo: 1267, games: 17, wins: 9, losses: 8, settings: {} }
+const state = reactive({ view: 'menu', code: '', name: user.displayName, turnSeconds: 120, botDifficulty: 'medium', searchMode: 'casual', busy: false, connected: true, clientVersion: 'test', room: null, showSettings: false, settings: { quality: 'medium', volume: .5, sensitivity: 1, bindings: { ...DEFAULT_BINDINGS }, showAimGuide: true, showPocketLabels: true }, bindingCapture: null })
+window.clubFixture = state
+const app = defineComponent({ setup() { return () => [h(ClubMenu, { ...state, user, connection: 'Соединение установлено', onNavigate: value => state.view = value, onSettings: () => state.showSettings = true, onSearch: mode => { state.searchMode = mode; state.view = 'search' }, onCancelSearch: () => state.view = 'play', onCreateRoom: () => { state.view = 'lobby'; state.room = { id: 'fixture-room', code: 'ABC123', hostId: user.id, players: [{ id: user.id, displayName: user.displayName, ready: false }], spectators: [], status: 'waiting', settings: { turnSeconds: state.turnSeconds, ranked: false } } }, onLeave: () => { state.room = null; state.view = 'play' }, onReady: () => state.room.players[0].ready = !state.room.players[0].ready, onJoinRoom: spectate => { window.lastFixtureJoin = { spectate, code: state.code } }, 'onUpdate:code': value => state.code = value, 'onUpdate:name': value => state.name = value, 'onUpdate:turnSeconds': value => state.turnSeconds = value, 'onUpdate:botDifficulty': value => state.botDifficulty = value, onSaveName: () => user.displayName = state.name }), state.showSettings && h(ClubSettings, { user, settings: state.settings, bindingCapture: state.bindingCapture, captureLabels: Object.fromEntries(Object.keys(DEFAULT_BINDINGS).map(key => [key, key])), bindingConflicts: [], aimGuideLocked: state.searchMode === 'ranked', inMatch: false, clientVersion: 'test', 'onUpdate:settings': value => state.settings = value, onClose: () => state.showSettings = false, onSave: () => state.showSettings = false, onCapture: value => state.bindingCapture = value, onReset: () => state.settings = { ...state.settings, volume: .5 } })] } })
+createApp(app).mount('#fixture')
+</script></body></html>

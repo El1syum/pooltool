@@ -7,8 +7,16 @@ import { expandTrajectory, numberForPocket } from './game/playback'
 import { DEFAULT_BINDINGS } from './game/types'
 import type { AimState, BindingAction, CameraMode, GameScene, GameSettings, ShotPhase } from './game/types'
 import MatchHud from './components/MatchHud.vue'
+import ClubMenu from './components/ClubMenu.vue'
+import ClubSettings from './components/ClubSettings.vue'
+import ModelWorkshop from './components/ModelWorkshop.vue'
+import ModelAdminLogin from './components/ModelAdminLogin.vue'
+import { applyMatchVisualPolicy, getAimGuidePolicy } from './game/matchPolicy'
+import { createServerModelLibrary } from './models/serverLibrary'
+import { profileFromLibrary } from './models/libraryProfile'
+import { emptyVisualAssetProfile, type VisualAssetProfile } from './models/types'
 
-type View = 'menu' | 'play' | 'lobby' | 'search' | 'match' | 'profile'
+type View = 'menu' | 'play' | 'lobby' | 'search' | 'match' | 'profile' | 'models'
 const view = ref<View>('menu')
 const user = ref<User | null>(null)
 const room = ref<Room | null>(null)
@@ -27,7 +35,10 @@ const searchMode = ref<'casual' | 'ranked'>('casual')
 const botDifficulty = ref<'easy' | 'medium' | 'hard'>((localStorage.getItem('pooltool.botDifficulty') as 'easy' | 'medium' | 'hard') || 'medium')
 const settingsOpen = ref(false)
 const gameMenuOpen = ref(false)
+const surrenderConfirmation = ref(false)
 const rulesOpen = ref(false)
+const altHeld = ref(false)
+const assistPinned = ref(false)
 const hudPanelOpen = ref(false)
 const shotPhase = ref<ShotPhase>('overview')
 const bindingCapture = ref<BindingAction | null>(null)
@@ -41,6 +52,16 @@ const calledPocket = ref('')
 const aim = ref<AimState>({ phi: 90, V0: 2.5, theta: 0, a: 0, b: 0 })
 const defaults = (): GameSettings => ({ quality: 'medium', volume: 0.5, sensitivity: 1, bindings: { ...DEFAULT_BINDINGS }, showAimGuide: true, showPocketLabels: true })
 const settings = ref<GameSettings>(defaults())
+const aimGuidePolicy = computed(() => getAimGuidePolicy(match.value))
+const effectiveSettings = computed(() => applyMatchVisualPolicy(settings.value, match.value))
+const showAssist = computed(() => (altHeld.value || assistPinned.value) && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !bindingCapture.value)
+const modelLibrary = createServerModelLibrary()
+const modelProfile = ref<VisualAssetProfile>(emptyVisualAssetProfile())
+const modelAdminOpen = ref(false)
+const modelAdminBusy = ref(false)
+const modelAdminError = ref('')
+const workshopKey = ref(0)
+const modelReturnView = ref<View>('menu')
 let scene: GameScene | null = null
 let socket: WebSocket | null = null
 let reconnectTimer = 0
@@ -361,12 +382,13 @@ function ensureScene() {
       onError: (message) => { error.value = message; telemetry('clientError', { message: message.slice(0, 500) }) },
       onPerformance: (stats) => { telemetry('clientPerformance', stats) },
     })
-    scene.setSettings(settings.value)
+    scene.setSettings(effectiveSettings.value)
     scene.setState(match.value.snapshot)
     scene.setAim(aim.value)
     scene.setShotPhase(shotPhase.value)
     scene.setCalledBall(calledBall.value || null)
     scene.setCalledPocket(calledPocket.value || null)
+    void scene.setVisualAssets(modelProfile.value)
     updateInteraction()
   } catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось открыть 3D-сцену' }
 }
@@ -383,7 +405,11 @@ watch([ownTurn, () => match.value?.id, () => match.value?.status, playbackBusy, 
 })
 watch(calledBall, (id) => scene?.setCalledBall(id || null))
 watch(calledPocket, (id) => scene?.setCalledPocket(id || null))
-watch(settings, () => { scene?.setSettings(settings.value); if (user.value) { localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value)); settingsDirty.value = true } }, { deep: true })
+watch(effectiveSettings, value => scene?.setSettings(value), { deep: true })
+watch(settings, () => { if (user.value) { localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value)); settingsDirty.value = true } }, { deep: true })
+watch(view, value => { if (value !== 'match') { altHeld.value = false; assistPinned.value = false } })
+watch(modelProfile, value => { void scene?.setVisualAssets(value) }, { deep: true })
+watch(() => match.value?.id, (id, previous) => { if (id && id !== previous) void loadModelLibrary() })
 function updateAim() {
   if (!scene) return
   scene.setAim(aim.value)
@@ -524,11 +550,62 @@ async function saveSettings() {
   try { await request('/api/me/settings', { method: 'PUT', body: JSON.stringify(settings.value) }); settingsDirty.value = false; settingsOpen.value = false }
   catch (e) { error.value = e instanceof Error ? e.message : 'Настройки сохранены локально; синхронизация повторится после подключения' }
 }
+function updateSettings(value: GameSettings) {
+  // Keep the saved casual preference even when the ranked presentation is off.
+  settings.value = { ...value, showAimGuide: aimGuidePolicy.value.locked ? settings.value.showAimGuide : value.showAimGuide }
+}
+function navigate(value: 'menu' | 'play' | 'profile' | 'match') {
+  if (value === 'profile') { void showProfile(); return }
+  view.value = value
+}
+async function loadModelLibrary() {
+  try { modelProfile.value = profileFromLibrary(await modelLibrary.adapter.load()) }
+  catch { /* An unavailable art library must never prevent a playable table. */ }
+}
+async function openModels() {
+  modelReturnView.value = view.value === 'models' ? 'menu' : view.value
+  settingsOpen.value = false; gameMenuOpen.value = false
+  await modelLibrary.refreshSession().catch(() => {})
+  await loadModelLibrary()
+  view.value = 'models'
+}
+async function loginModelAdmin(credentials: { username: string; password: string }) {
+  modelAdminBusy.value = true; modelAdminError.value = ''
+  try {
+    await modelLibrary.login(credentials.username, credentials.password)
+    modelAdminOpen.value = false; workshopKey.value++
+  } catch (e) { modelAdminError.value = e instanceof Error ? e.message : 'Не удалось войти' }
+  finally { credentials.password = ''; modelAdminBusy.value = false }
+}
+async function logoutModelAdmin() {
+  try { await modelLibrary.logout(); workshopKey.value++ }
+  catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось завершить сеанс' }
+}
+function applyModels(value: VisualAssetProfile) { modelProfile.value = value }
+function releaseAlt() { altHeld.value = false }
+function handleAssistKey(event: KeyboardEvent) {
+  if (event.key !== 'Alt') return
+  if (event.type === 'keyup') { releaseAlt(); return }
+  if (view.value === 'match' && !bindingCapture.value && !settingsOpen.value && !(event.target instanceof HTMLInputElement)) {
+    event.preventDefault(); altHeld.value = true
+  }
+}
+function elevationWheel(event: WheelEvent) {
+  if (!event.shiftKey || !canShoot.value || shotPhase.value === 'overview' || !event.deltaY) return
+  event.preventDefault(); event.stopImmediatePropagation()
+  changeHudAim({ ...aim.value, theta: Math.max(0, Math.min(60, aim.value.theta + (event.deltaY < 0 ? 1 : -1))) })
+}
+async function surrender() {
+  surrenderConfirmation.value = false; gameMenuOpen.value = false
+  await sendCommand('surrender', {})
+}
 function captureBinding(event: KeyboardEvent | MouseEvent) {
   if (!bindingCapture.value) {
     if (event instanceof KeyboardEvent && event.code === 'Escape' && view.value === 'match' && !settingsOpen.value && !(event.target instanceof HTMLInputElement)) {
       event.preventDefault()
-      if (rulesOpen.value) rulesOpen.value = false
+      if (surrenderConfirmation.value) surrenderConfirmation.value = false
+      else if (rulesOpen.value) rulesOpen.value = false
+      else if (gameMenuOpen.value) gameMenuOpen.value = false
       else if (shotPhase.value !== 'overview') setShotPhase(shotPhase.value === 'power' ? 'aim' : 'overview')
       else gameMenuOpen.value = !gameMenuOpen.value
     }
@@ -541,14 +618,14 @@ function captureBinding(event: KeyboardEvent | MouseEvent) {
   bindingCapture.value = null
 }
 async function copyCode() { if (!room.value) return; try { await navigator.clipboard.writeText(room.value.code) } catch { code.value = room.value.code } }
-function visibilityChanged() { telemetry('clientVisibility', { visible: document.visibilityState === 'visible' }); if (document.visibilityState === 'visible' && connected.value) void restoreMatch() }
-onMounted(() => { void authenticate(); window.addEventListener('keydown', captureBinding, true); window.addEventListener('mousedown', captureBinding, true); document.addEventListener('visibilitychange', visibilityChanged); window.addEventListener('online', connect) })
-onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(polling); clearInterval(heartbeat); clearTimeout(reconnectTimer); socket?.close(); scene?.destroy(); window.removeEventListener('keydown', captureBinding, true); window.removeEventListener('mousedown', captureBinding, true); document.removeEventListener('visibilitychange', visibilityChanged); window.removeEventListener('online', connect) })
+function visibilityChanged() { releaseAlt(); telemetry('clientVisibility', { visible: document.visibilityState === 'visible' }); if (document.visibilityState === 'visible' && connected.value) void restoreMatch() }
+onMounted(() => { void authenticate(); void loadModelLibrary(); window.addEventListener('keydown', captureBinding, true); window.addEventListener('mousedown', captureBinding, true); window.addEventListener('keydown', handleAssistKey, true); window.addEventListener('keyup', handleAssistKey, true); window.addEventListener('blur', releaseAlt); document.addEventListener('visibilitychange', visibilityChanged); window.addEventListener('online', connect) })
+onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(polling); clearInterval(heartbeat); clearTimeout(reconnectTimer); socket?.close(); scene?.destroy(); window.removeEventListener('keydown', captureBinding, true); window.removeEventListener('mousedown', captureBinding, true); window.removeEventListener('keydown', handleAssistKey, true); window.removeEventListener('keyup', handleAssistKey, true); window.removeEventListener('blur', releaseAlt); document.removeEventListener('visibilitychange', visibilityChanged); window.removeEventListener('online', connect) })
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'in-match': view === 'match' && match }">
-    <header class="app-header">
+  <div class="app-shell club-app" :class="{ 'in-match': view === 'match' && match, 'in-workshop': view === 'models' }">
+    <header v-if="loading || !user" class="app-header">
       <button class="brand" :disabled="busy" @click="view = match ? 'match' : 'menu'">Pooltool Online</button>
       <span class="connection" :class="{ offline: !connected }" role="status">{{ connection }}</span>
       <span v-if="user">{{ user.displayName }} · Эло {{ user.elo }}</span>
@@ -556,35 +633,14 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
     <div v-if="error" class="error-banner" role="alert">{{ error }} <button @click="error = ''" aria-label="Закрыть ошибку">×</button></div>
     <main v-if="loading" class="panel" aria-busy="true"><h1>Загрузка игры</h1><p>Подключаемся к серверу и восстанавливаем профиль.</p></main>
     <main v-else-if="!user" class="panel"><h1>Соединение недоступно</h1><p>Проверьте подключение и повторите попытку.</p><button @click="authenticate">Повторить</button></main>
-    <main v-else-if="view === 'menu'" class="panel menu">
-      <h1>Бильярд по сети</h1><p>8-ball для двух игроков. Физика и правила рассчитываются на сервере.</p>
-      <button :disabled="busy || !connected" @click="view = 'play'">Играть</button>
-      <button :disabled="busy" @click="settingsOpen = true">Настройки</button>
-      <button :disabled="busy" @click="showProfile">Профиль</button>
-      <button v-if="match" :disabled="busy" @click="view = 'match'">Вернуться в матч</button>
-      <button v-if="room && (!match || match.status === 'finished')" :disabled="busy" @click="leave">Выйти из комнаты</button>
+    <main v-else-if="view === 'models'" class="model-library-page">
+      <div class="model-session-bar"><span>Общая библиотека · {{ modelLibrary.session.value.authenticated ? `Администратор: ${modelLibrary.session.value.username}` : 'Режим просмотра' }}</span><button v-if="modelLibrary.session.value.authenticated" @click="logoutModelAdmin">Выйти из админки</button><button v-else @click="modelAdminError = ''; modelAdminOpen = true">Вход администратора</button></div>
+      <ModelWorkshop :key="workshopKey" :library="modelLibrary.adapter" :can-manage="modelLibrary.session.value.authenticated" :initial-profile="modelProfile" @apply="applyModels" @request-admin="modelAdminError = ''; modelAdminOpen = true" @close="view = modelReturnView" />
     </main>
-    <main v-else-if="view === 'play'" class="panel">
-      <h1>Выбор игры</h1><div class="button-row"><button :disabled="busy || !connected" @click="search('casual')">Случайный противник</button><button :disabled="busy || !connected" @click="search('ranked')">Рейтинговая игра</button></div>
-      <section><h2>Игра с ботом</h2><label>Сложность <select v-model="botDifficulty"><option value="easy">Лёгкий</option><option value="medium">Средний</option><option value="hard">Сильный</option></select></label><button :disabled="busy || !connected" @click="playBot">Играть с ботом</button></section>
-      <section><h2>Игра с другом</h2><label>Время на ход <select v-model.number="turnSeconds"><option :value="30">30 секунд</option><option :value="60">60 секунд</option><option :value="90">90 секунд</option><option :value="120">120 секунд</option></select></label><button :disabled="busy || !connected" @click="createRoom">Создать комнату</button></section>
-      <section><label>Код комнаты <input v-model="code" maxlength="12" autocomplete="off" @keyup.enter="joinRoom(false)" /></label><div class="button-row"><button :disabled="busy || !connected" @click="joinRoom(false)">Присоединиться</button><button :disabled="busy || !connected" @click="joinRoom(true)">Наблюдать матч</button></div></section>
-      <button :disabled="busy" @click="view = 'menu'">Назад</button>
-    </main>
-    <main v-else-if="view === 'search'" class="panel"><h1>{{ searchMode === 'ranked' ? 'Поиск соперника по рейтингу' : 'Поиск соперника' }}</h1><p>Ожидаем второго игрока. Матч откроется автоматически.</p><button :disabled="busy" @click="cancelSearch">Отменить поиск</button></main>
-    <main v-else-if="view === 'lobby' && room" class="panel">
-      <h1>Комната {{ room.code }}</h1><button @click="copyCode">Скопировать код приглашения</button><p>Время на ход: {{ room.settings.turnSeconds }} секунд</p>
-      <ul class="player-list"><li v-for="player in room.players" :key="player.id">{{ player.displayName }} <span>{{ player.ready ? 'Готов' : 'Не готов' }}</span></li><li v-if="room.players.length < 2">Ждём второго игрока</li></ul>
-      <p>Матч начнётся, когда оба игрока подтвердят готовность.</p><div class="button-row"><button :disabled="busy || !connected" @click="ready">{{ room.players.find(p => p.id === user?.id)?.ready ? 'Отменить готовность' : 'Готов' }}</button><button :disabled="busy" @click="leave">Выйти из комнаты</button></div>
-    </main>
-    <main v-else-if="view === 'profile'" class="panel">
-      <h1>Профиль</h1><label>Имя игрока <input v-model="name" maxlength="32" /></label><button :disabled="busy || !name.trim()" @click="saveName">Сохранить имя</button>
-      <p>Рейтинг: {{ user.elo }} · Матчей: {{ user.games }} · Побед: {{ user.wins }} · Поражений: {{ user.losses }}</p>
-      <h2>История матчей</h2><p v-if="!history.length">Пока нет завершённых матчей.</p><ul class="history-list"><li v-for="item in history" :key="String(item.id || item.matchId)"><span>{{ new Date(timestamp(item.finishedAt as string || item.startedAt as string)).toLocaleString('ru-RU') }}</span><span>{{ item.opponentName ? `против ${item.opponentName}` : '' }}</span><span>{{ item.mode === 'ranked' || item.ranked ? 'Рейтинговый' : 'Обычный' }}</span><span>{{ item.winnerId === user.id ? 'Победа' : item.winnerId ? 'Поражение' : 'Матч завершён' }}</span><span v-if="item.eloDelta != null">Эло {{ Number(item.eloDelta) > 0 ? '+' : '' }}{{ item.eloDelta }}</span></li></ul><button @click="view = 'menu'">Назад</button>
-    </main>
+    <ClubMenu v-else-if="view !== 'match'" :view="view" :user="user" :room="room" :history="history" :busy="busy" :connected="connected" :connection="connection" :search-mode="searchMode" :client-version="CLIENT_VERSION" :match-available="Boolean(match)" v-model:code="code" v-model:name="name" v-model:turn-seconds="turnSeconds" v-model:bot-difficulty="botDifficulty" @navigate="navigate" @settings="settingsOpen = true" @models="openModels" @exit="leave" @search="search" @cancel-search="cancelSearch" @create-room="createRoom" @join-room="joinRoom" @ready="ready" @leave="leave" @copy-code="copyCode" @play-bot="playBot" @save-name="saveName" />
     <main v-else-if="view === 'match' && match" class="match-screen figma-match-screen">
       <div class="stage-wrap">
-        <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол"></div>
+        <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол" @wheel.capture="elevationWheel"></div>
         <Transition name="toast"><div v-if="toast" class="shot-toast" :class="toast.tone" role="status"><strong>{{ toast.title }}</strong><span v-for="line in toast.lines" :key="line">{{ line }}</span></div></Transition>
       </div>
       <MatchHud
@@ -595,20 +651,27 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
         :remaining="remaining" :elapsed="elapsed" :status-text="matchStatusText"
         :volume="settings.volume" :top-view-key="settings.bindings.topView || DEFAULT_BINDINGS.topView"
         :called-ball="calledBall" :called-pocket="calledPocket" :camera-mode="cameraMode"
+        :show-assist="showAssist"
         @settings="settingsOpen = true" @menu="gameMenuOpen = true" @mute="toggleSound"
         @rules="rulesOpen = true" @camera="changeCamera" @aim="changeHudAim"
         @shoot="shoot()" @phase="setShotPhase" @select-ball="selectBall" @select-pocket="selectPocket"
         @place-cue="toggleCuePlacement" @copy-code="copyCode" @panel-open="hudPanelOpen = $event"
+        @toggle-assist="assistPinned = !assistPinned"
       />
       <div v-for="player in offlinePlayers" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
       <div v-if="match.status === 'finished'" class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
     </main>
-    <div v-if="gameMenuOpen" class="modal-backdrop" @click.self="gameMenuOpen = false">
-      <section class="settings-dialog menu" role="dialog" aria-modal="true" aria-labelledby="game-menu-title">
-        <h1 id="game-menu-title">Меню матча</h1><p>{{ isPlayer && match?.status !== 'finished' ? 'Если покинуть стол во время партии, будет засчитано поражение. Таймер продолжает идти.' : 'Вы можете вернуться к столу или покинуть комнату.' }}</p>
-        <button @click="gameMenuOpen = false">Вернуться в игру</button><button @click="gameMenuOpen = false; settingsOpen = true">Настройки</button>
-        <button v-if="isPlayer && match?.status !== 'finished'" :disabled="busy" @click="gameMenuOpen = false; sendCommand('surrender', {})">Сдаться</button><button v-else :disabled="busy" @click="leave">В главное меню</button>
-        <button v-if="isPlayer && match?.status !== 'finished'" :disabled="busy" @click="leave">Сдаться и покинуть стол</button>
+    <div v-if="gameMenuOpen" class="modal-backdrop club-match-backdrop" @click.self="gameMenuOpen = false; surrenderConfirmation = false">
+      <section class="club-match-dialog" role="dialog" aria-modal="true" aria-labelledby="game-menu-title">
+        <span class="club-dialog-eyebrow">POOLTOOL · 8-BALL</span>
+        <h1 id="game-menu-title">{{ surrenderConfirmation ? 'Сдаться?' : 'Меню матча' }}</h1>
+        <template v-if="surrenderConfirmation"><p>Вам будет засчитано поражение. Результат рейтинговой партии повлияет на Эло.</p><button class="club-dialog-primary" :disabled="busy" @click="surrender">Да, сдаться</button><button @click="surrenderConfirmation = false">Продолжить игру</button></template>
+        <template v-else>
+          <p>{{ isPlayer && match?.status !== 'finished' ? 'Таймер сетевой партии продолжает идти.' : 'Вы можете вернуться к столу или покинуть комнату.' }}</p>
+          <button class="club-dialog-primary" @click="gameMenuOpen = false">Вернуться в игру</button><button @click="gameMenuOpen = false; settingsOpen = true">Настройки</button>
+          <button @click="gameMenuOpen = false; rulesOpen = true">Правила игры</button><button @click="toggleSound">{{ settings.volume > 0 ? 'Выключить звук' : 'Включить звук' }}</button>
+          <button v-if="isPlayer && match?.status !== 'finished'" :disabled="busy" @click="surrenderConfirmation = true">Сдаться</button><button v-else :disabled="busy" @click="leave">В главное меню</button>
+        </template>
       </section>
     </div>
     <div v-if="rulesOpen" class="modal-backdrop" @click.self="rulesOpen = false">
@@ -616,19 +679,12 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
         <h1 id="rules-title">Правила 8-BALL</h1>
         <p>После распределения групп игрок забивает свои цельные или полосатые шары. Восьмёрку нужно забить после всех семи шаров своей группы в заказанную лузу.</p>
         <p>После разбоя перед ударом выберите заказанный шар и лузу. Ошибочный первый контакт, падение битка и другие нарушения оценивает сервер; после фола биток ставится в разрешённой зоне.</p>
-        <p>На общем виде нажмите на сукно, чтобы приблизиться к битку. Наведите прицел, выберите точку контакта и подтвердите левой кнопкой мыши. Затем оттяните кий, чтобы задать силу и наклон, и отпустите кнопку для удара. Правая кнопка возвращает на предыдущий этап.</p>
-        <p>Альтернативное управление доступно в панели «Параметры удара». Подсказка вида сверху использует вашу назначенную клавишу. Настройки и меню не останавливают таймер сетевой партии.</p>
+        <p>До первого ЛКМ наведите направление удара. Первый ЛКМ фиксирует его и открывает выбор точки контакта кия с битком. Подтвердите точку ЛКМ. Затем зажмите ЛКМ, оттяните кий вниз для выбора силы и отпустите кнопку для удара. Правая кнопка возвращает на предыдущий этап.</p>
+        <p>Удерживайте Alt для дополнительных приборов. Shift + колесо меняет наклон кия. Альтернативное управление доступно в панели «Параметры удара». В рейтинговых матчах линия прицеливания принудительно отключена. Настройки и меню не останавливают таймер сетевой партии.</p>
         <button @click="rulesOpen = false">Закрыть правила</button>
       </section>
     </div>
-    <div v-if="settingsOpen" class="modal-backdrop" @click.self="saveSettings">
-      <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <h1 id="settings-title">Настройки</h1><p v-if="match?.status === 'active'">В сетевой игре таймер хода продолжает идти.</p>
-        <label>Качество графики<select v-model="settings.quality"><option value="low">Низкое</option><option value="medium">Среднее</option><option value="high">Высокое</option></select></label><label>Громкость<input v-model.number="settings.volume" type="range" min="0" max="1" step="0.05" /></label><label>Чувствительность прицела<input v-model.number="settings.sensitivity" type="range" min="0.1" max="3" step="0.1" /></label><label><input v-model="settings.showAimGuide" type="checkbox" /> Показывать прицел</label><label><input v-model="settings.showPocketLabels" type="checkbox" /> Показывать номера луз</label>
-        <h2>Управление</h2><p>Нажмите назначение, затем клавишу или кнопку мыши. Escape отменяет ввод.</p><div class="binding-grid"><label v-for="(title, action) in captureLabels" :key="action"><span>{{ title }}</span><button @click="bindingCapture = action">{{ bindingCapture === action ? 'Ожидаем нажатие…' : settings.bindings[action] }}</button></label></div>
-        <p v-for="conflict in bindingConflicts" :key="conflict" class="warning">Конфликт: {{ conflict }}</p><div class="button-row"><button @click="settings = defaults()">Сбросить настройки</button><button :disabled="bindingConflicts.length > 0" @click="saveSettings">Сохранить и закрыть</button><button @click="settingsOpen = false; bindingCapture = null">Закрыть</button></div>
-      </section>
-    </div>
-    <footer v-if="view !== 'match'">Pooltool {{ CLIENT_VERSION }}</footer>
+    <ClubSettings v-if="settingsOpen" :settings="effectiveSettings" :binding-capture="bindingCapture" :capture-labels="captureLabels" :binding-conflicts="bindingConflicts" :aim-guide-locked="aimGuidePolicy.locked" :in-match="view === 'match'" :user="user" :client-version="CLIENT_VERSION" @update:settings="updateSettings" @capture="bindingCapture = $event" @reset="settings = defaults()" @save="saveSettings" @close="settingsOpen = false; bindingCapture = null" @models="openModels" />
+    <ModelAdminLogin v-if="modelAdminOpen" :busy="modelAdminBusy" :error="modelAdminError" :configured="modelLibrary.session.value.configured" @submit="loginModelAdmin" @close="modelAdminOpen = false; modelAdminError = ''" />
   </div>
 </template>

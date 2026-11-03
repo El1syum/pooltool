@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GameAudio } from './audio'
+import { VisualAssetManager } from '../models/VisualAssetManager'
 import { isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } from './playback'
 import { applyShotPhaseLocks, isMeaningfulPowerDrag, powerDragAim, previousShotPhase } from './shotWorkflow'
 import {
@@ -139,6 +140,17 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   scene.add(floor)
   const tableGroup = new THREE.Group()
   scene.add(tableGroup)
+  // Keep physical pocket markers/picking separate from replaceable table art.
+  const tableBodyGroup = new THREE.Group()
+  tableGroup.add(tableBodyGroup)
+  const calibrationGroup = new THREE.Group()
+  calibrationGroup.visible = false
+  scene.add(calibrationGroup)
+  const visualAssets = new VisualAssetManager(scene, {
+    tableHeight: () => tableHeight(),
+    onTableReplacement: replace => { tableBodyGroup.visible = !replace },
+    onEnvironmentReplacement: replace => { floor.visible = !replace },
+  })
   const balls = new Map<string, BallVisual>()
   const pocketMeshes = new Map<string, THREE.Mesh<THREE.TorusGeometry, THREE.MeshStandardMaterial>>()
   const pocketLabels: THREE.Sprite[] = []
@@ -219,7 +231,12 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   function dimensionsSignature(value: GameSnapshot): string { return JSON.stringify(value.table) }
   function isEnabled(): boolean { return !destroyed && !playback && !interaction.spectator && interaction.canShoot && !interaction.canPlaceCueBall }
   function createTable(): void {
+    // This persistent subgroup is reattached below. Clear its children before
+    // clearing the parent, otherwise disposed beds survive the rebuild and can
+    // occlude every ball when the server supplies a different cloth height.
+    disposeGroup(tableBodyGroup)
     disposeGroup(tableGroup)
+    tableGroup.add(tableBodyGroup)
     pocketMeshes.clear()
     pocketLabels.length = 0
     const { width: width, length } = snapshot.table
@@ -230,34 +247,34 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     const base = new THREE.Mesh(new THREE.BoxGeometry(width + 0.25, 0.25, length + 0.25), wood)
     base.position.y = height - 0.15
     base.castShadow = base.receiveShadow = true
-    tableGroup.add(base)
+    tableBodyGroup.add(base)
     const bed = new THREE.Mesh(new THREE.BoxGeometry(width, 0.025, length), cloth)
     bed.position.y = height - 0.0125
     bed.receiveShadow = true
-    tableGroup.add(bed)
+    tableBodyGroup.add(bed)
     for (const side of [-1, 1]) {
       for (const half of [-1, 1]) {
         const rail = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.058, length / 2 - 0.13), cloth.clone())
         rail.position.set(side * (width / 2 + 0.025), height + 0.022, half * (length / 4))
         rail.castShadow = rail.receiveShadow = true
-        tableGroup.add(rail)
+        tableBodyGroup.add(rail)
       }
       const end = new THREE.Mesh(new THREE.BoxGeometry(width - 0.11, 0.058, 0.09), cloth.clone())
       end.position.set(0, height + 0.022, side * (length / 2 + 0.025))
       end.castShadow = end.receiveShadow = true
-      tableGroup.add(end)
+      tableBodyGroup.add(end)
       for (const half of [-1, 1]) {
         const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, height - 0.27, 0.14), wood.clone())
         leg.position.set(side * (width / 2 - 0.12), (height - 0.27) / 2, half * (length / 2 - 0.2))
         leg.castShadow = true
-        tableGroup.add(leg)
+        tableBodyGroup.add(leg)
       }
       for (let i = 1; i <= 7; i++) {
         if (i === 4) continue
         const diamond = new THREE.Mesh(new THREE.CircleGeometry(0.008, 4), trim.clone())
         diamond.rotation.set(-Math.PI / 2, 0, Math.PI / 4)
         diamond.position.set(side * (width / 2 + 0.089), height + 0.032, -length / 2 + length * i / 8)
-        tableGroup.add(diamond)
+        tableBodyGroup.add(diamond)
       }
     }
     const pockets = snapshot.table.pockets.length ? snapshot.table.pockets : [
@@ -295,8 +312,25 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       pocketLabels.push(label)
       tableGroup.add(label)
     })
+    disposeGroup(calibrationGroup)
+    const guide = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-width / 2, height + 0.003, -length / 2),
+      new THREE.Vector3(width / 2, height + 0.003, -length / 2),
+      new THREE.Vector3(width / 2, height + 0.003, length / 2),
+      new THREE.Vector3(-width / 2, height + 0.003, length / 2),
+      new THREE.Vector3(-width / 2, height + 0.003, -length / 2),
+    ]), new THREE.LineBasicMaterial({ color: 0xffd26f, depthTest: false, transparent: true, opacity: 0.95 }))
+    guide.renderOrder = 20
+    calibrationGroup.add(guide)
+    const axes = new THREE.AxesHelper(0.4)
+    axes.position.set(0, height + 0.005, 0)
+    calibrationGroup.add(axes)
+    const grid = new THREE.GridHelper(10, 20, 0x6c766c, 0x394b48)
+    grid.position.y = 0.001
+    calibrationGroup.add(grid)
     tablePlane.constant = -height
     refreshPocketSelection()
+    visualAssets.refresh()
   }
 
   function createBall(ball: BallState): BallVisual {
@@ -944,6 +978,9 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   animationId = requestAnimationFrame(tick)
 
   return {
+    setVisualAssets: profile => visualAssets.setProfile(profile),
+    getVisualAssetReport: () => visualAssets.getReport(),
+    setCalibrationOverlay(visible) { calibrationGroup.visible = visible },
     setState(next) {
       cancelShotGesture()
       const changed = dimensionsSignature(next) !== dimensionsSignature(snapshot)
@@ -1017,6 +1054,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       resizeObserver.disconnect()
       controls.dispose()
       audio.destroy()
+      visualAssets.destroy()
       window.removeEventListener('keydown', keyDown)
       window.removeEventListener('keyup', keyUp)
       window.removeEventListener('blur', clearKeys)

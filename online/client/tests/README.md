@@ -15,6 +15,19 @@ node tests/browser-smoke.mjs
 
 Both Chromium and WebKit run by default. `BROWSERS=chromium` or `BROWSERS=webkit` selects one engine. `PLAYWRIGHT_BROWSERS_PATH` can select the installed browser cache; the browser revisions must match the Playwright module. `CHROMIUM_EXECUTABLE` / `WEBKIT_EXECUTABLE` are available for a known compatible custom installation.
 
+`ranked-policy-integration.mjs` runs only against a loopback test service and its
+compiled client. It creates actual rated/casual matches and a spectator, verifies
+the ranked aim-line control is disabled/off, changes and saves an unrelated
+preference without overwriting the saved casual aim-line choice, reloads a fresh
+scene, closes/reconnects a real socket, and confirms the preference is restored
+after finish and in the next casual match. It also checks stable canvas identity
+while settings are open and collects JavaScript errors. No match rank or renderer
+state is mocked; the pure policy tests cover the calculating intermediate state.
+
+```powershell
+node tests/ranked-policy-integration.mjs
+```
+
 `NETWORK_DELAY_MS=250` delays every browser HTTP API request by 250 ms while leaving the token and WebSocket protocol intact. This exercises readiness, commands, settings and navigation under a slower connection. `mobile-layout.mjs` separately checks 390×844 framing and a landscape/portrait resize round trip in both engines.
 
 Screenshots are generated under `tests/artifacts/` (ignored by Git). `ARTIFACT_DIR` changes the directory. WebKit exercises the Safari rendering engine, while an actual Safari release on Apple hardware remains a separate platform check.
@@ -22,6 +35,15 @@ Screenshots are generated under `tests/artifacts/` (ignored by Git). `ARTIFACT_D
 `MOBILE_DEBUG=1` in `mobile-layout.mjs` records actual WebGL draw counts, center-pixel colour during a default-framebuffer draw, buffer/viewport dimensions and context status. This distinguishes a live renderer from a blank WebKit automation screenshot after resizing. The instrumentation is injected only by the test, never included in the application.
 
 ## Figma match HUD
+
+The November 3 menu and Alt update adds `club-menu-ssr.test.mjs`,
+`club-menu-browser.mjs`, `server-library.test.mjs`, `match-assist.mjs`,
+`model-workshop.mjs`, `shared-library-integration.mjs` and
+`ranked-policy-integration.mjs`. Pure model validation and match policy checks
+are under `src/models` and `src/game`. See `CLUB_MENU.md` and
+`../../docs/MODEL_ASSET_PIPELINE.md` for scope and fixture limitations.
+Shared-library integration requires a loopback test server and explicit admin
+credentials in environment variables; it never uses production model data.
 
 `match-hud.mjs` checks the new full-window HUD with the real service: desktop
 1920×1080 and 1280×800, portrait 390×844, original SVG dimensions, aiming/power

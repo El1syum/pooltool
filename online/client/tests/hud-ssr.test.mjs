@@ -68,21 +68,21 @@ test('moving the local player to the left preserves original group and turn indi
   assert.match(cards[1].html, /hud-player-active/)
 })
 
-test('timers, mapped key hint and mute action use current values', async () => {
+test('timers, mapped key hint and the single match-menu action use current values', async () => {
   const html = await render(fixture({ volume: 0, topViewKey: 'KeyF' }))
   assert.match(html, /00:24/)
   assert.match(html, /12:05/)
-  assert.match(html, /Взгляд сверху кнопка F/)
-  assert.match(html, /aria-label="Включить звук"/)
-  assert.doesNotMatch(html, /Взгляд сверху кнопка KeyF/)
+  assert.match(html, /F · вид сверху/)
+  assert.match(html, /aria-label="Меню матча"/)
+  assert.doesNotMatch(html, /KeyF · вид сверху/)
 })
 
 test('power phase renders original vector gauges as live percent and speed, never elevation', async () => {
-  const html = await render(fixture({ phase: 'power' }))
-  for (const name of ['reticle-center', 'reticle-ring', 'wedge-outline']) assert.match(html, new RegExp(`${name}\\.svg`))
+  const html = await render(fixture({ phase: 'power', showAssist: true }))
+  for (const name of ['power-reticle', 'wedge-outline']) assert.match(html, new RegExp(`${name}\\.svg`))
   assert.match(html, /30%/)
   assert.match(html, /2.4 м\/с/)
-  assert.doesNotMatch(html, /15°/)
+  assert.match(html, /aria-label="Прибор наклона кия"/)
   assert.equal([...html.matchAll(/role="meter"/g)].length, 2)
   assert.match(html, /aria-valuemax="100" aria-valuenow="30"/)
   assert.match(html, /aria-valuemax="8" aria-valuenow="2.4"/)
@@ -92,16 +92,25 @@ test('power phase renders original vector gauges as live percent and speed, neve
 
 test('both fill levels follow the same current cue speed', async () => {
   for (const [V0, percentage, offset] of [[0.2, 3, '0.975'], [4, 50, '0.5'], [8, 100, '0']]) {
-    const html = await render(fixture({ phase: 'power', aim: { phi: 90, V0, theta: 0, a: 0, b: 0 } }))
+    const html = await render(fixture({ phase: 'power', showAssist: true, aim: { phi: 90, V0, theta: 0, a: 0, b: 0 } }))
     assert.match(html, new RegExp(`${percentage}%`))
     assert.match(html, new RegExp(`${V0.toFixed(1)} м/с`))
     assert.equal([...html.matchAll(new RegExp(`offset="${offset}"`, 'g'))].length, 4)
   }
 })
 
-test('contact phase disables the locked direction control', async () => {
-  const html = await render(fixture({ phase: 'aim' }))
+test('contact phase preserves its original Figma reticle and locked-direction hint', async () => {
+  const html = await render(fixture({ phase: 'aim', showAssist: true }))
   // Open drawer controls are exercised in browser tests; this hint also makes
   // the lock and its escape route explicit to a player using the contact HUD.
-  assert.match(html, /Направление зафиксировано/)
+  assert.match(html, /Направление сохранено/)
+  assert.match(html, /contact-ring\.svg/)
+  assert.match(html, /contact-reticle\.svg/)
+})
+
+test('auxiliary cards and gauges are hidden until Alt help is requested', async () => {
+  const html = await render(fixture({ phase: 'power', showAssist: false }))
+  assert.doesNotMatch(html, /data-testid="alt-assist"/)
+  assert.doesNotMatch(html, /role="meter"/)
+  assert.match(html, /power-reticle\.svg/)
 })

@@ -29,7 +29,7 @@ try {
         players: [{ id: 'a', displayName: 'Alex Chen' }, { id: 'b', displayName: 'Morgan Reed' }],
         snapshot: { groups: [null, null], balls: [], table: { width: 1.27, length: 2.54, pockets: [] } } },
       user: { id: 'a' }, room: { code: 'ABC123' }, aim: { phi: 90, V0: fraction * 8, theta: 15, a: 0, b: 0 },
-      phase: 'power', canShoot: true, canPlace: false, canReposition: false, placingCue: false,
+      phase: 'power', showAssist: true, canShoot: true, canPlace: false, canReposition: false, placingCue: false,
       connected: true, connection: '', remaining: 24, elapsed: 0, statusText: 'Ваш ход',
       volume: 0.5, topViewKey: 'KeyT', calledBall: '', calledPocket: '', cameraMode: 'cue',
     }

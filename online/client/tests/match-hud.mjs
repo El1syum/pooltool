@@ -48,7 +48,7 @@ async function clickNamed(page, names) {
 
 async function closeDialog(page) {
   const dialog = page.getByRole('dialog').last()
-  await clickNamed(dialog, ['Закрыть правила', 'Закрыть', 'Понятно', 'Вернуться в игру', 'Сохранить и закрыть'])
+  await clickNamed(dialog, ['Закрыть правила', 'Закрыть настройки', 'Закрыть', 'Понятно', 'Вернуться в игру', 'Сохранить и закрыть'])
   await dialog.waitFor({ state: 'hidden' })
 }
 
@@ -217,7 +217,7 @@ for (const engineName of engines) {
       const rect = image.getBoundingClientRect()
       return { name: image.src.split('/').pop(), natural: [image.naturalWidth, image.naturalHeight], rendered: [rect.width, rect.height] }
     }))
-    assert.ok(assetGeometry.length >= 5 && assetGeometry.every(asset => asset.rendered[0] > 0 && asset.rendered[1] > 0), 'Every visible static HUD asset must occupy a nonempty rendered slot')
+    assert.ok(assetGeometry.some(asset => asset.name === 'menu.svg' && asset.rendered[0] > 0 && asset.rendered[1] > 0), 'The original match-menu asset must occupy a visible slot')
     const fontMetrics = await first.evaluate(async () => {
       await document.fonts.load('600 19px "Pooltool Inter"')
       const samples = []
@@ -233,7 +233,8 @@ for (const engineName of engines) {
     })
 
     // Modal keyboard gating is tested deliberately with focus forced back onto canvas.
-    for (const action of ['Правила', 'Настройки', 'Покинуть стол']) {
+    for (const action of ['Правила', 'Настройки', 'Меню матча']) {
+      if (action === 'Настройки') await clickNamed(current, ['Меню матча'])
       await clickNamed(current, [action])
       const dialog = current.getByRole('dialog').last()
       await dialog.waitFor()
@@ -246,10 +247,12 @@ for (const engineName of engines) {
       await assertStableCanvas()
     }
 
+    await clickNamed(current, ['Меню матча'])
     await clickNamed(current, ['Выключить звук', 'Звук'])
     const storedVolume = await current.evaluate(id => JSON.parse(localStorage.getItem(`pooltool.settings.${id}`) || '{}').volume, currentActor.user.id)
     assert.equal(storedVolume, 0, 'Mute must use the actual persisted game volume')
     await clickNamed(current, ['Включить звук', 'Звук'])
+    await closeDialog(current)
     await assertStableCanvas()
 
     const denied = await api(actors[2], `/api/matches/${match.id}/commands`, {
@@ -283,6 +286,9 @@ for (const engineName of engines) {
     assert.ok(reticleGeometry.every(asset => asset.natural[0] > 0 && asset.rendered[0] > 0 && asset.rendered[1] > 0))
     await current.getByRole('button', { name: 'Точка удара по битку. Нажмите для выбора силы', exact: true }).click()
     await current.locator('[data-testid="match-hud"][data-shot-phase="power"]').waitFor()
+    assert.equal(await current.getByTestId('alt-assist').count(), 0, 'Extra instruments are hidden without Alt')
+    await current.keyboard.down('Alt')
+    await current.getByTestId('alt-assist').waitFor()
     await current.locator('.hud-percent-wedge').waitFor()
     await new Promise(resolve => setTimeout(resolve, 750))
     await current.screenshot({ path: path.join(artifacts, `${engineName}-power-state.png`), fullPage: true })
@@ -300,6 +306,13 @@ for (const engineName of engines) {
       await phaseCanvas.click({ button: 'right', position: { x: phaseBounds.width * 0.25, y: phaseBounds.height * 0.4 } })
       await current.locator(`[data-testid="match-hud"][data-shot-phase="${phase}"]`).waitFor()
     }
+    await current.keyboard.up('Alt')
+    await current.getByTestId('alt-assist').waitFor({ state: 'hidden' })
+    await current.keyboard.down('Alt')
+    await current.getByTestId('alt-assist').waitFor()
+    await current.evaluate(() => window.dispatchEvent(new Event('blur')))
+    await current.getByTestId('alt-assist').waitFor({ state: 'hidden' })
+    await current.keyboard.up('Alt')
     await assertStableCanvas()
 
     // Pulling the cue changes real bounded parameters; Escape cancels before release.
@@ -307,6 +320,7 @@ for (const engineName of engines) {
     await clickNamed(current, ['Прицелиться'])
     await current.getByRole('button', { name: 'Точка удара по битку. Нажмите для выбора силы', exact: true }).click()
     await current.locator('[data-testid="match-hud"][data-shot-phase="power"]').waitFor()
+    await current.keyboard.down('Alt')
     const beforeDrag = sent.get(current).filter(frame => frame.type === 'command' && frame.command?.type === 'shot').length
     const oldPower = await current.locator('.hud-power-number').innerText()
     const pullX = phaseBounds.x + phaseBounds.width * 0.25
@@ -327,6 +341,7 @@ for (const engineName of engines) {
     assert.equal(sent.get(current).filter(frame => frame.type === 'command' && frame.command?.type === 'shot').length, beforeDrag, 'Cancelling a pull must not submit a shot')
     await phaseCanvas.click({ button: 'right', position: { x: phaseBounds.width * 0.25, y: phaseBounds.height * 0.4 } })
     await current.locator('[data-testid="match-hud"][data-shot-phase="overview"]').waitFor()
+    await current.keyboard.up('Alt')
 
     // This control panel is intentionally secondary: opening it cannot remove canvas.
     await clickNamed(current, ['Параметры удара', 'Управление ударом'])

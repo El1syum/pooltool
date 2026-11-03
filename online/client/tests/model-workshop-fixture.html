@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Model integration fixture</title><style>body{margin:0;background:#14201c}#stage{width:100vw;height:100vh}</style></head>
+<body><div id="app"></div><div id="stage"></div><script type="module">
+import { createApp } from 'vue'
+import * as THREE from 'three'
+import ModelWorkshop from '/src/components/ModelWorkshop.vue'
+import { createGameScene } from '/src/game/createGameScene.ts'
+import { VisualAssetManager } from '/src/models/VisualAssetManager.ts'
+import * as store from '/src/models/store.ts'
+import * as types from '/src/models/types.ts'
+window.modelModules = { store, types, THREE, VisualAssetManager }
+window.libraryState = {version:1,assets:[],profile:{tableId:null,environmentId:null}}
+window.uploadCalls = []; window.publishCalls = []; window.updateCalls = []; window.adminRequests = 0
+const adapter = {
+  async load() { return structuredClone(window.libraryState) },
+  async upload(file,role) {
+    window.uploadCalls.push({name:file.name,role,bytes:await file.arrayBuffer()})
+    const id = String(window.uploadCalls.length).padStart(32,'0')
+    const { name,source,...config } = types.defaultModelSlot(file.name,{kind:'url',url:'/models/library/'+id+'.glb'})
+    const asset = {id,name:file.name,role,url:'/models/library/'+id+'.glb',bytes:file.size,enabled:true,config}
+    window.libraryState.assets.push(asset); window.libraryState.version++
+    return structuredClone(asset)
+  },
+  async update(id,patch) { window.updateCalls.push({id,patch});const asset=window.libraryState.assets.find(a=>a.id===id);Object.assign(asset,patch);window.libraryState.version++;return structuredClone(asset) },
+  async remove(id) { window.libraryState.assets.find(a=>a.id===id).enabled=false;window.libraryState.version++ },
+  async publish(selection,configs) { window.publishCalls.push({selection,configs});for(const [id,config] of Object.entries(configs))window.libraryState.assets.find(a=>a.id===id).config=config;window.libraryState.profile=selection;window.libraryState.version++;return structuredClone(window.libraryState) },
+}
+if(new URLSearchParams(location.search).get('mode')==='workshop'){
+ document.querySelector('#stage').remove()
+ window.modelApp=createApp(ModelWorkshop,{library:adapter,canManage:!new URLSearchParams(location.search).has('readonly'),onRequestAdmin:()=>window.adminRequests++,onApply:profile=>window.appliedProfile=profile}).mount('#app')
+}else{
+ document.querySelector('#app').remove()
+ // Test-only references to the actual renderer scene for occlusion regression.
+ const sceneAdd = THREE.Scene.prototype.add
+ THREE.Scene.prototype.add = function (...objects) { window.fixtureRenderScene=this;return sceneAdd.apply(this,objects) }
+ window.modelScene=createGameScene(document.querySelector('#stage'))
+ THREE.Scene.prototype.add = sceneAdd
+ window.modelScene.setState({table:{width:1.27,length:2.54,height:.8,pockets:[]},cueBallId:'cue',balls:[{id:'cue',position:[.635,.635,.028575],radius:.028575}]})
+ window.modelScene.setInteraction({canShoot:false,canPlaceCueBall:false,spectator:true})
+ window.modelScene.setCalibrationOverlay(true)
+}
+window.addEventListener('beforeunload',()=>window.modelScene?.destroy())
+window.fixtureReady=true
+</script></body></html>

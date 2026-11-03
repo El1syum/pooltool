@@ -1,3 +1,5 @@
+import type { VisualAssetLoadReport, VisualAssetProfile } from '../models/types'
+
 export type Vec3Tuple = [number, number, number]
 export type QuaternionTuple = [number, number, number, number]
 
@@ -116,6 +118,11 @@ export interface SceneCallbacks {
 }
 
 export interface GameScene {
+  /** Cosmetic GLB table/environment only; never changes physics or ball coordinates. */
+  setVisualAssets: (profile: VisualAssetProfile) => Promise<VisualAssetLoadReport>
+  getVisualAssetReport: () => VisualAssetLoadReport
+  /** Workshop-only wire reference of the actual cloth bounds and axes. */
+  setCalibrationOverlay: (visible: boolean) => void
   setState: (snapshot: GameSnapshot) => void
   setInteraction: (interaction: Partial<SceneInteraction>) => void
   setAim: (aim: Partial<AimParameters>, notify?: boolean) => void

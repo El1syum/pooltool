@@ -5,21 +5,23 @@ import type { AimState, CameraMode, ShotPhase } from '../game/types'
 import { normalizeAim, numberForPocket } from '../game/playback'
 import FigmaBallBadge from './FigmaBallBadge.vue'
 import ShotPowerGauge from './ShotPowerGauge.vue'
+import MatchAssistPanels from './MatchAssistPanels.vue'
 
 const props = defineProps<{
   match: Match; user: User; room: Room | null; aim: AimState; phase: ShotPhase
   canShoot: boolean; canPlace: boolean; canReposition: boolean; placingCue: boolean
   connected: boolean; connection: string; remaining: number; elapsed: number
   statusText: string; volume: number; topViewKey: string; calledBall: string
-  calledPocket: string; cameraMode: CameraMode
+  calledPocket: string; cameraMode: CameraMode; showAssist?: boolean
 }>()
 const emit = defineEmits<{
   settings: []; menu: []; mute: []; rules: []; camera: [action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' | 'out']
   aim: [value: AimState]; shoot: []; phase: [value: ShotPhase]; selectBall: [id: string]
-  selectPocket: [id: string]; placeCue: []; copyCode: []; panelOpen: [value: boolean]
+  selectPocket: [id: string]; placeCue: []; copyCode: []; panelOpen: [value: boolean]; toggleAssist: []
 }>()
 const base = import.meta.env.BASE_URL || '/'
 const asset = (name: string) => `${base}ui/figma-match/${name}.svg`
+const assistAsset = (name: string) => `${base}ui/figma-assist/${name}.svg`
 const controlsOpen = ref(false)
 watch(controlsOpen, value => emit('panelOpen', value))
 onBeforeUnmount(() => { if (controlsOpen.value) emit('panelOpen', false) })
@@ -67,10 +69,10 @@ defineExpose({ closeControls })
 </script>
 
 <template>
-  <section class="hud-root" :class="{ 'hud-compact': compact, 'hud-offline': !connected }" :data-shot-phase="phase" :data-aim-direction="aim.phi" data-testid="match-hud" aria-label="Интерфейс матча">
+  <section class="hud-root hud-modern" :class="{ 'hud-compact': compact, 'hud-offline': !connected }" :data-shot-phase="phase" :data-aim-direction="aim.phi" data-testid="match-hud" aria-label="Интерфейс матча">
     <div class="hud-identity" aria-label="Pooltool">
       <div class="hud-seal">8</div>
-      <div class="hud-wordmark"><strong>Pooltool</strong><span>BILLIARDS • МАТЧ {{ formatTime(elapsed) }}</span></div>
+      <div class="hud-wordmark"><strong>Pooltool</strong><span>8-BALL · МАТЧ {{ formatTime(elapsed) }}</span></div>
     </div>
 
     <div class="hud-scoreboard">
@@ -89,36 +91,35 @@ defineExpose({ closeControls })
       <div class="hud-clock" :class="{ 'hud-clock-low': remaining <= 10 && match.status === 'active' }">
         <div class="hud-turn-label"><img :src="asset('turn-light')" alt="" /><span>{{ turnLabel }}</span></div>
         <div class="hud-clock-digits" aria-label="Оставшееся время хода">{{ match.status === 'calculating' ? '··:··' : formatTime(remaining) }}</div>
-        <span class="hud-rack-detail">{{ compact ? `Обзор сверху — ${keyHint}` : 'Партия 1 · 8-BALL' }}</span>
+        <span class="hud-rack-detail">Раунд 1 · 8-BALL</span>
       </div>
     </div>
 
-    <nav class="hud-utilities" aria-label="Меню матча">
-      <button class="hud-leave" type="button" aria-label="Покинуть стол" title="Покинуть стол" @click="emit('menu')"><img :src="asset('arrow-left')" alt="" /><span>Покинуть стол</span></button>
-      <button class="hud-icon-button" type="button" :aria-label="volume > 0 ? 'Выключить звук' : 'Включить звук'" :aria-pressed="volume <= 0" :title="volume > 0 ? 'Выключить звук' : 'Включить звук'" @click="emit('mute')"><img :src="asset('volume')" alt="" /></button>
-      <button class="hud-icon-button" type="button" aria-label="Настройки" title="Настройки" @click="emit('settings')"><img :src="asset('settings')" alt="" /></button>
-    </nav>
+    <button class="hud-match-menu" type="button" aria-label="Меню матча" @click="emit('menu')"><img :src="assistAsset('menu')" alt="" /><span>Меню</span><kbd>Esc</kbd></button>
 
     <div class="hud-match-status match-status" role="status" :class="{ 'hud-status-attention': canPlace || !connected, 'hud-status-quiet': !showStatus }">{{ !connected ? connection : statusText }}</div>
 
     <div v-if="compact && match.status !== 'finished'" class="hud-target">
-      <button class="hud-reticle" type="button" :class="{ 'hud-reticle-interactive': phase === 'aim' && canShoot }" :disabled="!canShoot || phase !== 'aim'" aria-label="Точка удара по битку. Нажмите для выбора силы" @pointermove="setSpin" @pointerdown="setSpin" @click="confirmContact">
-        <img class="hud-reticle-ring" :src="asset('reticle-ring')" alt="" />
-        <img class="hud-reticle-center" :src="asset('reticle-center')" alt="" :style="{ transform: `translate(${aim.a * 158}px, ${-aim.b * 158}px)` }" />
+      <button v-if="phase === 'aim'" class="hud-reticle hud-contact-reticle" type="button" :class="{ 'hud-reticle-interactive': canShoot }" :disabled="!canShoot" aria-label="Точка удара по битку. Нажмите для выбора силы" @pointermove="setSpin" @pointerdown="setSpin" @click="confirmContact">
+        <img class="hud-reticle-ring" :src="assistAsset('contact-ring')" alt="" />
+        <img class="hud-reticle-center" :src="assistAsset('contact-reticle')" alt="" :style="{ transform: `translate(${aim.a * 77}px, ${-aim.b * 77}px)` }" />
       </button>
-      <div v-if="phase === 'power'" class="hud-charge" aria-live="polite">
+      <img v-else class="hud-power-reticle" :src="assistAsset('power-reticle')" alt="" />
+      <div v-if="phase === 'power' && showAssist" class="hud-charge" aria-live="polite">
         <ShotPowerGauge class="hud-percent-wedge" :fraction="powerFraction" unit="percent" label="Сила удара в процентах" />
         <ShotPowerGauge class="hud-speed-wedge" :fraction="powerFraction" unit="speed" label="Скорость удара в метрах в секунду" />
         <span class="hud-power-number">{{ power }}%</span><span class="hud-speed-number">{{ aim.V0.toFixed(1) }} м/с</span>
       </div>
     </div>
 
+    <MatchAssistPanels v-if="showAssist && match.status !== 'finished'" :aim="aim" :phase="phase" :can-shoot="canShoot" @aim="emit('aim', $event)" @phase="emit('phase', $event)" />
+
     <footer class="hud-footer">
-      <div class="hud-footer-actions"><button type="button" @click="emit('camera', 'top')" aria-label="Вид сверху">Взгляд сверху кнопка {{ keyHint }}</button><button type="button" class="hud-control-toggle" :aria-expanded="controlsOpen" aria-controls="hud-controls" @click="controlsOpen = !controlsOpen">Параметры удара</button></div>
-      <button class="hud-room-code" type="button" :title="room ? 'Скопировать код комнаты' : ''" :disabled="!room" @click="emit('copyCode')">{{ room ? `Комната ${room.code}` : 'Номер комнаты' }}</button>
-      <button class="hud-rules" type="button" @click="emit('rules')"><img :src="asset('help')" alt="" />Правила</button>
+      <div class="hud-footer-actions"><button type="button" @click="emit('camera', 'top')" aria-label="Вид сверху">{{ keyHint }} · вид сверху</button><button type="button" @click="emit('camera', 'free')">Обзор стола</button><button type="button" class="hud-control-toggle" :aria-expanded="controlsOpen" aria-controls="hud-controls" @click="controlsOpen = !controlsOpen">Параметры удара</button></div>
+      <span class="hud-footer-instruction">{{ phase === 'aim' ? 'ЛКМ · подтвердить точку контакта' : phase === 'power' ? 'Отпустите ЛКМ · выполнить удар' : 'Колесо мыши · приблизиться к битку' }}</span>
+      <div class="hud-footer-right"><button class="hud-room-code" type="button" :title="room ? 'Скопировать код комнаты' : ''" :disabled="!room" @click="emit('copyCode')">{{ room ? `Комната ${room.code}` : 'Стол' }}</button><span>·</span><button class="hud-rules" type="button" aria-label="Правила" @click="emit('rules')">Правила 8-ball</button><button class="hud-touch-assist" type="button" :aria-pressed="Boolean(showAssist)" @click="emit('toggleAssist')">Помощь</button></div>
     </footer>
-    <p v-if="compact || canPlace" class="hud-phase-hint">{{ phaseHint }}</p>
+    <p v-if="canPlace" class="hud-phase-hint">{{ phaseHint }}</p>
 
     <section v-if="controlsOpen" id="hud-controls" class="hud-controls" aria-label="Параметры удара">
       <div class="hud-controls-heading"><h2>Параметры удара</h2><button type="button" aria-label="Закрыть параметры удара" @click="closeControls">×</button></div>

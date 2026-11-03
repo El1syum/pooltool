@@ -21,14 +21,43 @@ reference is its `Дизайн\База` section: base frame `73:73`, aiming/pow
 interactive procedural scene rather than using the reference table screenshot.
 https://www.figma.com/design/qLURhvhuM4AZ0xibHYelU8/?node-id=73-73
 
+On 2026-11-03 the active design became
+https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=0-1
+(menu section `94:73`, game section `105:4604`). The main menu uses the original
+Figma image converted to a 1264×848 WebP, not a screenshot of a frame. Menu,
+search, private room, profile and settings now use `ClubMenu` / `ClubSettings`.
+The actual 3D scene remains procedural until final art models are supplied.
+
 The match HUD lives in `online/client/src/components/MatchHud.vue`, with the
 Figma SVG exports in `public/ui/figma-match`, self-hosted Inter/Lora fonts and
-scoped `match-hud.css`. App.vue remains the network/state authority. Preparation
+scoped `match-hud.css` plus `match-design.css`. New Alt-assist originals are in
+`public/ui/figma-assist`. Additional contact/power/elevation cards and the live
+%/m/s gauges appear while Alt is held (touch has a Help toggle); blur/visibility
+loss releases Alt. Shift+wheel changes cue elevation. Ranked matches force the
+aim line off, including spectators and reconnects, without overwriting the
+saved casual preference. App.vue remains the network/state authority. Preparation
 phases are overview (heading before first LMB) → aim (heading fixed, cue-contact
 selection only) → power (heading/contact fixed, downward pull sets V0). Both
 dynamic Figma wedge gauges show V0 as percent and m/s, not elevation. The server
 still validates and simulates the shot. The accessible parameters drawer
 preserves numeric and keyboard controls.
+
+The shared model library is cosmetic only: `online/server/assets.py`, public
+`/api/assets/library`, admin APIs under `/api/assets`, GLB files under
+`/models/library/`. `ModelWorkshop` supports local previews, transforms,
+materials, hidden nodes, calibration and explicit atomic server publication of
+table/environment. Only self-contained GLB 2.0 up to 50 MiB is accepted. New
+files/configuration persist outside releases at `/opt/pooltool-online/shared/assets`
+and in the existing SQLite DB. Disabled/error art falls back to procedural
+geometry; authoritative dimensions, balls, pockets and physics are unchanged.
+
+User explicitly chose separate admin username/password on the HTTP preview
+(no HTTPS/SSH requirement for this test). Use a unique test-only password;
+credentials can be intercepted on HTTP. Server stores scrypt hashes only,
+cookie sessions are HttpOnly/SameSite Strict with CSRF protection/rate limits.
+Create credentials with `online.ops.create_asset_admin`, outside Git. Never put
+plaintext passwords or admin hashes into commits or telemetry. Production TLS
+and VK publication remain deferred.
 
 The default preview `/` now sends `Cache-Control: no-store` for HTML (including
 HEAD/304), so a version query is not required. Existing pre-fix cached tabs may
@@ -60,7 +89,7 @@ Do not run multiple ASGI workers against the current SQLite authority.
 
 Read `online/README.md`, `online/server/API_CONTRACT.md`,
 `online/DELIVERY.md` and `online/ops/README.md` for commands and verified scope.
-Native Safari/device certification, a production load SLA, final Figma styling
+Native Safari/device certification, a production load SLA, final 3D art/audio
 and VK publication are explicitly not claimed complete.
 
 ## Git identity
