@@ -64,6 +64,15 @@ Free-scene confirmation additionally covers clicks outside the felt, rays that
 miss the table plane entirely, preserved heading/contact, a separate power press,
 UI-button exclusion, ball/pocket call-selection priority and permission gating.
 
+`optional-calls.mjs` runs two real App clients against the real service (defaults
+to port 8791), plays an opening miss, places the opponent's cue ball and submits
+an uncalled post-break shot through the actual parameters drawer. It checks no
+mandatory warning, no call fields, physical trajectories on both clients and
+identical final snapshots. It creates/cleans only its own disposable guest room.
+Use `POOLTOOL_URL`, `BROWSERS=chromium,webkit` and `PLAYWRIGHT_MODULE` as above.
+`match-assist.mjs` additionally verifies the optional selectors and enabled shot
+button with a legacy `callShotRequired=true` component fixture.
+
 `power-gauges.mjs` is an isolated visual component check, not gameplay evidence.
 It renders the actual Vue HUD and original external Figma SVG in Chromium/WebKit,
 counts gold pixels at 0/25/50/100%, verifies both units share the same fill and

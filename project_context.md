@@ -163,6 +163,15 @@ SQLite/runtime backup is `/opt/pooltool-online/shared/backup-models-5ef9e95`
 (42 completed matches preserved). No passwords/config/migration guards were
 changed; the service restarted once for the new table-reference endpoint.
 
+## No compulsory shot calls (2026-11-04)
+
+On 2026-11-04 compulsory ball/pocket declarations were removed from the web game,
+including the eight. Optional target markers do not restrict physical results.
+The online-only `OnlineEightBall` adapter preserves contact/cushion/scratch and
+early-eight rules. The first legal target pot after the break assigns groups by
+event order; break pots keep the table open. Existing active match flags are
+normalized on recovery without rewriting completed games or shot history.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

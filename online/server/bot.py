@@ -28,8 +28,9 @@ from pooltool.ai.pot.core import (
     is_pocket_occluded,
     is_room_for_cue_ball,
 )
-from pooltool.ruleset.eight_ball import is_legal, is_turn_over
+from pooltool.ruleset.eight_ball import is_turn_over
 
+from .eight_ball import is_legal
 from .physics import ENGINE, MAX_EVENTS, PhysicsEngine, PhysicsError, _restore_game, _restore_system
 
 LEVELS = {
@@ -109,9 +110,6 @@ def _outcome(state, shot):
     system = _restore_system(state)
     game = _restore_game(state)
     constraints = game.shot_constraints
-    if constraints.call_shot:
-        constraints.ball_call = shot["ballCall"]
-        constraints.pocket_call = shot["pocketCall"]
     system.strike(V0=shot["V0"], phi=shot["phi"], theta=0.0, a=0.0, b=shot.get("b", 0.0))
     pt.simulate(system, engine=ENGINE, inplace=True, max_events=MAX_EVENTS, t_final=60.0)
     legal, _ = is_legal(system, constraints, state["rules"]["shotNumber"] == 0)

@@ -721,6 +721,13 @@ class GameService:
                     match, physics = decode(row["payload"]), decode(row["physics"])
                     if match["status"] == "finished":
                         continue
+                    # Older active matches required a declared ball/pocket. The
+                    # web variant now plays without compulsory calls, including
+                    # immediately after reconnect; leave historical shot results
+                    # and finished matches untouched.
+                    for current in (match.get("snapshot"), physics.get("rules"), physics.get("snapshot")):
+                        if isinstance(current, dict) and "callShotRequired" in current:
+                            current["callShotRequired"] = False
                     pending = decode(row["pending"]) if row["pending"] else None
                     if pending:
                         pending["startedAt"] = self.now()

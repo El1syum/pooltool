@@ -301,6 +301,57 @@ def test_restart_sessions_state_disconnect_grace_and_history(tmp_path):
             assert client.get("/api/me", headers=b).json()["user"]["wins"] == 1
 
 
+@pytest.mark.parametrize("status", ["active", "calculating"])
+def test_restart_removes_compulsory_calls_only_from_current_state(tmp_path, status):
+    database = str(tmp_path / f"legacy-calls-{status}.db")
+    clock = [1_800_000_000.0]
+    with TestClient(create_app(database=database, engine=TestPhysics(), process_pool=False, now=lambda: clock[0], background=False)) as client:
+        a, _ = login(client, "А")
+        b, _ = login(client, "Б")
+        _, match = start_room(client, a, b)
+        service = client.app.state.service
+        saved, physics, _ = service._match(match["id"])
+        saved.update(status=status, turn=7, revision=12)
+        saved["snapshot"].update(callShotRequired=True, groups=["solids", "stripes"],
+                                 shotNumber=7, score={"player0": 2, "player1": 3})
+        physics["snapshot"] = copy.deepcopy(saved["snapshot"])
+        physics["rules"] = {"callShotRequired": True, "groups": ["solids", "stripes"],
+                            "shotNumber": 7, "turnNumber": 4, "score": {"player0": 2, "player1": 3}}
+        saved["lastShot"] = {"commandId": "legacy-result", "result": {
+            "rules": {"callShotRequired": True},
+            "initialState": copy.deepcopy(saved["snapshot"]),
+            "finalState": copy.deepcopy(saved["snapshot"]),
+            "trajectory": {"duration": 0.1, "frames": [{"t": 0, "balls": []}]},
+        }}
+        expected_match = copy.deepcopy(saved)
+        expected_physics = copy.deepcopy(physics)
+        finished = copy.deepcopy(saved)
+        finished.update(id=f"{match['id']}-finished", status="finished")
+        with service.store.transaction() as db:
+            service._save_match(db, saved, physics)
+            service._save_match(db, finished, physics)
+        finished_row = tuple(service.store.db.execute(
+            "SELECT payload,physics,pending,updated_at FROM matches WHERE id=?", (finished["id"],)).fetchone())
+
+    clock[0] += 10
+    with TestClient(create_app(database=database, engine=TestPhysics(), process_pool=False, now=lambda: clock[0], background=False)) as client:
+        service = client.app.state.service
+        public = client.get(f"/api/matches/{match['id']}", headers=a).json()["match"]
+        assert public["snapshot"]["callShotRequired"] is False
+        recovered, recovered_physics, _ = service._match(match["id"])
+        assert recovered["status"] == "active"
+        assert recovered["turn"] == expected_match["turn"]
+        assert recovered["revision"] == expected_match["revision"]
+        expected_match["snapshot"]["callShotRequired"] = False
+        expected_physics["snapshot"]["callShotRequired"] = False
+        expected_physics["rules"]["callShotRequired"] = False
+        assert recovered["snapshot"] == expected_match["snapshot"]
+        assert recovered_physics == expected_physics
+        assert recovered["lastShot"] == expected_match["lastShot"]
+        assert tuple(service.store.db.execute(
+            "SELECT payload,physics,pending,updated_at FROM matches WHERE id=?", (finished["id"],)).fetchone()) == finished_row
+
+
 def test_profile_settings_and_client_telemetry_dedupe_security(setup):
     client, _, _ = setup
     a, data_a = login(client, "А")

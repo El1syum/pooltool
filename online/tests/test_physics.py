@@ -83,7 +83,7 @@ class PhysicsTests(unittest.TestCase):
         self.assertEqual(result["rules"]["nextPlayer"], 1)
         self.assertTrue(result["rules"]["ballInHand"])
         self.assertTrue(result["rules"]["needsPlacement"])
-        self.assertTrue(result["rules"]["callShotRequired"])
+        self.assertFalse(result["rules"]["callShotRequired"])
         self.assertTrue(result["rules"]["foulReason"])
 
     def test_low_power_break_can_settle_a_dense_rack_without_truncation(self):
@@ -145,7 +145,7 @@ class PhysicsTests(unittest.TestCase):
         with self.assertRaisesRegex(PhysicsError, "пересекается"):
             PhysicsEngine.place_cue_ball(free, object_ball[0], object_ball[1], shooter=1)
 
-    def test_shot_clock_foul_and_called_shot_validation(self):
+    def test_shot_clock_foul_requires_placement_but_not_a_call(self):
         state = PhysicsEngine.timeout(PhysicsEngine.new_match(4), shooter=0)
         self.assertEqual(state["snapshot"]["currentPlayer"], 1)
         self.assertEqual(state["snapshot"]["foulReason"], "Shot clock expired")
@@ -154,11 +154,76 @@ class PhysicsTests(unittest.TestCase):
         state = PhysicsEngine.place_cue_ball(state, 0.4, 0.4, shooter=1)
         self.assertFalse(state["snapshot"]["needsPlacement"])
         self.assertTrue(state["snapshot"]["ballInHand"])
-        with self.assertRaisesRegex(PhysicsError, "закажите шар"):
-            PhysicsEngine.validate_shot(state, {}, shooter=1)
-        with self.assertRaisesRegex(PhysicsError, "шести луз"):
-            PhysicsEngine.validate_shot(state, {"ballCall": "1", "pocketCall": "unknown"}, shooter=1)
+        self.assertFalse(state["snapshot"]["callShotRequired"])
+        PhysicsEngine.validate_shot(state, {}, shooter=1)
+        PhysicsEngine.validate_shot(state, {"ballCall": "1"}, shooter=1)
+        PhysicsEngine.validate_shot(state, {"pocketCall": "lt"}, shooter=1)
+        # Old clients' target markers are advisory, not rule constraints.
+        PhysicsEngine.validate_shot(state, {"ballCall": "missing", "pocketCall": "unknown"}, shooter=1)
         PhysicsEngine.validate_shot(state, {"ballCall": "1", "pocketCall": "lt"}, shooter=1)
+
+    def test_real_uncalled_pot_assigns_actual_group_and_continues(self):
+        state = self.corner_pot_state("1")
+        state["system"]["balls"]["8"]["s"] = 0
+        state["system"]["balls"]["8"]["rvw"][0] = [0.4, 0.6, state["snapshot"]["balls"][0]["radius"]]
+        before = copy.deepcopy(state)
+        # Includes a restored old mandatory flag: it must not reject the shot.
+        for markers in ({}, {"ballCall": "9", "pocketCall": "rb"}, {"ballCall": "9"}):
+            with self.subTest(markers=markers):
+                result = PhysicsEngine.simulate(state, {"V0": 1.2, "phi": 135, "b": -0.35, **markers})
+                self.assertTrue(result["rules"]["legal"])
+                self.assertFalse(result["rules"]["turnOver"])
+                self.assertEqual(result["rules"]["groups"], ["solids", "stripes"])
+                self.assertEqual(result["rules"]["hittable"], ["8"])
+                self.assertFalse(result["rules"]["callShotRequired"])
+                self.assertEqual(result["rules"]["score"], {"player0": 7, "player1": 6})
+                self.assertFalse(result["initialState"]["callShotRequired"])
+        self.assertEqual(state, before)
+
+    def test_legal_uncalled_eight_wins_even_with_both_groups_complete(self):
+        for groups in (["solids", "stripes"], ["stripes", "solids"]):
+            for markers in ({}, {"ballCall": "1", "pocketCall": "rb"}):
+                with self.subTest(groups=groups, markers=markers):
+                    state = self.corner_pot_state("8")
+                    state["system"]["balls"]["9"]["s"] = 4
+                    state["system"]["balls"]["9"]["rvw"] = [[0, 0, -0.1], [0.0] * 3, [0.0] * 3]
+                    state["rules"].update(groups=groups, hittable=["8"])
+                    result = PhysicsEngine.simulate(state, {"V0": 1.2, "phi": 135, "b": -0.35, **markers})
+                    self.assertTrue(result["rules"]["legal"])
+                    self.assertTrue(result["rules"]["gameOver"])
+                    self.assertEqual(result["rules"]["winner"], 0)
+                    self.assertEqual(result["rules"]["score"], {"player0": 8, "player1": 7})
+
+    def test_uncalled_eight_miss_and_wrong_group_still_respect_rules(self):
+        eight = self.corner_pot_state("8")
+        eight["rules"].update(groups=["solids", "stripes"], hittable=["8"])
+        missed = PhysicsEngine.simulate(eight, {"V0": 0.2, "phi": 270})
+        self.assertFalse(missed["rules"]["gameOver"])
+        self.assertTrue(missed["rules"]["turnOver"])
+        self.assertEqual(missed["rules"]["nextPlayer"], 1)
+
+        wrong = self.corner_pot_state("1")
+        wrong["rules"].update(groups=["stripes", "solids"], hittable=[str(i) for i in range(9, 16)])
+        result = PhysicsEngine.simulate(wrong, {"V0": 1.2, "phi": 135, "b": -0.35})
+        self.assertFalse(result["rules"]["legal"])
+        self.assertIn("First contact", result["rules"]["foulReason"])
+        self.assertEqual(result["rules"]["groups"], ["stripes", "solids"])
+        self.assertEqual(result["rules"]["nextPlayer"], 1)
+
+    def test_uncalled_break_pot_keeps_table_open_and_bot_uses_same_eight_rule(self):
+        from online.server.bot import _outcome
+        state = self.corner_pot_state("1")
+        state["system"]["balls"]["8"]["s"] = 0
+        state["system"]["balls"]["8"]["rvw"][0] = [0.4, 0.6, state["snapshot"]["balls"][0]["radius"]]
+        state["rules"]["shotNumber"] = 0
+        result = PhysicsEngine.simulate(state, {"V0": 1.2, "phi": 135, "b": -0.35})
+        self.assertTrue(result["rules"]["legal"])
+        self.assertFalse(result["rules"]["turnOver"])
+        self.assertEqual(result["rules"]["groups"], [None, None])
+        self.assertEqual(result["rules"]["hittable"], [str(i) for i in range(1, 16) if i != 8])
+        eight = self.corner_pot_state("8")
+        eight["rules"].update(groups=["solids", "stripes"], hittable=["8"])
+        self.assertEqual(_outcome(eight, {"V0": 1.2, "phi": 135, "b": -0.35}), (True, True))
 
     def test_equal_acceleration_uses_quadratic_collision_time(self):
         # Both balls roll in +x with exactly equal deceleration.  Relative

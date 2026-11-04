@@ -19,9 +19,14 @@ const state = reactive({
 })
 window.assistFixture = state
 window.aimChanges = []
+window.shotRequests = 0
+window.callSelections = []
 createApp({ render: () => h(MatchHud, { ...state,
   onAim: aim => { state.aim = aim; window.aimChanges.push(aim) },
   onPhase: phase => { state.phase = phase },
+  onShoot: () => { window.shotRequests++ },
+  onSelectBall: id => { state.calledBall = id; window.callSelections.push({ ball: id }) },
+  onSelectPocket: id => { state.calledPocket = id; window.callSelections.push({ pocket: id }) },
 }) }).mount('#app')
 window.fixtureReady = true
 </script></body></html>

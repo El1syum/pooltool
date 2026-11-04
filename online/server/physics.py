@@ -21,14 +21,15 @@ import pooltool as pt
 from pooltool.evolution.engine import SimulationEngine
 from pooltool.objects.ball.datatypes import BallState
 from pooltool.physics.resolve.resolver import default_resolver
-from pooltool.ruleset.datatypes import BallInHandOptions, ShotConstraints, ShotInfo
-from pooltool.ruleset.eight_ball import BallGroup, is_legal
+from pooltool.ruleset.datatypes import BallInHandOptions, ShotConstraints
+from pooltool.ruleset.eight_ball import BallGroup
+
+from .eight_ball import OnlineEightBall
 
 STATE_VERSION = 1
 MAX_EVENTS = 10000
 MAX_DURATION = 60.0
 PLAYBACK_DT = 1 / 60
-POCKET_ALIASES = {"1": "lb", "2": "lc", "3": "lt", "4": "rt", "5": "rc", "6": "rb"}
 ENGINE = SimulationEngine(resolver=default_resolver())
 
 
@@ -85,8 +86,8 @@ def _serialize_constraints(constraints: ShotConstraints) -> dict[str, Any]:
 
 def _restore_game(state: dict[str, Any]):
     data = state["rules"]
-    game = pt.get_ruleset(pt.GameType.EIGHTBALL)(
-        [pt.Player("player0"), pt.Player("player1")]
+    game = OnlineEightBall(
+        [pt.Player("player0"), pt.Player("player1")], data["groups"]
     )
     game.active_idx = int(data["currentPlayer"])
     game.shot_number = int(data["shotNumber"])
@@ -97,7 +98,7 @@ def _restore_game(state: dict[str, Any]):
         movable=data.get("movable", []),
         cueable=["cue"],
         hittable=tuple(data["hittable"]),
-        call_shot=bool(data["callShotRequired"]),
+        call_shot=False,
     )
     return game
 
@@ -234,7 +235,7 @@ class PhysicsEngine:
             random.setstate(py_random)
             np.random.set_state(np_random)
         system = pt.System(table=table, balls=balls, cue=pt.Cue.default())
-        game = pt.get_ruleset(pt.GameType.EIGHTBALL)(
+        game = OnlineEightBall(
             [pt.Player("player0"), pt.Player("player1")]
         )
         state = {
@@ -286,7 +287,7 @@ class PhysicsEngine:
             "ballInHandRegion": rules["ballInHandRegion"],
             "needsPlacement": rules.get("needsPlacement", False),
             "winner": rules["winner"],
-            "callShotRequired": rules["callShotRequired"],
+            "callShotRequired": False,
             "hittable": list(rules["hittable"]),
             "shotNumber": rules["shotNumber"],
             "foul": rules.get("foul", False),
@@ -317,17 +318,6 @@ class PhysicsEngine:
             raise PhysicsError("Бить можно только битком")
         if state["system"]["balls"]["cue"]["s"] == pt.constants.pocketed:
             raise PhysicsError("Перед ударом установите биток")
-        constraints = state["rules"]
-        if constraints["callShotRequired"]:
-            ball_call = str(shot.get("ballCall") or shot.get("ball_call") or "")
-            pocket_call = str(shot.get("pocketCall") or shot.get("pocket_call") or "")
-            if ball_call not in constraints["hittable"]:
-                raise PhysicsError("Перед ударом закажите шар своей группы")
-            if state["system"]["balls"][ball_call]["s"] == pt.constants.pocketed:
-                raise PhysicsError("Нельзя заказать уже забитый шар")
-            pocket_call = POCKET_ALIASES.get(pocket_call, pocket_call)
-            if pocket_call not in ("lb", "lc", "lt", "rb", "rc", "rt"):
-                raise PhysicsError("Перед ударом закажите одну из шести луз")
         return values
 
     @staticmethod
@@ -336,10 +326,6 @@ class PhysicsEngine:
         initial = PhysicsEngine.snapshot(state)
         system = _restore_system(state)
         game = _restore_game(state)
-        if game.shot_constraints.call_shot:
-            game.shot_constraints.ball_call = str(shot.get("ballCall") or shot.get("ball_call"))
-            pocket = str(shot.get("pocketCall") or shot.get("pocket_call"))
-            game.shot_constraints.pocket_call = POCKET_ALIASES.get(pocket, pocket)
         system.strike(**values)
         pt.simulate(system, engine=ENGINE, inplace=True, max_events=MAX_EVENTS, t_final=MAX_DURATION)
         if len(system.events) >= MAX_EVENTS or system.t >= MAX_DURATION:
@@ -363,25 +349,10 @@ class PhysicsEngine:
             {"ball": e["ids"][0], "pocket": e["ids"][1], "time": e["time"], "order": index + 1}
             for index, e in enumerate(e for e in events if e["type"] == "ball_pocket")
         ]
-        # Upstream eight-ball's get_score reads self.shot_info.legal while
-        # build_shot_info is still building that very object.  Seed it with this
-        # shot's actual legality, so restored games and the winning eight shot
-        # do not depend on a missing or stale previous ShotInfo.
-        legal, reason = is_legal(system, game.shot_constraints, game.shot_number == 0)
-        game.shot_info = ShotInfo(
-            player=game.active_player, legal=legal, reason=reason,
-            turn_over=False, game_over=False, winner=None, score=game.score,
-        )
         game.process_and_advance(system)
         info = game.shot_info
         if not info.legal:
             _ensure_safe_cue_respot(system)
-        groups = list(state["rules"]["groups"])
-        if groups[0] is None and info.legal and not info.turn_over and state["rules"]["callShotRequired"]:
-            called = str(shot.get("ballCall") or shot.get("ball_call"))
-            assigned = BallGroup.SOLIDS if called in BallGroup.SOLIDS.balls else BallGroup.STRIPES
-            groups[shooter] = str(assigned)
-            groups[1 - shooter] = str(BallGroup.STRIPES if assigned == BallGroup.SOLIDS else BallGroup.SOLIDS)
         winner = None if info.winner is None else int(info.winner.name[-1])
         next_state = {
             "version": STATE_VERSION,
@@ -392,7 +363,7 @@ class PhysicsEngine:
                 "currentPlayer": game.active_idx,
                 "shotNumber": state["rules"]["shotNumber"] + 1,
                 "turnNumber": game.turn_number,
-                "groups": groups,
+                "groups": list(game.groups),
                 "score": dict(game.score),
                 "winner": winner,
                 "foul": not info.legal,
@@ -516,7 +487,7 @@ class PhysicsEngine:
         rules["needsPlacement"] = True
         rules["ballInHandRegion"] = str(BallInHandOptions.ANYWHERE)
         rules["movable"] = ["cue"]
-        rules["callShotRequired"] = True
+        rules["callShotRequired"] = False
         target = rules["groups"][1 - shooter]
         group = BallGroup.UNDECIDED if target is None else BallGroup(target)
         balls = next_state["system"]["balls"]

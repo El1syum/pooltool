@@ -106,8 +106,31 @@ try {
   }))
   assert.ok(clockRows[1].top >= clockRows[0].bottom && clockRows[2].top >= clockRows[1].bottom, `Mobile clock parts must form separate rows: ${JSON.stringify(clockRows)}`)
   await page.screenshot({ path: path.join(artifacts, `${engine}-390x844-overview.png`) })
+  // A recovered legacy snapshot must not re-introduce mandatory call UI.
+  // This is a component-only check; the authoritative no-call shot is covered
+  // separately by the real-engine match integration tests.
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.evaluate(() => {
+    const state = window.assistFixture
+    state.user = { id: 'a' }
+    state.canShoot = true
+    state.calledBall = ''
+    state.calledPocket = ''
+    state.match.snapshot.callShotRequired = true
+    state.match.snapshot.balls = [{ id: '1', position: [0, 0, .03], pocketed: false }]
+    state.match.snapshot.table.pockets = [{ id: 'lt', position: [0, 1.98, 0], radius: .062 }]
+  })
+  await page.getByRole('button', { name: 'Параметры удара', exact: true }).click()
+  const calls = page.locator('.hud-call-title')
+  assert.deepEqual(await calls.allTextContents(), ['Заказ шара · необязательно', 'Заказ лузы · необязательно'])
+  assert.equal(await page.getByRole('button', { name: 'Удар', exact: true }).isEnabled(), true)
+  await page.getByRole('button', { name: 'Удар', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.shotRequests), 1, 'No call selection is needed to request a shot')
+  await page.getByRole('button', { name: 'Шар 1', exact: true }).click()
+  await page.getByRole('button', { name: 'Луза 3', exact: true }).click()
+  assert.deepEqual(await page.evaluate(() => window.callSelections), [{ ball: '1' }, { pocket: 'lt' }], 'Optional target selectors remain available')
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ engine, geometry, fills, layouts, keyboardSliders: true, contactLocksDirection: true, jsErrors: errors.length }))
+  console.log(JSON.stringify({ engine, geometry, fills, layouts, keyboardSliders: true, contactLocksDirection: true, optionalCalls: true, jsErrors: errors.length }))
 } finally {
   await browser?.close()
   await server.close()

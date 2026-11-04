@@ -114,15 +114,21 @@ spectators. POST `/api/matches/{matchId}/commands` accepts:
 
 ```json
 {"commandId":"unique_uuid","expectedRevision":0,"type":"shot",
- "payload":{"V0":3,"phi":90,"theta":0,"a":0,"b":0,
-            "ballCall":"1","pocketCall":"lb"}}
+ "payload":{"V0":3,"phi":90,"theta":0,"a":0,"b":0}}
 ```
 
 Other types: `placeCueBall` with `{x,y}`, and `surrender` with `{}`. Aim is in
 degrees; V0 is m/s (0.05–8); theta is 0–60; a/b are cue contact coordinates with
 `a²+b² <= .81`. The server rejects extra fields, positions and claimed outcomes.
-Eight-ball requires a called ball/pocket after the opening break. Pocket IDs are
-`lb,lc,lt,rt,rc,rb`; UI numeric aliases 1–6 are accepted by the engine.
+The web eight-ball variant does not require a ball/pocket call, including for
+the eight. Optional `ballCall`/`pocketCall` fields remain compatible as advisory
+target markers; they do not restrict actual potting, continuation or group
+assignment. `snapshot.callShotRequired` is always false. A legal post-break pot
+continues the turn; the first legally potted target after the break assigns the
+groups (physical event order if both groups are potted). Break pots keep the
+table open. The eight may be potted in any pocket only after the shooter's
+group is complete; early eight, scratches and wrong first contacts still foul.
+This online variant does not change the upstream/native ruleset or physics.
 Only the current player may shoot/place. Spectators cannot issue commands.
 Placement is accepted only with ball-in-hand and legal position/overlap checks.
 
