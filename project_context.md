@@ -172,6 +172,17 @@ early-eight rules. The first legal target pot after the break assigns groups by
 event order; break pots keep the table open. Existing active match flags are
 normalized on recovery without rewriting completed games or shot history.
 
+Deployed commit `29c4823` to the default preview, client
+`/assets/index-BKrqx33R.js` (CSS unchanged). The backend restarted once and is
+ready under PID 3702768. Online SQLite backup and prior runtime are under
+`/opt/pooltool-online/shared/backup-optional-calls-29c4823`; all 45 completed
+matches were verified byte-identical and the shared model catalogue unchanged.
+Local verification: 105 Python tests +520 subtests, 58 client checks, actual
+post-break uncalled GUI shots/shared state in Chromium and WebKit; legacy active
+match recovery, legal/early eight, group assignment, misses and bot rules covered.
+The public preview also passed the same two-client post-break GUI scenario in
+Chromium and WebKit, with no mandatory warnings, JavaScript or static-asset errors.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
