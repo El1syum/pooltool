@@ -21,10 +21,10 @@ player bearer tokens or nicknames never authorize a library mutation.
 | POST `/api/assets/admin/login` | `{username,password}` | `{authenticated:true,username,csrfToken,expiresAt}` + HttpOnly cookie |
 | GET `/api/assets/admin/session` | — | `{authenticated,configured,username?,csrfToken?,expiresAt?}` |
 | POST `/api/assets/admin/logout` | — | `{authenticated:false}` |
-| POST `/api/assets/models?name=...&role=table` | raw GLB bytes | `{asset,version}` |
+| POST `/api/assets/models?name=...&role=table&expectedVersion=N` | raw GLB bytes | `{asset,version}` |
 | PATCH `/api/assets/models/{id}` | `{name?,role?,enabled?,config?,expectedVersion?}` | `{asset,version}` |
-| DELETE `/api/assets/models/{id}` | — | `{asset,version}` (soft disable) |
-| PUT `/api/assets/library/profile` | `{tableId,environmentId,configs?,expectedVersion?}` | library snapshot |
+| DELETE `/api/assets/models/{id}?expectedVersion=N` | — | `{asset,version}` (soft disable) |
+| PUT `/api/assets/library/profile` | `{tableId,environmentId,configs?,names?,expectedVersion?}` | library snapshot |
 
 `asset = {id,name,role,bytes,sha256,enabled,config,url,createdAt,updatedAt}`.
 Roles are `table` and `environment`; each selected ID must be an enabled model of
@@ -43,9 +43,16 @@ are `#RRGGBB`. Position is limited to ±100 m, rotation to ±3600°, scale to
 be finite. Unknown fields are rejected. PATCH merges supplied config fields with
 the existing config; a supplied material/map field replaces that field.
 
-Profile `configs?:Record<selected-id,config>` publishes both slots and their full
-draft configs atomically. An optional `expectedVersion` guards against concurrent
-edits and returns 409 if stale. Every successful mutation increments the global
+Profile `configs?:Record<selected-id,config>` and `names?:Record<selected-id,string>`
+publish both slots, their full draft configs and model names atomically. Names
+must contain 1–160 visible characters. Unselected IDs are rejected without any
+partial changes. Optional `expectedVersion` guards uploads, edits, disables and
+publication against concurrent edits and returns 409 if stale. Uploads check it
+again after asynchronous disk validation, inside the commit transaction; a
+conflict removes the uncommitted GLB and leaves no partial file. Existing HTTP
+clients omitting the optional guard remain compatible. The workshop always sends
+the revision attached to its draft, not an unrelated newer catalogue response.
+Every successful mutation increments the global
 integer version. Disabling or changing the role of a selected model clears that
 slot; restoring with `enabled:true` preserves its ID, metadata and file. No endpoint
 permanently deletes files. With null slots the renderer keeps its procedural art.

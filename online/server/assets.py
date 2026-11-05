@@ -27,7 +27,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 import uuid
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -175,7 +175,13 @@ class ProfileUpdate(StrictAssetModel):
     tableId: str | None
     environmentId: str | None
     configs: dict[str, ModelConfiguration] = Field(default_factory=dict, max_length=2)
+    names: dict[str, str] = Field(default_factory=dict, max_length=2)
     expectedVersion: int | None = Field(default=None, ge=0)
+
+    @field_validator("names")
+    @classmethod
+    def display_names(cls, values):
+        return {asset_id: _name(value) for asset_id, value in values.items()}
 
 
 def validate_glb_file(path: Path, byte_length: int) -> None:
@@ -493,7 +499,7 @@ class AssetLibrary:
         else:
             db.execute("UPDATE asset_library_state SET version=version+1,profile=?,updated_at=? WHERE singleton=1", (encode(profile), self.now()))
 
-    async def upload(self, request, *, name, role):
+    async def upload(self, request, *, name, role, expected_version=None):
         self.admin_session(request, mutation=True)
         try:
             name = _name(name)
@@ -508,6 +514,7 @@ class AssetLibrary:
         if declared.isdigit() and int(declared) > MAX_MODEL_BYTES:
             raise HTTPException(413, "Модель превышает 50 МБ")
         async with self.upload_lock:
+            self._check_version(expected_version)
             usage = self.store.db.execute("SELECT COUNT(*),COALESCE(SUM(byte_size),0) FROM model_assets").fetchone()
             if usage[0] >= MAX_LIBRARY_ASSETS or usage[1] >= MAX_LIBRARY_BYTES:
                 raise HTTPException(409, "Достигнут лимит библиотеки; обратитесь к оператору сервера")
@@ -537,6 +544,11 @@ class AssetLibrary:
                 await _disk(os.replace, temp_path, final_path)
                 timestamp = self.now()
                 with self.store.transaction() as db:
+                    # Streaming, validation and the file move all yield. A
+                    # second administrator may have changed the library since
+                    # the initial check; reject rather than advance an old
+                    # preparation draft to a fresh revision implicitly.
+                    self._check_version(expected_version)
                     db.execute("INSERT INTO model_assets VALUES(?,?,?,?,?,?,1,?,?)",
                                (asset_id, digest.hexdigest(), name, role, size,
                                 encode(ModelConfiguration().model_dump(mode="json", exclude_none=True)), timestamp, timestamp))
@@ -564,6 +576,7 @@ class AssetLibrary:
             if profile[f"{role}Id"] == asset_id and (not values["enabled"] or values["role"] != role):
                 profile[f"{role}Id"] = None
         with self.store.transaction() as db:
+            self._check_version(update.expectedVersion)
             db.execute("UPDATE model_assets SET name=?,role=?,enabled=?,config=?,updated_at=? WHERE id=?",
                        (values["name"], values["role"], int(values["enabled"]), encode(values["config"]), self.now(), asset_id))
             self._bump(db, profile=profile)
@@ -575,14 +588,20 @@ class AssetLibrary:
         selected = {value for value in profile.values() if value is not None}
         if set(update.configs) - selected:
             raise HTTPException(422, "Конфигурации должны относиться только к выбранным моделям")
+        if set(update.names) - selected:
+            raise HTTPException(422, "Названия должны относиться только к выбранным моделям")
         for role in ROLES:
             asset_id = profile[f"{role}Id"]
             if asset_id is not None and self._asset(asset_id, enabled_only=True)["role"] != role:
                 raise HTTPException(422, "Роль выбранной модели не совпадает с ролью слота")
         with self.store.transaction() as db:
+            self._check_version(update.expectedVersion)
             for asset_id, config in update.configs.items():
                 db.execute("UPDATE model_assets SET config=?,updated_at=? WHERE id=?",
                            (encode(config.model_dump(mode="json", exclude_none=True)), self.now(), asset_id))
+            for asset_id, name in update.names.items():
+                db.execute("UPDATE model_assets SET name=?,updated_at=? WHERE id=?",
+                           (name, self.now(), asset_id))
             self._bump(db, profile=profile)
         return self.snapshot()
 
@@ -660,8 +679,9 @@ def asset_router() -> APIRouter:
         return current.snapshot(include_disabled=includeDisabled)
 
     @router.post("/api/assets/models")
-    async def upload_asset(request: Request, name: str = "Модель", role: str = "table"):
-        return await library(request).upload(request, name=name, role=role)
+    async def upload_asset(request: Request, name: str = "Модель", role: str = "table",
+                           expectedVersion: Annotated[int | None, Query(ge=0)] = None):
+        return await library(request).upload(request, name=name, role=role, expected_version=expectedVersion)
 
     @router.patch("/api/assets/models/{asset_id}")
     async def update_asset(asset_id: str, request: Request):
@@ -670,10 +690,11 @@ def asset_router() -> APIRouter:
         return current.update(asset_id, await _json(request, AssetUpdate))
 
     @router.delete("/api/assets/models/{asset_id}")
-    async def disable_asset(asset_id: str, request: Request):
+    async def disable_asset(asset_id: str, request: Request,
+                            expectedVersion: Annotated[int | None, Query(ge=0)] = None):
         current = library(request)
         current.admin_session(request, mutation=True)
-        return current.update(asset_id, AssetUpdate(enabled=False))
+        return current.update(asset_id, AssetUpdate(enabled=False, expectedVersion=expectedVersion))
 
     @router.put("/api/assets/library/profile")
     async def publish_profile(request: Request):

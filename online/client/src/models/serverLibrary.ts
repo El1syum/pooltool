@@ -1,5 +1,5 @@
 import { readonly, shallowRef } from 'vue'
-import type { ModelConfiguration, ModelLibraryAdapter, ModelLibraryAsset, ModelLibrarySelection, ModelLibrarySnapshot, ModelRole } from './types'
+import type { ModelConfiguration, ModelLibraryAdapter, ModelLibraryMutation, ModelLibraryPublishOptions, ModelLibrarySelection, ModelLibrarySnapshot, ModelLibraryWriteOptions, ModelRole } from './types'
 
 export interface ModelAdminSession {
   authenticated: boolean
@@ -12,8 +12,6 @@ export interface ModelAdminSession {
 export class ModelLibraryError extends Error {
   constructor(message: string, public readonly status: number) { super(message); this.name = 'ModelLibraryError' }
 }
-
-type AssetResponse = { asset: ModelLibraryAsset; version: number }
 
 /** Shared library API; admin secrets and CSRF stay in memory, never in player settings. */
 export function createServerModelLibrary() {
@@ -71,7 +69,12 @@ export function createServerModelLibrary() {
     await api('/api/assets/admin/logout', { method: 'POST', headers })
     signedOut()
   }
-  function optimisticVersion() { return version === undefined ? {} : { expectedVersion: version } }
+  function optimisticVersion(options?: ModelLibraryWriteOptions) {
+    // A workshop owns the revision of its draft. A background catalogue fetch or
+    // another upload must never silently rebase that draft onto newer data.
+    const expectedVersion = options?.expectedVersion ?? version
+    return expectedVersion === undefined ? {} : { expectedVersion }
+  }
   async function load(): Promise<ModelLibrarySnapshot> {
     let snapshot: ModelLibrarySnapshot
     try { snapshot = await api<ModelLibrarySnapshot>(`/api/assets/library${session.value.authenticated ? '?includeDisabled=true' : ''}`) }
@@ -83,27 +86,32 @@ export function createServerModelLibrary() {
     rememberVersion(snapshot.version)
     return snapshot
   }
-  async function upload(file: File, role: ModelRole): Promise<ModelLibraryAsset> {
+  async function upload(file: File, role: ModelRole, options?: ModelLibraryWriteOptions): Promise<ModelLibraryMutation> {
     const headers = await adminHeaders()
     const params = new URLSearchParams({ name: file.name, role })
-    const response = await api<AssetResponse>(`/api/assets/models?${params}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'model/gltf-binary' }, body: file })
+    const expected = optimisticVersion(options).expectedVersion
+    if (expected !== undefined) params.set('expectedVersion', String(expected))
+    const response = await api<ModelLibraryMutation>(`/api/assets/models?${params}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'model/gltf-binary' }, body: file })
     rememberVersion(response.version)
-    return response.asset
+    return response
   }
-  async function update(id: string, patch: { name?: string; enabled?: boolean; config?: ModelConfiguration }): Promise<ModelLibraryAsset> {
+  async function update(id: string, patch: { name?: string; enabled?: boolean; config?: ModelConfiguration }, options?: ModelLibraryWriteOptions): Promise<ModelLibraryMutation> {
     const headers = await adminHeaders()
-    const response = await api<AssetResponse>(`/api/assets/models/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...patch, ...optimisticVersion() }) })
+    const response = await api<ModelLibraryMutation>(`/api/assets/models/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...patch, ...optimisticVersion(options) }) })
     rememberVersion(response.version)
-    return response.asset
+    return response
   }
-  async function remove(id: string): Promise<void> {
+  async function remove(id: string, options?: ModelLibraryWriteOptions): Promise<ModelLibraryMutation> {
     const headers = await adminHeaders()
-    const response = await api<AssetResponse>(`/api/assets/models/${encodeURIComponent(id)}`, { method: 'DELETE', headers })
+    const expected = optimisticVersion(options).expectedVersion
+    const query = expected === undefined ? '' : `?expectedVersion=${expected}`
+    const response = await api<ModelLibraryMutation>(`/api/assets/models/${encodeURIComponent(id)}${query}`, { method: 'DELETE', headers })
     rememberVersion(response.version)
+    return response
   }
-  async function publish(selection: ModelLibrarySelection, configs: Record<string, ModelConfiguration>): Promise<ModelLibrarySnapshot> {
+  async function publish(selection: ModelLibrarySelection, configs: Record<string, ModelConfiguration>, options?: ModelLibraryPublishOptions): Promise<ModelLibrarySnapshot> {
     const headers = await adminHeaders()
-    const snapshot = await api<ModelLibrarySnapshot>('/api/assets/library/profile', { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ tableId: selection.tableId, environmentId: selection.environmentId, configs, ...optimisticVersion() }) })
+    const snapshot = await api<ModelLibrarySnapshot>('/api/assets/library/profile', { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ tableId: selection.tableId, environmentId: selection.environmentId, configs, ...(options ? { names: options.names } : {}), ...optimisticVersion(options) }) })
     rememberVersion(snapshot.version)
     return snapshot
   }

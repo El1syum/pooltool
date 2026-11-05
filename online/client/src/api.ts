@@ -45,6 +45,7 @@ export interface Match {
   players: Array<{ id: string; displayName: string; elo?: number; group?: string; bot?: string }>
   currentPlayer: number
   deadline: number | string | null
+  playbackUntil?: number | string | null
   startedAt: number | string
   finishedAt?: number | string | null
   winnerId?: string | null

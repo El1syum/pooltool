@@ -44,13 +44,16 @@ export interface ModelLibraryAsset {
 }
 export interface ModelLibrarySelection { tableId: string | null; environmentId: string | null }
 export interface ModelLibrarySnapshot { version: number; assets: ModelLibraryAsset[]; profile: ModelLibrarySelection }
+export interface ModelLibraryWriteOptions { expectedVersion: number }
+export interface ModelLibraryMutation { asset: ModelLibraryAsset; version: number }
+export interface ModelLibraryPublishOptions extends ModelLibraryWriteOptions { names: Record<string, string> }
 /** Authentication stays in the app adapter, not in the preparation component. */
 export interface ModelLibraryAdapter {
   load: () => Promise<ModelLibrarySnapshot>
-  upload: (file: File, role: ModelRole) => Promise<ModelLibraryAsset>
-  update: (id: string, patch: { name?: string; enabled?: boolean; config?: ModelConfiguration }) => Promise<ModelLibraryAsset>
-  remove: (id: string) => Promise<void>
-  publish: (selection: ModelLibrarySelection, configs: Record<string, ModelConfiguration>) => Promise<ModelLibrarySnapshot | void>
+  upload: (file: File, role: ModelRole, options?: ModelLibraryWriteOptions) => Promise<ModelLibraryMutation>
+  update: (id: string, patch: { name?: string; enabled?: boolean; config?: ModelConfiguration }, options?: ModelLibraryWriteOptions) => Promise<ModelLibraryMutation>
+  remove: (id: string, options?: ModelLibraryWriteOptions) => Promise<ModelLibraryMutation>
+  publish: (selection: ModelLibrarySelection, configs: Record<string, ModelConfiguration>, options?: ModelLibraryPublishOptions) => Promise<ModelLibrarySnapshot>
 }
 
 export interface StoredModelAsset {

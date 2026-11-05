@@ -13,17 +13,18 @@ window.libraryState = {version:1,assets:[],profile:{tableId:null,environmentId:n
 window.uploadCalls = []; window.publishCalls = []; window.updateCalls = []; window.adminRequests = 0
 const adapter = {
   async load() { return structuredClone(window.libraryState) },
-  async upload(file,role) {
+  async upload(file,role,options) {
+    if(options && options.expectedVersion!==window.libraryState.version)throw Object.assign(new Error('Библиотека изменилась'),{status:409})
     window.uploadCalls.push({name:file.name,role,bytes:await file.arrayBuffer()})
     const id = String(window.uploadCalls.length).padStart(32,'0')
     const { name,source,...config } = types.defaultModelSlot(file.name,{kind:'url',url:'/models/library/'+id+'.glb'})
     const asset = {id,name:file.name,role,url:'/models/library/'+id+'.glb',bytes:file.size,enabled:true,config}
     window.libraryState.assets.push(asset); window.libraryState.version++
-    return structuredClone(asset)
+    return {asset:structuredClone(asset),version:window.libraryState.version}
   },
-  async update(id,patch) { window.updateCalls.push({id,patch});const asset=window.libraryState.assets.find(a=>a.id===id);Object.assign(asset,patch);window.libraryState.version++;return structuredClone(asset) },
-  async remove(id) { window.libraryState.assets.find(a=>a.id===id).enabled=false;window.libraryState.version++ },
-  async publish(selection,configs) { window.publishCalls.push({selection,configs});for(const [id,config] of Object.entries(configs))window.libraryState.assets.find(a=>a.id===id).config=config;window.libraryState.profile=selection;window.libraryState.version++;return structuredClone(window.libraryState) },
+  async update(id,patch,options) { if(options && options.expectedVersion!==window.libraryState.version)throw Object.assign(new Error('Библиотека изменилась'),{status:409});window.updateCalls.push({id,patch});const asset=window.libraryState.assets.find(a=>a.id===id);Object.assign(asset,patch);window.libraryState.version++;return {asset:structuredClone(asset),version:window.libraryState.version} },
+  async remove(id,options) { if(options && options.expectedVersion!==window.libraryState.version)throw Object.assign(new Error('Библиотека изменилась'),{status:409});const asset=window.libraryState.assets.find(a=>a.id===id);asset.enabled=false;window.libraryState.version++;return {asset:structuredClone(asset),version:window.libraryState.version} },
+  async publish(selection,configs,options) { if(options && options.expectedVersion!==window.libraryState.version)throw Object.assign(new Error('Библиотека изменилась'),{status:409});window.publishCalls.push({selection,configs});for(const [id,config] of Object.entries(configs))window.libraryState.assets.find(a=>a.id===id).config=config;for(const [id,name] of Object.entries(options?.names??{}))window.libraryState.assets.find(a=>a.id===id).name=name;window.libraryState.profile=selection;window.libraryState.version++;return structuredClone(window.libraryState) },
 }
 if(new URLSearchParams(location.search).get('mode')==='workshop'){
  document.querySelector('#stage').remove()

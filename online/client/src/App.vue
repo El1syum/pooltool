@@ -72,7 +72,6 @@ const modelSceneErrors = ref<string[]>([])
 const modelAdminOpen = ref(false)
 const modelAdminBusy = ref(false)
 const modelAdminError = ref('')
-const workshopKey = ref(0)
 const modelReturnView = ref<View>('menu')
 let scene: GameScene | null = null
 let socket: WebSocket | null = null
@@ -80,6 +79,7 @@ let reconnectTimer = 0
 let reconnectAttempt = 0
 let disposed = false
 let lastPlayedShot = ''
+let latestPlayback: { matchId: string; shot: ShotResult } | null = null
 let token = localStorage.getItem('pooltool.token') || ''
 let heartbeat = 0
 let polling = 0
@@ -89,6 +89,10 @@ let clockCalibrated = false
 let lifecycleGeneration = 0
 let modelCatalogueGeneration = 0
 let modelSceneGeneration = 0
+let hydratingSettings = false
+let settingsRevision = 0
+let settingsDialogRevision = 0
+let settingsSync: Promise<boolean> | null = null
 type CommandResponse = { match: Match; result?: ShotResult }
 class SocketUnavailable extends Error {}
 // Commands sent over the open socket, keyed by commandId (resolved by commandResult).
@@ -109,7 +113,7 @@ function mergeSettings(value: unknown): GameSettings {
 }
 const isPlayer = computed(() => Boolean(match.value?.players.some((p) => p.id === user.value?.id)))
 const ownTurn = computed(() => match.value?.players[match.value.currentPlayer]?.id === user.value?.id)
-const turnReady = computed(() => Boolean(connected.value && ownTurn.value && match.value?.status === 'active' && !busy.value && !playbackBusy.value && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !appearanceOpen.value && !modelNavigationBusy.value))
+const turnReady = computed(() => Boolean(view.value === 'match' && connected.value && ownTurn.value && match.value?.status === 'active' && timestamp(match.value.playbackUntil) <= now.value + serverClockOffset.value && !busy.value && !playbackBusy.value && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !appearanceOpen.value && !modelNavigationBusy.value))
 const canShoot = computed(() => turnReady.value && !match.value?.snapshot.needsPlacement && !placingCue.value)
 const canPlace = computed(() => turnReady.value && Boolean(match.value?.snapshot.ballInHand) && (Boolean(match.value?.snapshot.needsPlacement) || placingCue.value))
 const remaining = computed(() => Math.max(0, Math.ceil((timestamp(match.value?.deadline) - now.value - serverClockOffset.value) / 1000)))
@@ -255,9 +259,13 @@ async function authenticate() {
       user.value = 'user' in result ? result.user : result
     }
     name.value = user.value.displayName
-    settings.value = mergeSettings(user.value.settings)
+    const remoteSettings = mergeSettings(user.value.settings)
     const cached = restoreJson<GameSettings | null>(`pooltool.settings.${user.value.id}`, null)
-    if (cached) settings.value = mergeSettings(cached)
+    hydratingSettings = true
+    try { settings.value = cached ? mergeSettings(cached) : remoteSettings }
+    finally { hydratingSettings = false }
+    settingsDirty.value = JSON.stringify(settings.value) !== JSON.stringify(remoteSettings)
+    localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value))
     connect()
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
@@ -289,11 +297,11 @@ function connect() {
         telemetry('clientReconnect', { connected: true })
         void restoreMatch()
         void resumePendingCommand()
-        if (settingsDirty.value) void saveSettings()
+        if (settingsDirty.value) void synchronizeSettings()
       } else if (message.type === 'restored') {
         if (message.room) receiveRoom(message.room)
         if (message.match) receiveMatch(message.match)
-        if (message.queue?.queued) { searchMode.value = message.queue.mode; view.value = 'search' }
+        if (message.queue?.queued) { searchMode.value = message.queue.mode; receiveServerView('search') }
       } else if (message.type === 'pong' && message.clientTime && message.serverTime) {
         const estimate = timestamp(message.serverTime) - (message.clientTime + Date.now()) / 2
         serverClockOffset.value = clockCalibrated ? serverClockOffset.value * .8 + estimate * .2 : estimate
@@ -325,24 +333,44 @@ function connect() {
   }
   current.onerror = () => current.close()
 }
+function receiveServerView(value: View) {
+  // A running/recovered game updates in the background while the administrator
+  // prepares art. Even a newly started match must not destroy that draft; the
+  // explicit Return action leads to the latest authoritative game/room instead.
+  if (view.value === 'models' || modelNavigationBusy.value) modelReturnView.value = value
+  else view.value = value
+}
 function receiveRoom(value: Room | null) {
   if (!value || departedRooms.has(value.code)) return
   room.value = value
   localStorage.setItem('pooltool.room', value.code)
   if (value.matchId) { if (value.matchId !== match.value?.id) loadMatchInBackground(value.matchId) }
-  else if (value.status !== 'closed') view.value = 'lobby'
+  else if (value.status !== 'closed') receiveServerView('lobby')
 }
 function receiveMatch(value: Match, result?: ShotResult) {
   if (!value || departedMatches.has(value.id) || (match.value?.id === value.id && value.revision < match.value.revision)) return
   match.value = value
+  const replay = result?.trajectory ? result : value.lastShot && 'result' in value.lastShot && value.lastShot.result?.trajectory ? value.lastShot.result : null
+  if (replay) latestPlayback = { matchId: value.id, shot: replay }
+  else if (latestPlayback?.matchId !== value.id) latestPlayback = null
   if (calledBall.value && !remainingBalls.value.some(ball => String(ball.id) === calledBall.value)) calledBall.value = ''
   localStorage.setItem('pooltool.match', value.id)
-  view.value = 'match'
+  receiveServerView('match')
+  if (view.value === 'match' && !modelNavigationBusy.value) applyMatchPlayback(value, result)
+  updateInteraction()
+  if (value.status === 'finished') { gameMenuOpen.value = false; void refreshUser().catch(reportBackgroundError) }
+}
+function applyMatchPlayback(value: Match, result?: ShotResult) {
   const last = value.lastShot
   const lastResult = last && 'result' in last ? last.result : last as ShotResult | undefined
-  const shot = result || lastResult
+  const lastId = last && 'shotId' in last ? last.shotId : last && 'id' in last ? last.id : undefined
+  const cached = latestPlayback?.matchId === value.id && (!lastId || latestPlayback.shot.shotId === lastId) ? latestPlayback.shot : undefined
+  // Match broadcasts deliberately omit lastShot.result when result is sent as
+  // a sibling field. Retain that last trajectory while the workshop is open so
+  // returning to the table can still catch up to the real shared animation.
+  const shot = result || (lastResult?.trajectory ? lastResult : cached || lastResult)
   if (shot?.trajectory) {
-    const shotKey = shot.shotId || (last && 'id' in last ? last.id : '') || `${value.id}:${value.revision}`
+    const shotKey = `${value.id}:${shot.shotId || (last && 'id' in last ? last.id : '') || value.revision}`
     const serverStart = timestamp(shot.startAt || shot.playbackStartAt || (last && 'startAt' in last ? last.startAt : undefined))
     const start = serverStart ? serverStart - serverClockOffset.value : Date.now() + 200
     if (shotKey !== lastPlayedShot && start + shot.duration * 1000 > Date.now()) {
@@ -350,11 +378,12 @@ function receiveMatch(value: Match, result?: ShotResult) {
       playbackBusy.value = true
       pendingSummary = shot
       const trajectory = expandTrajectory(shot.trajectory)
-      void nextTick(() => { ensureScene(); scene?.setState(shot.initialState); scene?.playShot(trajectory, start) })
+      void nextTick(() => {
+        if (view.value !== 'match' || modelNavigationBusy.value || match.value?.id !== value.id || lastPlayedShot !== shotKey) return
+        ensureScene(); scene?.setState(shot.initialState); scene?.playShot(trajectory, start)
+      })
     } else if (!playbackBusy.value) scene?.setState(value.snapshot)
   } else if (!playbackBusy.value) scene?.setState(value.snapshot)
-  updateInteraction()
-  if (value.status === 'finished') { gameMenuOpen.value = false; void refreshUser().catch(reportBackgroundError) }
 }
 function reportBackgroundError(failure: unknown) {
   if (!disposed) error.value = failure instanceof Error ? failure.message : 'Не удалось обновить данные. Текущее состояние партии сохранено.'
@@ -375,7 +404,7 @@ async function restoreMatch() {
     if (generation !== lifecycleGeneration) return
     if (state.room) receiveRoom(state.room)
     if (state.match) receiveMatch(state.match)
-    if (state.queue?.queued) { searchMode.value = state.queue.mode; view.value = 'search' }
+    if (state.queue?.queued) { searchMode.value = state.queue.mode; receiveServerView('search') }
   } catch (e) {
     if (e instanceof ApiError && [403, 404, 410].includes(e.status)) { localStorage.removeItem('pooltool.match'); localStorage.removeItem('pooltool.room') }
     else error.value = e instanceof Error ? e.message : 'Ошибка восстановления'
@@ -410,6 +439,7 @@ function ensureScene() {
     scene.setCalledPocket(calledPocket.value || null)
     void applySceneModels()
     updateInteraction()
+    applyMatchPlayback(match.value)
   } catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось открыть 3D-сцену' }
 }
 function updateInteraction() {
@@ -417,7 +447,15 @@ function updateInteraction() {
   scene?.setInteraction({ canShoot: canShoot.value && !hudPanelOpen.value, canPlaceCueBall: canPlace.value && !hudPanelOpen.value, spectator: !isPlayer.value,
     placementRegion: match.value?.snapshot.ballInHandRegion === 'behind_line' && table ? { minY: 0, maxY: table.length / 4 } : undefined })
 }
-watch(stage, () => { if (stage.value) ensureScene(); else { scene?.destroy(); scene = null; playbackBusy.value = false } }, { flush: 'post' })
+watch(stage, () => {
+  if (stage.value) ensureScene()
+  else {
+    scene?.destroy(); scene = null; playbackBusy.value = false
+    // A disposed scene has not completed its animation. A replacement scene
+    // must be allowed to resume this same shot from the shared server time.
+    lastPlayedShot = ''
+  }
+}, { flush: 'post' })
 watch([canShoot, canPlace, isPlayer], updateInteraction)
 watch(hudPanelOpen, updateInteraction)
 watch([ownTurn, () => match.value?.id, () => match.value?.status, playbackBusy, canPlace, settingsOpen, gameMenuOpen, rulesOpen, appearanceOpen, modelNavigationBusy, hudPanelOpen], () => {
@@ -426,7 +464,14 @@ watch([ownTurn, () => match.value?.id, () => match.value?.status, playbackBusy, 
 watch(calledBall, (id) => scene?.setCalledBall(id || null))
 watch(calledPocket, (id) => scene?.setCalledPocket(id || null))
 watch(effectiveSettings, value => scene?.setSettings(value), { deep: true })
-watch(settings, () => { if (user.value) { localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value)); settingsDirty.value = true } }, { deep: true })
+watch(settings, () => {
+  if (user.value && !hydratingSettings) {
+    localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value))
+    settingsRevision++
+    settingsDirty.value = true
+  }
+}, { deep: true, flush: 'sync' })
+watch(settingsOpen, () => { settingsDialogRevision++ }, { flush: 'sync' })
 watch(view, value => { if (value !== 'match') { altHeld.value = false; assistPinned.value = false } })
 watch(effectiveModelProfile, () => { void applySceneModels() }, { deep: true })
 watch(() => user.value?.id, id => {
@@ -559,7 +604,7 @@ async function leave() {
     try { if (previousRoom) await post(`/api/rooms/${previousRoom}/leave`) }
     catch (error) { if (previousRoom) departedRooms.delete(previousRoom); if (previousMatch) departedMatches.delete(previousMatch); throw error }
     localStorage.removeItem('pooltool.room'); localStorage.removeItem('pooltool.match'); localStorage.removeItem('pooltool.pendingCommand')
-    room.value = null; match.value = null; lastPlayedShot = ''; gameMenuOpen.value = false; rulesOpen.value = false; hudPanelOpen.value = false; placingCue.value = false; shotPhase.value = 'overview'; view.value = 'menu'
+    room.value = null; match.value = null; lastPlayedShot = ''; latestPlayback = null; gameMenuOpen.value = false; rulesOpen.value = false; hudPanelOpen.value = false; placingCue.value = false; shotPhase.value = 'overview'; view.value = 'menu'
   })
 }
 async function showProfile() {
@@ -568,10 +613,33 @@ async function showProfile() {
 async function saveName() {
   await perform(async () => { await request('/api/me', { method: 'PATCH', body: JSON.stringify({ displayName: name.value.trim() }) }); localStorage.setItem('pooltool.name', name.value.trim()); await refreshUser() })
 }
+async function synchronizeSettings(): Promise<boolean> {
+  if (!user.value || bindingConflicts.value.length) return false
+  if (settingsSync) return settingsSync
+  settingsSync = (async () => {
+    try {
+      // Serialize writes and send a new snapshot if the user edits while a PUT
+      // is in flight. An older response never clears newer unsaved changes.
+      while (settingsDirty.value) {
+        if (!user.value || bindingConflicts.value.length) return false
+        const revision = settingsRevision, userId = user.value.id
+        const payload = JSON.stringify(settings.value)
+        await request('/api/me/settings', { method: 'PUT', body: payload })
+        if (user.value?.id !== userId) return false
+        if (revision === settingsRevision) settingsDirty.value = false
+      }
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Настройки сохранены локально; синхронизация повторится после подключения'
+      return false
+    }
+  })()
+  try { return await settingsSync }
+  finally { settingsSync = null }
+}
 async function saveSettings() {
-  if (!user.value || bindingConflicts.value.length) return
-  try { await request('/api/me/settings', { method: 'PUT', body: JSON.stringify(settings.value) }); settingsDirty.value = false; settingsOpen.value = false }
-  catch (e) { error.value = e instanceof Error ? e.message : 'Настройки сохранены локально; синхронизация повторится после подключения' }
+  const revision = settingsRevision, dialogRevision = settingsDialogRevision
+  if (await synchronizeSettings() && revision === settingsRevision && dialogRevision === settingsDialogRevision) settingsOpen.value = false
 }
 function updateSettings(value: GameSettings) {
   // Keep the saved casual preference even when the ranked presentation is off.
@@ -626,12 +694,12 @@ async function loginModelAdmin(credentials: { username: string; password: string
   modelAdminBusy.value = true; modelAdminError.value = ''
   try {
     await modelLibrary.login(credentials.username, credentials.password)
-    modelAdminOpen.value = false; workshopKey.value++
+    modelAdminOpen.value = false
   } catch (e) { modelAdminError.value = e instanceof Error ? e.message : 'Не удалось войти' }
   finally { credentials.password = ''; modelAdminBusy.value = false }
 }
 async function logoutModelAdmin() {
-  try { await modelLibrary.logout(); workshopKey.value++ }
+  try { await modelLibrary.logout() }
   catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось завершить сеанс' }
 }
 function applyModels(value: VisualAssetProfile) { modelProfile.value = value; void loadModelLibrary() }
@@ -689,7 +757,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
     <main v-else-if="!user" class="panel"><h1>Соединение недоступно</h1><p>Проверьте подключение и повторите попытку.</p><button @click="authenticate">Повторить</button></main>
     <main v-else-if="view === 'models'" class="model-library-page">
       <div class="model-session-bar"><span>Общая библиотека · {{ modelLibrary.session.value.authenticated ? `Администратор: ${modelLibrary.session.value.username}` : 'Режим просмотра' }}</span><button v-if="modelLibrary.session.value.authenticated" @click="logoutModelAdmin">Выйти из админки</button><button v-else @click="modelAdminError = ''; modelAdminOpen = true">Вход администратора</button></div>
-      <ModelWorkshop :key="workshopKey" :library="modelLibrary.adapter" :can-manage="modelLibrary.session.value.authenticated" :initial-profile="modelProfile" @apply="applyModels" @request-admin="modelAdminError = ''; modelAdminOpen = true" @close="view = modelReturnView" />
+      <ModelWorkshop :library="modelLibrary.adapter" :can-manage="modelLibrary.session.value.authenticated" :initial-profile="modelProfile" @apply="applyModels" @request-admin="modelAdminError = ''; modelAdminOpen = true" @close="view = modelReturnView" />
     </main>
     <ClubMenu v-else-if="view !== 'match'" :view="view" :user="user" :room="room" :history="history" :busy="busy" :connected="connected" :connection="connection" :search-mode="searchMode" :client-version="CLIENT_VERSION" :match-available="Boolean(match)" v-model:code="code" v-model:name="name" v-model:turn-seconds="turnSeconds" v-model:bot-difficulty="botDifficulty" @navigate="navigate" @settings="settingsOpen = true" @models="openModels" @exit="leave" @search="search" @cancel-search="cancelSearch" @create-room="createRoom" @join-room="joinRoom" @ready="ready" @leave="leave" @copy-code="copyCode" @play-bot="playBot" @save-name="saveName" />
     <main v-else-if="view === 'match' && match" class="match-screen figma-match-screen">

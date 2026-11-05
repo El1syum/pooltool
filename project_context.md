@@ -183,6 +183,35 @@ match recovery, legal/early eight, group assignment, misses and bot rules covere
 The public preview also passed the same two-client post-break GUI scenario in
 Chromium and WebKit, with no mandatory warnings, JavaScript or static-asset errors.
 
+## Administration fixes (2026-11-05)
+
+The five audited administration defects are addressed: workshop drafts own a
+base catalogue revision; uploads/updates/disables/publication send that explicit
+revision and only their successful returned version advances it. Refreshing the
+catalogue or reauthenticating never silently rebases old settings. A conflict
+retains the draft and blocks writes until explicit confirmed shared-scene reload.
+Initial draft and revision come from the same response, not cached App art.
+
+Profile publication atomically persists selected model names, configs and both
+slots. Uploads recheck the optional revision inside the commit after async disk
+validation, cleaning uncommitted files on conflict. Existing HTTP clients remain
+compatible; already-open old administrator tabs need a reload after deployment.
+
+Administrator login/logout no longer remounts the workshop. Room/match/visibility
+and reconnect updates preserve it, with an explicit Return destination. Returning
+to an ongoing shot catches up to authoritative playback, including when the shot
+had started before entering the workshop. The server playback-until timestamp
+also gates shooting. Background settings sync never closes the settings dialog;
+writes are serialized and older responses cannot clear newer edits.
+
+`tests/admin-library-integration.mjs` exercises the actual App/API with isolated
+loopback-only credentials, including the original lost-update/draft/navigation
+and startup races. See `online/docs/MODEL_ASSET_PIPELINE.md` and API_CONTRACT.md.
+Verification: 116 Python tests +520 subtests, 60 client checks, the isolated
+workshop GPU suite in Chromium/WebKit, and 20 real App/API administration
+scenarios per browser passed. This includes two actual physical-playback returns,
+the five original regressions and zero uncaught JS/static-resource failures.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

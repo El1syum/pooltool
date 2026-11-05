@@ -110,6 +110,15 @@ user's proxy settings. Without the flag the normal browser network is used.
 
 ## Prepared models and personal appearance
 
+`admin-library-integration.mjs` verifies the actual App and real API in both
+browsers, restricted to an isolated loopback service with explicit disposable
+`ASSET_ADMIN_USERNAME` / `ASSET_ADMIN_PASSWORD`. It covers all workshop actions,
+atomic rename/publication, invalidated-session re-login without draft loss,
+stale drafts after catalogue refresh or concurrent upload, explicit shared-scene
+reload, retained workshop on match/visibility/reconnect updates and asynchronous
+settings synchronization. It cleans up its own fixtures/rooms and restores the
+baseline selection. Never point mutation tests at the published library.
+
 `player-appearance.mjs` exercises the actual preview and draft Apply/Cancel.
 `player-appearance-integration.mjs` uses an isolated loopback service and explicit
 test administrator credentials to verify catalogue choices, per-user device

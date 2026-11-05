@@ -1,10 +1,12 @@
 """Shared model persistence, bounded GLB ingestion and separate admin auth."""
 
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import re
 import struct
+import threading
 
 from fastapi.testclient import TestClient
 import pytest
@@ -226,6 +228,150 @@ def test_config_edit_and_atomic_publish_soft_disable_restore(client):
     restored = client.patch(f"/api/assets/models/{table['id']}", json={"enabled": True}, headers=headers)
     assert restored.status_code == 200 and restored.json()["asset"]["enabled"]
     assert client.get(table["url"]).status_code == 200
+
+
+def test_profile_names_configs_and_both_selections_publish_atomically(client):
+    headers = login(client)
+    table = upload(client, headers, name="Original table")
+    room = upload(client, headers, role="environment", name="Original room")
+    before = client.get("/api/assets/library").json()
+    body = {
+        "tableId": table["id"], "environmentId": room["id"],
+        "expectedVersion": before["version"],
+        "names": {table["id"]: "  Prepared table  ", room["id"]: "Prepared room"},
+        "configs": {table["id"]: {"position": [0.12, 0, 0]},
+                    room["id"]: {"rotation": [0, 90, 0], "replaceProcedural": False}},
+    }
+    response = client.put("/api/assets/library/profile", json=body, headers=headers)
+    assert response.status_code == 200, response.text
+    published = response.json()
+    assert published["version"] == before["version"] + 1
+    assert published["profile"] == {"tableId": table["id"], "environmentId": room["id"]}
+    by_id = {asset["id"]: asset for asset in published["assets"]}
+    assert by_id[table["id"]]["name"] == "Prepared table"
+    assert by_id[table["id"]]["config"]["position"] == [0.12, 0, 0]
+    assert by_id[room["id"]]["name"] == "Prepared room"
+    assert by_id[room["id"]]["config"]["rotation"] == [0, 90, 0]
+    assert by_id[room["id"]]["config"]["replaceProcedural"] is False
+    assert client.get("/api/assets/library").json() == published
+
+    # A stale rename cannot partly change either asset before the conflict.
+    body["names"][table["id"]] = "Stale table"
+    assert client.put("/api/assets/library/profile", json=body, headers=headers).status_code == 409
+    assert client.get("/api/assets/library").json() == published
+
+
+@pytest.mark.parametrize("invalid_name", ["", "   ", "x" * 161, "bad\nname", "bad\x7fname"])
+def test_invalid_profile_name_changes_nothing(client, invalid_name):
+    headers = login(client)
+    table = upload(client, headers)
+    before = client.get("/api/assets/library").json()
+    response = client.put("/api/assets/library/profile", headers=headers, json={
+        "tableId": table["id"], "environmentId": None, "expectedVersion": before["version"],
+        "configs": {table["id"]: {"position": [1, 0, 0]}},
+        "names": {table["id"]: invalid_name},
+    })
+    assert response.status_code == 422
+    assert client.get("/api/assets/library").json() == before
+
+
+def test_profile_names_must_belong_to_selected_role_correct_assets(client):
+    headers = login(client)
+    table, room = upload(client, headers), upload(client, headers, role="environment")
+    before = client.get("/api/assets/library").json()
+    for selection, names in (
+        ({"tableId": table["id"], "environmentId": None}, {room["id"]: "Not selected"}),
+        ({"tableId": table["id"], "environmentId": None}, {"f" * 32: "Missing"}),
+        ({"tableId": table["id"], "environmentId": table["id"]}, {table["id"]: "Wrong role"}),
+    ):
+        response = client.put("/api/assets/library/profile", headers=headers, json={
+            **selection, "expectedVersion": before["version"], "names": names,
+            "configs": {table["id"]: {"position": [1, 0, 0]}},
+        })
+        assert response.status_code == 422
+        assert client.get("/api/assets/library").json() == before
+
+
+def test_upload_and_delete_reject_stale_expected_version_without_changes(client):
+    headers = login(client)
+    table = upload(client, headers)
+    before = client.get("/api/assets/library").json()
+    paths = set(client.app.state.asset_library.root.iterdir())
+    response = client.post("/api/assets/models", params={"expectedVersion": 0}, content=glb(),
+                           headers={**headers, "Content-Type": "model/gltf-binary"})
+    assert response.status_code == 409
+    assert client.delete(f"/api/assets/models/{table['id']}", params={"expectedVersion": 0}, headers=headers).status_code == 409
+    assert client.get("/api/assets/library").json() == before
+    assert set(client.app.state.asset_library.root.iterdir()) == paths
+    for endpoint, method in (("/api/assets/models", "post"), (f"/api/assets/models/{table['id']}", "delete")):
+        arguments = {"params": {"expectedVersion": -1}, "headers": headers}
+        if method == "post":
+            arguments.update(content=glb(), headers={**headers, "Content-Type": "model/gltf-binary"})
+        assert getattr(client, method)(endpoint, **arguments).status_code == 422
+    assert client.get("/api/assets/library").json() == before
+
+
+@pytest.mark.parametrize("phase", ["validation", "move"])
+def test_concurrent_edit_during_upload_rejects_and_removes_all_upload_files(client, monkeypatch, phase):
+    headers = login(client)
+    table = upload(client, headers)
+    before = client.get("/api/assets/library").json()
+    root = client.app.state.asset_library.root
+    paths = set(root.iterdir())
+    reached, resume = threading.Event(), threading.Event()
+    original = assets.validate_glb_file if phase == "validation" else assets.os.replace
+
+    def pause_after_operation(*args):
+        result = original(*args)
+        reached.set()
+        assert resume.wait(5), "Concurrent edit did not release the upload"
+        return result
+
+    if phase == "validation":
+        monkeypatch.setattr(assets, "validate_glb_file", pause_after_operation)
+    else:
+        monkeypatch.setattr(assets.os, "replace", pause_after_operation)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(client.post, "/api/assets/models",
+                                  params={"name": "Concurrent environment", "role": "environment", "expectedVersion": before["version"]},
+                                  content=glb(), headers={**headers, "Content-Type": "model/gltf-binary"})
+        try:
+            assert reached.wait(5), "Upload did not reach its asynchronous operation"
+            changed = client.patch(f"/api/assets/models/{table['id']}", headers=headers,
+                                   json={"name": "Newer administrator edit", "expectedVersion": before["version"]})
+            assert changed.status_code == 200, changed.text
+            after_edit = client.get("/api/assets/library").json()
+        finally:
+            resume.set()
+        response = pending.result(timeout=5)
+    assert response.status_code == 409, response.text
+    assert client.get("/api/assets/library").json() == after_edit
+    assert set(root.iterdir()) == paths, "Conflicting uploads must not leave .part or final GLB files"
+
+
+def test_sequential_guarded_uploads_publish_names_and_guarded_delete(client):
+    headers = login(client)
+    version = client.get("/api/assets/library").json()["version"]
+    created = []
+    for role in ("table", "environment"):
+        response = client.post("/api/assets/models", params={"role": role, "expectedVersion": version},
+                               content=glb(), headers={**headers, "Content-Type": "model/gltf-binary"})
+        assert response.status_code == 200, response.text
+        assert response.json()["version"] == version + 1
+        version, asset = response.json()["version"], response.json()["asset"]
+        created.append(asset)
+    table, room = created
+    response = client.put("/api/assets/library/profile", headers=headers, json={
+        "tableId": table["id"], "environmentId": room["id"], "expectedVersion": version,
+        "names": {table["id"]: "Published table", room["id"]: "Published room"},
+    })
+    assert response.status_code == 200, response.text
+    version = response.json()["version"]
+    removed = client.delete(f"/api/assets/models/{table['id']}", params={"expectedVersion": version}, headers=headers)
+    assert removed.status_code == 200
+    assert removed.json()["version"] == version + 1
+    assert removed.json()["asset"]["enabled"] is False
+    assert client.get("/api/assets/library").json()["profile"] == {"tableId": None, "environmentId": room["id"]}
 
 
 @pytest.mark.parametrize("config", [
