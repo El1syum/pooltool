@@ -338,6 +338,18 @@ test per browser passed with zero JS/static-resource errors. Code review
 APPROVE; independent architecture review CLEAR. Only the pre-existing Starlette
 test-client deprecation warning remains.
 
+Deployed `e9fe4a2` to the ordinary testing URL: client
+`/assets/index-CMVoAi06.js`, CSS `/assets/index-DrLBsvdN.css`. Assets were installed
+before the HTML entry; old chunks retained, backend PID 328303 unchanged.
+Backup: `/opt/pooltool-online/shared/backup-design-input-e9fe4a2`; all 60 prior
+completed match payloads preserved, catalogue unchanged, DB integrity checked.
+Public Chromium/WebKit passed the actual three-client physical-shot/HUD and
+finish→menu→play cycle with the shared AI table loaded by every client, no JS or
+static-resource errors. Both also passed real insecure-HTTP invitation copying:
+native copy event, exact code, success feedback and no leaked temporary fields.
+Published JS/CSS/SVG hashes match the tested local originals. Guest entry remains
+enabled and VK Play remains disabled/unconfigured; no credentials changed.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
