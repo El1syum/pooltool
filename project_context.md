@@ -212,6 +212,19 @@ workshop GPU suite in Chromium/WebKit, and 20 real App/API administration
 scenarios per browser passed. This includes two actual physical-playback returns,
 the five original regressions and zero uncaught JS/static-resource failures.
 
+Deployed `f8c058d`, default client `/assets/index-B1WwzGAE.js` (CSS unchanged),
+backend PID 40841. Runtime/online SQLite backup:
+`/opt/pooltool-online/shared/backup-admin-fixes-f8c058d`. All 48 previously
+completed match payloads were preserved; database integrity and unchanged model
+catalogue/selection were verified. Live Chromium/WebKit administrator login,
+actual AI preview, original GLB hash, session reload and logout passed with zero
+model writes or JS/static-resource errors. Published source/client hashes match
+the tested local build. Refresh already-open administrator tabs to receive the
+fixed draft-revision logic.
+The public three-client WebKit match test also passed with the actual shared AI
+table loaded in all three clients, a real charged shot and identical final ball
+states; no JavaScript or static-resource failures.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
