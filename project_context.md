@@ -247,6 +247,17 @@ platform App bootstrap/account-switch tests in Chromium/WebKit, real disabled
 mode+guest-persistence checks in both browsers, and real three-client physical
 match/HUD checks in both browsers passed. No live platform login is claimed.
 
+Deployed preparation `d263c94` to the testing preview with VK Play disabled and
+unconfigured (`guestEnabled=true`, `appId=null`). Current entry is
+`/assets/index-BEVCRBzm.js`, backend PID 328303. Online DB/runtime backup:
+`/opt/pooltool-online/shared/backup-vkplay-prepare-d263c94`. All 49 prior completed
+matches and existing user/VK mappings were preserved; model library unchanged,
+external identity table empty, integrity checked. Public Chromium/WebKit checks
+confirmed the guest survives a failed disabled-platform launch and return, no
+SDK/platform requests or guest fallback occur, and no JS errors. Published
+client/module hashes match the local tested source. No credentials were added
+and no VK Play publication was attempted.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
