@@ -28,7 +28,10 @@ try{
    localStorage.setItem('pooltool.room','GUEST1');localStorage.setItem('pooltool.match','guest-match')
   },{guestToken})
   const page=await context.newPage(),exchanges=[],authFrames=[],unexpected=[],errors=[]
-  let sdkLoads=0,uid='123',socketA=null,holdLate=false,releaseLate=null,lateArrived=null,inflightCommands=0
+  let sdkLoads=0,uid='123',socketA=null,socketB=null,holdLate=false,releaseLate=null,lateArrived=null,inflightCommands=0
+  let emptyRestore=false,holdReplayLeave=false,releaseReplayLeave=null,replayLeaveArrived=null,crossIdentityReplays=0
+  const replayRoom={...room,id:'room-B',code:'BBB222',hostId:'platform-internal-456',status:'finished',matchId:'match-B',settings:{...room.settings,solo:true},players:[userFor('456'),{id:'opponent',displayName:'Opponent',bot:'easy'}]}
+  const replayMatch={...match,id:'match-B',roomId:'room-B',status:'finished',revision:1,winnerId:'opponent',finishedAt:new Date().toISOString(),players:replayRoom.players}
   page.on('pageerror',error=>errors.push(error.message))
   await context.route('**/tests/vkplay-shell',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><iframe name="pooltool" src="/tests/vkplay-app-fixture.html?platform=vkplay" style="border:0;width:100vw;height:100vh"></iframe>'}))
   await context.route('https://vkplay.ru/app/42/static/mailru.core.js',route=>{
@@ -49,9 +52,18 @@ try{
    if(url.pathname==='/api/me/current'){
     const isA=request.headers().authorization===`Bearer ${tokens['123']}`
     if(isA&&holdLate){holdLate=false;lateArrived?.();await new Promise(resolve=>releaseLate=resolve)}
-    return reply(isA?{room,match,queue:{queued:false}}:{room:null,match:null,queue:{queued:false}})
+    return reply(isA&&!emptyRestore?{room,match,queue:{queued:false}}:{room:null,match:null,queue:{queued:false}})
    }
    if(url.pathname==='/api/matches/match-A')return reply({match})
+   if(url.pathname==='/api/matches/match-B')return reply({match:replayMatch})
+   if(url.pathname==='/api/rooms/BBB222/leave'&&holdReplayLeave){
+    holdReplayLeave=false;replayLeaveArrived?.();await new Promise(resolve=>releaseReplayLeave=resolve)
+    return reply({})
+   }
+   if(url.pathname==='/api/solo'){
+    crossIdentityReplays++
+    return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({detail:'Unexpected cross-identity replay'})})
+   }
    if(url.pathname==='/api/me')return reply({user:userFor(uid)})
    if(url.pathname==='/api/me/history')return reply({matches:[]})
    if(url.pathname==='/api/telemetry/events')return reply({acceptedIds:(body?.events||[]).map(value=>value.id)})
@@ -64,9 +76,9 @@ try{
     const value=JSON.parse(raw)
     if(value.type==='auth'){
      authFrames.push(value);const current=value.token===tokens['123']?'123':'456'
-     assert.equal(value.token,tokens[current]);if(current==='123')socketA=socket
+     assert.equal(value.token,tokens[current]);if(current==='123')socketA=socket;else socketB=socket
      socket.send(JSON.stringify({type:'authenticated',user:userFor(current),serverTime:Date.now()}))
-     socket.send(JSON.stringify({type:'restored',...(current==='123'?{room,match}:{room:null,match:null}),queue:{queued:false}}))
+     socket.send(JSON.stringify({type:'restored',...(current==='123'&&!emptyRestore?{room,match}:{room:null,match:null}),queue:{queued:false}}))
     }else if(value.type==='ping')socket.send(JSON.stringify({type:'pong',clientTime:value.clientTime,serverTime:Date.now()}))
     else if(value.type==='command')inflightCommands++ // Deliberately do not ACK A's test shot.
    })
@@ -103,7 +115,34 @@ try{
   assert.doesNotMatch(JSON.stringify(storage),/platform-session-[AB]|otp-123|otp-456/)
   assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);assert.equal(inflightCommands,1,'The old shot must not replay after identity change')
   await page.screenshot({path:path.join(artifacts,`${engine}-identity-B.png`),fullPage:true})
-  console.log(JSON.stringify({engine,fakePlatform:true,actualApp:true,guestTokenUntouched:true,platformSessionMemoryOnly:true,freshIdentityAfterDeniedSession:true,latePrivateMatchRejected:true,sdkLoads,exchanges:exchanges.length,jsErrors:errors.length}))
+
+  // A pending "play again" is an intent owned by B. Deliberately delay only
+  // its fake leave response, switch to A with an empty account, then release B.
+  // A stale continuation must not create a new solo game under A's credentials.
+  socketB.send(JSON.stringify({type:'restored',room:replayRoom,match:replayMatch,queue:{queued:false}}))
+  await frame.locator('.result-panel').waitFor()
+  holdReplayLeave=true
+  const replayArrived=new Promise(resolve=>replayLeaveArrived=resolve)
+  await frame.locator('.result-panel').getByRole('button',{name:'Сыграть ещё',exact:true}).click()
+  await replayArrived
+  assert.equal(await frame.locator('.result-panel').getByRole('button',{name:'Сыграть ещё',exact:true}).isDisabled(),true)
+  socketB.close({code:1008,reason:'Test replay identity invalidated'})
+  await frame.getByTestId('vkplay-entry').waitFor()
+  emptyRestore=true;uid='123';await frame.evaluate(()=>window.fixtureUid='123')
+  await frame.getByRole('button',{name:'Повторить вход',exact:true}).click()
+  await frame.getByRole('heading',{name:'Pooltool',exact:true}).waitFor()
+  releaseReplayLeave();await page.waitForTimeout(250)
+  assert.equal(crossIdentityReplays,0,'An old account replay must never POST /api/solo for the new identity')
+  assert.equal(await frame.locator('.result-panel').count(),0)
+  assert.equal(await frame.getByTestId('match-hud').count(),0)
+  assert.match(await frame.locator('body').innerText(),/VK Player A/)
+  assert.doesNotMatch(await frame.locator('body').innerText(),/VK Player B|BBB222|match-B/)
+  const mainActions=frame.getByRole('navigation',{name:'Главное меню',exact:true})
+  for(const label of ['Играть','Настройки','Профиль','Выход'])assert.equal(await mainActions.getByRole('button',{name:label,exact:true}).isEnabled(),true)
+  assert.equal(exchanges.length,3);assert.equal(authFrames.length,3)
+  assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[])
+  await page.screenshot({path:path.join(artifacts,`${engine}-replay-identity-A.png`),fullPage:true})
+  console.log(JSON.stringify({engine,fakePlatform:true,actualApp:true,guestTokenUntouched:true,platformSessionMemoryOnly:true,freshIdentityAfterDeniedSession:true,latePrivateMatchRejected:true,crossIdentityReplayRejected:true,newIdentityMenuEnabled:true,sdkLoads,exchanges:exchanges.length,jsErrors:errors.length}))
   await context.close();await browser.close();browser=null
  }
 }finally{await browser?.close();await server.close()}

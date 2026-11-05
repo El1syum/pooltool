@@ -69,7 +69,7 @@ defineExpose({ closeControls })
 </script>
 
 <template>
-  <section class="hud-root hud-modern" :class="{ 'hud-compact': compact, 'hud-offline': !connected }" :data-shot-phase="phase" :data-aim-direction="aim.phi" data-testid="match-hud" aria-label="Интерфейс матча">
+  <section class="hud-root hud-modern" :class="{ 'hud-compact': compact, 'hud-offline': !connected }" :data-shot-phase="phase" :data-aim-direction="aim.phi" :data-camera-mode="cameraMode" data-testid="match-hud" aria-label="Интерфейс матча">
     <div class="hud-identity" aria-label="Pooltool">
       <div class="hud-seal">8</div>
       <div class="hud-wordmark"><strong>Pooltool</strong><span>8-BALL · МАТЧ {{ formatTime(elapsed) }}</span></div>

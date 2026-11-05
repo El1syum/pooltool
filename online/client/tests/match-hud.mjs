@@ -218,6 +218,9 @@ for (const engineName of engines) {
     const current = pages[currentIndex]
     const currentActor = actors[currentIndex]
     const other = pages[currentIndex === 0 ? 1 : 0]
+    await current.locator('[data-testid="match-hud"][data-camera-mode="cue"][data-shot-phase="overview"]').waitFor()
+    assert.equal(await other.getByTestId('match-hud').getAttribute('data-camera-mode'), 'free', 'The opponent must keep the table overview')
+    assert.equal(await spectator.getByTestId('match-hud').getAttribute('data-camera-mode'), 'free', 'Spectators must not inherit the shooter cue camera')
     const canvasMarker = `canvas-${engineName}-${Date.now()}`
     await current.locator('.game-stage canvas').evaluate((canvas, marker) => { canvas.dataset.hudQa = marker }, canvasMarker)
     async function assertStableCanvas() {
@@ -265,6 +268,21 @@ for (const engineName of engines) {
       assert.equal(sent.get(current).filter(frame => frame.type === 'command' && frame.command?.type === 'shot').length, before, `${action} must block shooting behind the modal`)
       await closeDialog(current)
       await assertStableCanvas()
+    }
+
+    // Camera selection must not confirm the heading or be overwritten when a
+    // modal/drawer temporarily disables interaction during the same shot.
+    await current.locator('[data-testid="match-hud"][data-camera-mode="cue"][data-shot-phase="overview"]').waitFor()
+    for (const camera of ['Обзор стола', 'Вид сверху']) {
+      await clickNamed(current, [camera])
+      await current.locator('[data-testid="match-hud"][data-camera-mode="free"]').waitFor()
+      await clickNamed(current, ['Меню матча'])
+      await closeDialog(current)
+      assert.equal(await current.getByTestId('match-hud').getAttribute('data-camera-mode'), 'free', `${camera} must survive closing a modal in the same turn`)
+      await clickNamed(current, ['Параметры удара'])
+      await clickNamed(current, ['Из-за кия'])
+      await clickNamed(current, ['Закрыть параметры удара'])
+      await current.locator('[data-testid="match-hud"][data-camera-mode="cue"][data-shot-phase="overview"]').waitFor()
     }
 
     await clickNamed(current, ['Меню матча'])
@@ -425,6 +443,10 @@ for (const engineName of engines) {
     const observedState = (await api(actors[2], '/api/me/current', undefined, 'GET')).data.match
     assert.deepEqual(match.snapshot.balls, opponentState.snapshot.balls)
     assert.deepEqual(match.snapshot.balls, observedState.snapshot.balls)
+    const nextIndex = match.players[match.currentPlayer].id === actors[0].user.id ? 0 : 1
+    await pages[nextIndex].locator(`[data-testid="match-hud"][data-camera-mode="${match.snapshot.needsPlacement ? 'free' : 'cue'}"]`).waitFor()
+    await pages[nextIndex === 0 ? 1 : 0].locator('[data-testid="match-hud"][data-camera-mode="free"]').waitFor()
+    assert.equal(await spectator.getByTestId('match-hud').getAttribute('data-camera-mode'), 'free')
     assert.equal(await current.locator('.game-stage canvas').getAttribute('data-hud-qa'), canvasMarker)
     assert.ok(textures.size >= 16, `Original ball textures must load; got ${textures.size}`)
     assert.deepEqual(badAssets, [], 'Static HUD assets/fonts must not return HTTP errors')
@@ -436,11 +458,28 @@ for (const engineName of engines) {
       assert.ok(workload.some(sample => sample.triangles > 80_000), 'The prepared AI geometry must actually render, not silently fall back to a stock table')
     }
     const build = await first.locator('script[type="module"][src]').first().getAttribute('src')
+    // Finish this disposable real match, then exercise the deployed postgame
+    // navigation without a reload. No existing users/rooms are changed.
+    await api(currentActor, `/api/matches/${match.id}/commands`, {
+      commandId: `hud-finish-${engineName}-${Date.now()}`, expectedRevision: match.revision,
+      type: 'surrender', payload: {},
+    })
+    await current.locator('.result-panel').getByRole('button', { name: 'В главное меню', exact: true }).click()
+    await current.locator('[data-club-view="menu"]').waitFor()
+    const menu = current.getByRole('navigation', { name: 'Главное меню', exact: true })
+    await until(async () => {
+      const states = await Promise.all(['Играть', 'Настройки', 'Профиль', 'Выход'].map(name => menu.getByRole('button', { name, exact: true }).isEnabled()))
+      return states.every(Boolean)
+    }, 'Postgame main-menu actions stayed disabled')
+    await menu.getByRole('button', { name: 'Играть', exact: true }).click()
+    await current.locator('[data-club-view="choices"]').waitFor()
+    assert.deepEqual(errors, [])
+    assert.deepEqual(badAssets, [])
     if (process.env.VISUAL_FIXTURE === '1') await scoreboardFixture(first, engineName)
     console.log(JSON.stringify({ engine: engineName, room: room.code, build, jsErrors: errors.length, injectedFailures, assetGeometry, reticleGeometry, wedgeGeometry, badgeGeometry, fontMetrics, visualFixture: process.env.VISUAL_FIXTURE === '1',
       textures: textures.size, customTable: requiredTable ? { id: requiredTable.id, clients: customModelsLoaded.size } : null, geometrySamples: workload.length, trajectoryFrames: result.result.trajectory.frames.length,
       duration: result.result.duration, serverWallSeconds: result.result.wallDuration, clickToResultMs,
-      tests: 'uncached default URL, responsive HUD, stable canvas, modal gating, mute, spectator authority, real shot and shared final state' }))
+      tests: 'uncached default URL, default cue heading, persistent manual camera, responsive HUD, stable canvas, modal gating, mute, spectator authority, real shot and shared final state, postgame menu without reload' }))
   } catch (error) {
     for (let index = 0; index < pages.length; index++) await pages[index].screenshot({ path: path.join(artifacts, `${engineName}-failure-${index}.png`), fullPage: true }).catch(() => {})
     console.error(`${engineName}: ${error.stack || error}`)

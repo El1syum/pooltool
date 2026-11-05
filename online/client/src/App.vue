@@ -78,6 +78,7 @@ const modelAdminBusy = ref(false)
 const modelAdminError = ref('')
 const modelReturnView = ref<View>('menu')
 let scene: GameScene | null = null
+let aimTurnKey = ''
 let socket: WebSocket | null = null
 let reconnectTimer = 0
 let reconnectAttempt = 0
@@ -92,6 +93,9 @@ let telemetryFlush = false
 let authSentAt = 0
 let clockCalibrated = false
 let lifecycleGeneration = 0
+// UI-operation ownership is separate from navigation generation: leaving a
+// match deliberately invalidates stale room loads, but must release its busy UI.
+let activeOperation: symbol | null = null
 let modelCatalogueGeneration = 0
 let modelSceneGeneration = 0
 let hydratingSettings = false
@@ -187,7 +191,7 @@ function setShotPhase(phase: ShotPhase) { shotPhase.value = phase; scene?.setSho
 function changeCamera(action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' | 'out') {
   if (action === 'top') { setShotPhase('overview'); scene?.resetCamera(true) }
   else if (action === 'free') { setShotPhase('overview'); scene?.resetCamera() }
-  else if (action === 'cue') { if (canShoot.value) setShotPhase('aim'); else scene?.setCameraMode('cue') }
+  else if (action === 'cue') scene?.setCameraMode('cue')
   else if (action === 'left') scene?.rotateCamera(-0.4)
   else if (action === 'right') scene?.rotateCamera(0.4)
   else scene?.zoomCamera(action === 'in' ? 0.85 : 1.18)
@@ -240,12 +244,15 @@ function summarizeShot(shot: ShotResult) {
 }
 async function perform(action: () => Promise<void>) {
   if (busy.value) return
-  const generation = lifecycleGeneration
+  const owner = Symbol('ui-operation')
+  activeOperation = owner
   busy.value = true
   error.value = ''
   try { await action() } catch (e) {
-    if (generation === lifecycleGeneration && !(e instanceof ApiError && e.code === 'identity_changed')) error.value = e instanceof Error ? e.message : 'Не удалось выполнить действие'
-  } finally { if (generation === lifecycleGeneration) busy.value = false }
+    if (activeOperation === owner && !(e instanceof ApiError && e.code === 'identity_changed')) error.value = e instanceof Error ? e.message : 'Не удалось выполнить действие'
+  } finally {
+    if (activeOperation === owner) { activeOperation = null; busy.value = false }
+  }
 }
 function telemetry(type: string, data: Record<string, unknown> = {}) {
   if (!user.value) return
@@ -281,6 +288,7 @@ function applyAuthenticatedUser(value: User) {
 }
 function resetPlatformIdentity() {
   lifecycleGeneration++; modelSceneGeneration++
+  activeOperation = null
   clearTimeout(reconnectTimer); clearInterval(heartbeat); clearInterval(polling)
   const previous = socket; socket = null; previous?.close()
   for (const pending of socketCommands.values()) { clearTimeout(pending.timer); pending.reject(new ApiError('Учётная запись изменилась.', 409, 'identity_changed')) }
@@ -506,6 +514,9 @@ function ensureScene() {
       onError: (message) => { error.value = message; telemetry('clientError', { message: message.slice(0, 500) }) },
       onPerformance: (stats) => { telemetry('clientPerformance', stats) },
     })
+    aimTurnKey = ''
+    cameraMode.value = scene.getCameraMode()
+    scene.setDefaultAimCamera('cue')
     scene.setSettings(effectiveSettings.value)
     scene.setState(match.value.snapshot)
     scene.setAim(aim.value)
@@ -519,8 +530,17 @@ function ensureScene() {
 }
 function updateInteraction() {
   const table = match.value?.snapshot.table
-  scene?.setInteraction({ canShoot: canShoot.value && !hudPanelOpen.value, canPlaceCueBall: canPlace.value && !hudPanelOpen.value, spectator: !isPlayer.value,
+  const canAim = canShoot.value && !hudPanelOpen.value
+  scene?.setInteraction({ canShoot: canAim, canPlaceCueBall: canPlace.value && !hudPanelOpen.value, spectator: !isPlayer.value,
+    ownTurn: ownTurn.value && match.value?.status === 'active',
     placementRegion: match.value?.snapshot.ballInHandRegion === 'behind_line' && table ? { minY: 0, maxY: table.length / 4 } : undefined })
+  // Modals and drawers also toggle canShoot. Only a new authoritative shot (or
+  // finishing cue-ball placement) resets an explicitly selected top/free view.
+  if (canPlace.value) aimTurnKey = ''
+  if (scene && canAim && match.value) {
+    const key = `${match.value.id}:${match.value.snapshot.shotNumber ?? 0}`
+    if (aimTurnKey !== key) { aimTurnKey = key; scene.beginAimTurn() }
+  }
 }
 watch(stage, () => {
   if (stage.value) ensureScene()
@@ -642,8 +662,11 @@ async function playBot() {
   })
 }
 async function playBotAgain() {
+  const previousUser = user.value?.id, previousToken = token
   await leave()
-  if (!room.value) await playBot()
+  // A queued replay belongs to the original identity, not an account that
+  // authenticated while its leave request was pending.
+  if (user.value?.id === previousUser && token === previousToken && !room.value) await playBot()
 }
 async function search(mode: 'casual' | 'ranked') {
   await perform(async () => {

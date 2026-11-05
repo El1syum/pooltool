@@ -258,6 +258,35 @@ SDK/platform requests or guest fallback occur, and no JS errors. Published
 client/module hashes match the local tested source. No credentials were added
 and no VK Play publication was attempted.
 
+## Postgame menu recovery and default cue aiming (2026-11-05)
+
+UI busy ownership now uses an operation token independent of navigation
+generation. Successful/failed match exit releases the menu, while an old
+operation cannot clear a newer account's busy/error state. Replay-after-leave
+also checks the initiating user/session before starting another bot match.
+
+The real match scene opts into the existing first-person cue camera during
+heading selection, before the first LMB. The workflow remains heading → contact
+→ power; selecting the cue camera alone no longer confirms heading. Explicit
+free/top/orbit views survive drawers and modals until the next authoritative
+own shot (`match.id` + `snapshot.shotNumber`). Cue placement stays in overview;
+the camera returns behind the cue afterwards. Explicit turn ownership exits cue
+view on timeout/finish even without a physical-shot trajectory. Spectators and
+model/appearance previews retain their free-camera default. Touch uses horizontal
+drag for heading, followed by a separate confirmation tap.
+
+Regression coverage includes `tests/postgame-menu.mjs` (real API/finished matches,
+all menu actions, replay, search/cancel and an explicitly injected failed leave),
+`tests/default-cue-camera.mjs` (real Three renderer, including timeout, modal and
+touch transitions), and extended `tests/match-hud.mjs` assertions on the actual
+App plus real shared physics. Platform bootstrap remains explicitly simulated.
+
+Verification: production build/typecheck, 74 client checks, dedicated cue-camera
+and existing workflow suites, real postgame menu cycles (four completed matches
+per browser), extended platform identity/replay regression, and three-client
+physical match → finish → responsive main menu all passed in Chromium/WebKit.
+Independent code and architecture review found no unresolved blocker.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

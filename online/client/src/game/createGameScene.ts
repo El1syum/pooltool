@@ -205,6 +205,9 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   let calledBall: string | null = null
   let predictedPocket: string | null = null
   let cameraMode: CameraMode = 'free'
+  let defaultAimCamera: CameraMode = 'free'
+  let headingCameraOverride: CameraMode | null = null
+  let freeHeadingPose: { position: THREE.Vector3; target: THREE.Vector3 } | null = null
   let cueDistance = 0.95
   const ghost = new THREE.Mesh(new THREE.SphereGeometry(0.028575, 20, 12), new THREE.MeshBasicMaterial({ color: 0xe0f5ff, transparent: true, opacity: 0.32, depthWrite: false, wireframe: true }))
   scene.add(ghost)
@@ -229,7 +232,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     return [position.x + snapshot.table.width / 2, snapshot.table.length / 2 - position.z, cue?.radius ?? 0.028575]
   }
   function dimensionsSignature(value: GameSnapshot): string { return JSON.stringify(value.table) }
-  function isEnabled(): boolean { return !destroyed && !playback && !interaction.spectator && interaction.canShoot && !interaction.canPlaceCueBall }
+  function isEnabled(): boolean { return !destroyed && !playback && !interaction.spectator && interaction.ownTurn !== false && interaction.canShoot && !interaction.canPlaceCueBall }
   function createTable(): void {
     // This persistent subgroup is reattached below. Clear its children before
     // clearing the parent, otherwise disposed beds survive the rebuild and can
@@ -520,20 +523,67 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
 
   // --- Camera ------------------------------------------------------------------------
 
-  function setCameraMode(mode: CameraMode): void {
+  function applyCameraMode(mode: CameraMode): void {
     if (mode === cameraMode) return
     cameraMode = mode
+    aimHoverX = null
     controls.enabled = mode === 'free'
     callbacks.onCameraModeChange?.(mode)
   }
 
+  function rememberFreeHeadingPose(): void {
+    freeHeadingPose = { position: camera.position.clone(), target: controls.target.clone() }
+  }
+
+  function setCameraMode(mode: CameraMode): void {
+    headingCameraOverride = mode
+    applyCameraMode(mode)
+    if (mode === 'free') rememberFreeHeadingPose()
+  }
+
+  function applyHeadingCamera(): void {
+    // A modal can return contact/power to heading while input is already locked.
+    // Restore the chosen overview pose even in that ordering; unlocking input
+    // later must not replace a deliberate top/free view with a different frame.
+    if (defaultAimCamera === 'cue' && headingCameraOverride === 'free') {
+      applyCameraMode('free')
+      if (freeHeadingPose) {
+        camera.position.copy(freeHeadingPose.position)
+        controls.target.copy(freeHeadingPose.target)
+        controls.update()
+      }
+    } else if (defaultAimCamera === 'cue' && isEnabled()) {
+      applyCameraMode('cue')
+    } else frameTable()
+  }
+
+  function syncDefaultAimCamera(): void {
+    // canShoot also changes when a drawer/modal is opened. Do not treat those
+    // permission changes as a new turn or erase an explicitly chosen top/free view.
+    if (defaultAimCamera === 'cue' && shotPhase === 'overview' && isEnabled() && headingCameraOverride !== 'free') applyCameraMode('cue')
+  }
+
+  function setDefaultAimCamera(mode: CameraMode): void {
+    defaultAimCamera = mode
+    if (shotPhase === 'overview' && isEnabled()) applyHeadingCamera()
+  }
+
+  function beginAimTurn(): void {
+    headingCameraOverride = null
+    freeHeadingPose = null
+    aimHoverX = null
+    syncDefaultAimCamera()
+  }
+
   /** Rotate the view around the vertical axis through the target (free camera). */
   function rotateCamera(angle: number): void {
+    headingCameraOverride = 'free'
     if (shotPhase !== null && shotPhase !== 'overview') setShotPhase('overview')
-    if (cameraMode === 'cue') setCameraMode('free')
+    applyCameraMode('free')
     const offset = camera.position.clone().sub(controls.target).applyAxisAngle(UP, angle)
     camera.position.copy(controls.target).add(offset)
     controls.update()
+    rememberFreeHeadingPose()
   }
 
   function zoomCamera(factor: number): void {
@@ -574,15 +624,21 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     if (notify) callbacks.onAimChange?.({ ...aim })
   }
 
-  function resetCamera(topDown = false): void {
-    if (shotPhase !== null && shotPhase !== 'overview') setShotPhase('overview')
-    setCameraMode('free')
+  function frameTable(topDown = false): void {
+    applyCameraMode('free')
     const length = snapshot.table.length
     const fit = framingFactor()
     controls.target.set(0, tableHeight(), 0)
     if (topDown) camera.position.set(0, tableHeight() + length * 1.7 * fit, length * 0.003)
     else camera.position.set(length * 0.74 * fit, tableHeight() + length * 1.05 * fit, length * 1.12 * fit)
     controls.update()
+  }
+
+  function resetCamera(topDown = false): void {
+    headingCameraOverride = 'free'
+    if (shotPhase !== null && shotPhase !== 'overview') setShotPhase('overview')
+    frameTable(topDown)
+    rememberFreeHeadingPose()
   }
 
   function framingFactor(): number {
@@ -660,13 +716,14 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
 
   function setShotPhase(phase: ShotPhase | null): void {
     if (phase === shotPhase) return
+    if (defaultAimCamera === 'cue' && shotPhase === 'overview' && cameraMode === 'free') rememberFreeHeadingPose()
     cancelShotGesture()
     keys.clear()
     shotPhase = phase
     lockedShot = phase === 'aim' || phase === 'power' ? { phi: aim.phi, a: aim.a, b: aim.b } : null
     updateOrbitButtons()
-    if (phase === 'aim' || phase === 'power') setCameraMode('cue')
-    else if (phase === 'overview') resetCamera()
+    if (phase === 'aim' || phase === 'power') applyCameraMode('cue')
+    else if (phase === 'overview') applyHeadingCamera()
     callbacks.onShotPhaseChange?.(phase)
   }
 
@@ -705,7 +762,10 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     canvas.focus({ preventScroll: true })
     // Explicit bindings take priority over the default workflow. The orbit
     // modifier intentionally suppresses both a shot and ball-in-hand placement.
-    if (event.pointerType === 'mouse' && event.button === 0 && orbitModifierHeld()) { cancelShotGesture(); return }
+    if (event.pointerType === 'mouse' && event.button === 0 && orbitModifierHeld()) {
+      if (shotPhase === null || shotPhase === 'overview') setCameraMode('free')
+      cancelShotGesture(); return
+    }
     // A normal left click must always be able to place the cue ball after a foul,
     // even when Mouse0 is mapped to shoot or orbit in the player's saved settings.
     if (event.button === 0 && interaction.canPlaceCueBall && !interaction.spectator && !playback) {
@@ -731,7 +791,10 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
         else keys.add(binding)
         return
       }
-      if (settings.bindings.orbit === binding && !(event.button === 2 && shotPhase !== null && shotPhase !== 'overview')) { cancelShotGesture(); return }
+      if (settings.bindings.orbit === binding && !(event.button === 2 && shotPhase !== null && shotPhase !== 'overview')) {
+        if (shotPhase === null || shotPhase === 'overview') setCameraMode('free')
+        cancelShotGesture(); return
+      }
     }
     if (shotPhase !== null && event.button === 2 && shotPhase !== 'overview') {
       event.preventDefault()
@@ -784,10 +847,16 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     }
     if (!pointer || pointer.id !== event.pointerId || activePointers.size > 1) return
     pointer.moved ||= Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 4
-    const position = pointOnTable(event)
-    if (!position) return
     const dx = event.clientX - pointer.lastX
     pointer.lastX = event.clientX
+    if (isEnabled() && shotPhase === 'overview' && cameraMode === 'cue' && event.pointerType !== 'mouse') {
+      // Touch has no hover; dragging steers the first-person heading and does
+      // not confirm it. A separate tap then locks the selected direction.
+      setAim({ phi: aim.phi - dx * 0.12 * settings.sensitivity })
+      return
+    }
+    const position = pointOnTable(event)
+    if (!position) return
     if (interaction.canPlaceCueBall && !interaction.spectator && !playback) {
       pointer.placement = position
       updatePlacement(position)
@@ -837,7 +906,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       if (shotPhase === 'overview' && !isObjectBall && isEnabled()) {
         // Touch has no hover. A felt tap chooses heading; a background tap only
         // confirms the existing heading, just like a mouse click outside felt.
-        if (event.pointerType !== 'mouse' && position && isFelt(position)) aimAt(position)
+        if (event.pointerType !== 'mouse' && cameraMode !== 'cue' && position && isFelt(position)) aimAt(position)
         setShotPhase('aim')
       }
       else if (shotPhase === 'aim' && !isObjectBall && isEnabled()) setShotPhase('power')
@@ -955,7 +1024,9 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   function stopContextMenu(event: Event): void { event.preventDefault() }
   const resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(container)
-  canvas.addEventListener('pointerdown', pointerDown)
+  // Run before OrbitControls' bubbling handler so an explicit orbit gesture can
+  // leave cue view and start rotating on this same press.
+  canvas.addEventListener('pointerdown', pointerDown, true)
   canvas.addEventListener('pointermove', pointerMove)
   canvas.addEventListener('pointerenter', resetHoverSample)
   canvas.addEventListener('pointerup', pointerUp)
@@ -968,7 +1039,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   window.addEventListener('blur', clearKeys)
   createTable()
   setSettings(DEFAULT_SETTINGS)
-  resetCamera()
+  frameTable()
   animationId = requestAnimationFrame(tick)
 
   return {
@@ -980,7 +1051,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       const changed = dimensionsSignature(next) !== dimensionsSignature(snapshot)
       snapshot = next
       playback = null
-      if (changed) { createTable(); resetCamera() }
+      if (changed) { createTable(); frameTable() }
       const ids = new Set(next.balls.map(ball => String(ball.id)))
       for (const [id, visual] of balls) {
         if (ids.has(id)) continue
@@ -996,6 +1067,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       if (!isEnabled()) cancelShotGesture()
       updateOrbitButtons()
       if (interaction.spectator || !interaction.canPlaceCueBall) placement.visible = false
+      if ((interaction.spectator || interaction.canPlaceCueBall || (defaultAimCamera === 'cue' && interaction.ownTurn === false)) && cameraMode === 'cue') frameTable()
+      syncDefaultAimCamera()
       updateAimGuide()
     },
     setAim,
@@ -1028,6 +1101,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       if (!stroke) strokeSoundPlayed = false
       stroke = null
       playback = { trajectory, startAt, lastT: Math.max(0, (Date.now() - startAt) / 1000), eventIndex: 0 }
+      if (defaultAimCamera === 'cue' && cameraMode === 'cue') frameTable()
       clearKeys()
       updateAimGuide()
     },
@@ -1035,6 +1109,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     resetCamera,
     setCameraMode,
     getCameraMode: () => cameraMode,
+    setDefaultAimCamera,
+    beginAimTurn,
     setShotPhase,
     rotateCamera,
     zoomCamera,
@@ -1052,7 +1128,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       window.removeEventListener('keydown', keyDown)
       window.removeEventListener('keyup', keyUp)
       window.removeEventListener('blur', clearKeys)
-      canvas.removeEventListener('pointerdown', pointerDown)
+      canvas.removeEventListener('pointerdown', pointerDown, true)
       canvas.removeEventListener('pointermove', pointerMove)
       canvas.removeEventListener('pointerenter', resetHoverSample)
       canvas.removeEventListener('pointerup', pointerUp)

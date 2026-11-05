@@ -31,6 +31,8 @@ export interface TableState {
 export interface GameSnapshot {
   balls: BallState[]
   table: TableState
+  /** Authoritative shot boundary; temporary input/UI locks are not new turns. */
+  shotNumber?: number
   cueBallId?: string | number
   ballInHand?: boolean | string
   ballInHandRegion?: string
@@ -98,6 +100,8 @@ export interface SceneInteraction {
   canShoot: boolean
   canPlaceCueBall: boolean
   spectator: boolean
+  /** Authoritative active-turn ownership, independent of modal/busy input locks. */
+  ownTurn?: boolean
   /** Display a remote player's cue without giving the viewer input permissions. */
   showRemoteAim?: boolean
   /** Bounds in pooltool metres. Server remains the authority for placement. */
@@ -136,6 +140,10 @@ export interface GameScene {
   resetCamera: (topDown?: boolean) => void
   setCameraMode: (mode: CameraMode) => void
   getCameraMode: () => CameraMode
+  /** Opt-in match heading view; previews and legacy controls remain free by default. */
+  setDefaultAimCamera: (mode: CameraMode) => void
+  /** A new authoritative own shot, not a temporary UI permission change. Clears camera overrides. */
+  beginAimTurn: () => void
   /** null restores legacy input; phase changes cancel any unfinished pointer gesture. */
   setShotPhase: (phase: ShotPhase | null) => void
   /** Radians around the vertical axis; switches the cue view to the free camera. */
