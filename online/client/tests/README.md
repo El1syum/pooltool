@@ -1,5 +1,28 @@
 # Browser smoke checks
 
+## Interface and controls regression (2026-11-05)
+
+- `design-game-states.mjs`: real Vue HUD and both production CSS files, six
+  Figma states × seven viewports per browser; native assets, overlap/central-ball
+  clearance and power fills without the assistance key. Component-only, no fake physics.
+- `cue-pointer-lock.mjs`: native Chromium capture and unbounded movement,
+  first-LMB confirmation, safety release, denied/unsupported edge-turn fallback,
+  and conflicting assistance-key safety. WebKit reports native grant separately.
+- `assist-binding-integration.mjs`: actual App/API on loopback, default Ctrl,
+  reassignment/server persistence/reload, modifier families, native copy chords,
+  conflicts and no unintended shots. Only its own guests/rooms are changed.
+- `ui-usability.mjs`: aligned history, selectable invitation code, real insecure
+  HTTP clipboard fallback, cleanup and focus/selection recovery; real App lane
+  proxies the isolated service on 8791. `SKIP_REAL_APP=1` is component/helper only.
+- `default-cue-camera.mjs`: also checks actual Three camera projection so the
+  heading reticle cannot drift away from the real cue ball.
+
+The default assistance key is Ctrl (configurable in settings), not Alt. Real
+match tests release captured heading input through the actual Ctrl gesture when
+accessing HUD buttons; they do not bypass Pointer Lock with a scripted unlock.
+
+## General multiplayer smoke
+
 `browser-smoke.mjs` checks the actual running server and compiled client, using separate browser contexts for two players and an observer. It exercises room readiness, cue placement through canvas raycasting, a real physical shot, animation in all three clients, reconnect during playback, spectator authorization and explicit rejoining of the same room, persisted key bindings/graphics settings, keyboard-modifier camera rotation without changing aim, profile history, leaving a completed room and creating a new match through matchmaking. It also verifies original ball textures, nonempty rendered geometry, no JavaScript errors and a narrow 390×844 viewport.
 
 The test creates disposable guest accounts and completes the test matches. Use a development/test database. Start the application with the real physics engine; a mock server does not satisfy the checks.

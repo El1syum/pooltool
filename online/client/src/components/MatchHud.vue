@@ -12,7 +12,7 @@ const props = defineProps<{
   canShoot: boolean; canPlace: boolean; canReposition: boolean; placingCue: boolean
   connected: boolean; connection: string; remaining: number; elapsed: number
   statusText: string; volume: number; topViewKey: string; calledBall: string
-  calledPocket: string; cameraMode: CameraMode; showAssist?: boolean
+  calledPocket: string; cameraMode: CameraMode; showAssist?: boolean; assistKeyLabel?: string
 }>()
 const emit = defineEmits<{
   settings: []; menu: []; mute: []; rules: []; camera: [action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' | 'out']
@@ -25,7 +25,15 @@ const assistAsset = (name: string) => `${base}ui/figma-assist/${name}.svg`
 const controlsOpen = ref(false)
 watch(controlsOpen, value => emit('panelOpen', value))
 onBeforeUnmount(() => { if (controlsOpen.value) emit('panelOpen', false) })
-const compact = computed(() => props.phase !== 'overview')
+const localTurn = computed(() => props.match.status === 'active' && props.match.players[props.match.currentPlayer]?.id === props.user.id)
+const headingView = computed(() => props.phase === 'overview' && props.cameraMode === 'cue' && localTurn.value && !props.canPlace)
+const compact = computed(() => props.phase !== 'overview' || headingView.value)
+const showOverviewInstruction = computed(() => !compact.value && localTurn.value && !props.canPlace)
+const contactDescription = computed(() => {
+  const horizontal = Math.abs(props.aim.a) < 0.025 ? '' : props.aim.a > 0 ? 'справа' : 'слева'
+  const vertical = Math.abs(props.aim.b) < 0.025 ? '' : props.aim.b > 0 ? 'выше центра' : 'ниже центра'
+  return `Контакт · ${[horizontal, vertical].filter(Boolean).join(' ') || 'по центру'}`
+})
 const keyHint = computed(() => props.topViewKey.replace(/^Key/, '').replace(/^Digit/, '').replace('Space', 'Пробел'))
 const showStatus = computed(() => props.canPlace || !props.connected || props.match.status === 'calculating' || props.statusText === 'Воспроизведение удара' || !props.match.players.some(player => player.id === props.user.id))
 const power = computed(() => Math.round(props.aim.V0 / 8 * 100))
@@ -69,7 +77,7 @@ defineExpose({ closeControls })
 </script>
 
 <template>
-  <section class="hud-root hud-modern" :class="{ 'hud-compact': compact, 'hud-offline': !connected }" :data-shot-phase="phase" :data-aim-direction="aim.phi" :data-camera-mode="cameraMode" data-testid="match-hud" aria-label="Интерфейс матча">
+  <section class="hud-root hud-modern" :class="{ 'hud-compact': compact, 'hud-heading': headingView, 'hud-offline': !connected, 'hud-assist-visible': showAssist }" :data-shot-phase="phase" :data-aim-direction="aim.phi" :data-camera-mode="cameraMode" data-testid="match-hud" aria-label="Интерфейс матча">
     <div class="hud-identity" aria-label="Pooltool">
       <div class="hud-seal">8</div>
       <div class="hud-wordmark"><strong>Pooltool</strong><span>8-BALL · МАТЧ {{ formatTime(elapsed) }}</span></div>
@@ -99,25 +107,31 @@ defineExpose({ closeControls })
 
     <div class="hud-match-status match-status" role="status" :class="{ 'hud-status-attention': canPlace || !connected, 'hud-status-quiet': !showStatus }">{{ !connected ? connection : statusText }}</div>
 
+    <aside v-if="showOverviewInstruction" class="hud-stage-instruction hud-overview-instruction"><span>01 / 04 · ОБЗОР</span><h2>Ваш ход</h2><p>Оцените стол и оставшиеся шары. Затем выберите направление удара.</p></aside>
+    <div v-if="!compact && match.status !== 'finished'" class="hud-ball-legend" aria-label="Обозначения состояния шаров"><span><img :src="assistAsset('legend-live')" alt="" />Яркие — на столе</span><span><img :src="assistAsset('legend-pocketed')" alt="" />Приглушённые — забиты</span></div>
+
     <div v-if="compact && match.status !== 'finished'" class="hud-target">
       <button v-if="phase === 'aim'" class="hud-reticle hud-contact-reticle" type="button" :class="{ 'hud-reticle-interactive': canShoot }" :disabled="!canShoot" aria-label="Точка удара по битку. Нажмите для выбора силы" @pointermove="setSpin" @pointerdown="setSpin" @click="confirmContact">
         <img class="hud-reticle-ring" :src="assistAsset('contact-ring')" alt="" />
         <img class="hud-reticle-center" :src="assistAsset('contact-reticle')" alt="" :style="{ transform: `translate(${aim.a * 77}px, ${-aim.b * 77}px)` }" />
       </button>
       <img v-else class="hud-power-reticle" :src="assistAsset('power-reticle')" alt="" />
-      <div v-if="phase === 'power' && showAssist" class="hud-charge" aria-live="polite">
+      <div v-if="headingView" class="hud-direction-control"><img :src="assistAsset('direction-arrow')" alt="" /><span>Мышь ↔ · направление удара</span></div>
+      <div v-if="phase === 'aim' && showAssist && localTurn" class="hud-contact-annotation" :style="{ left: `${158 + aim.a * 77}px`, top: `${158 - aim.b * 77}px` }"><img :src="assistAsset('contact-leader')" alt="" /><span>{{ contactDescription }}</span></div>
+      <div v-if="phase === 'power'" class="hud-charge" aria-live="polite">
         <ShotPowerGauge class="hud-percent-wedge" :fraction="powerFraction" unit="percent" label="Сила удара в процентах" />
         <ShotPowerGauge class="hud-speed-wedge" :fraction="powerFraction" unit="speed" label="Скорость удара в метрах в секунду" />
         <span class="hud-power-number">{{ power }}%</span><span class="hud-speed-number">{{ aim.V0.toFixed(1) }} м/с</span>
       </div>
+      <span v-if="phase === 'power'" class="hud-target-caption">Мышь ↕ · сила удара</span>
     </div>
 
-    <MatchAssistPanels v-if="showAssist && match.status !== 'finished'" :aim="aim" :phase="phase" :can-shoot="canShoot" @aim="emit('aim', $event)" @phase="emit('phase', $event)" />
+    <MatchAssistPanels v-if="showAssist && localTurn && !canPlace" :aim="aim" :phase="phase" :show-stage="!showOverviewInstruction" :assist-key-label="assistKeyLabel" :can-shoot="canShoot" @aim="emit('aim', $event)" @phase="emit('phase', $event)" />
 
     <footer class="hud-footer">
-      <div class="hud-footer-actions"><button type="button" @click="emit('camera', 'top')" aria-label="Вид сверху">{{ keyHint }} · вид сверху</button><button type="button" @click="emit('camera', 'free')">Обзор стола</button><button type="button" class="hud-control-toggle" :aria-expanded="controlsOpen" aria-controls="hud-controls" @click="controlsOpen = !controlsOpen">Параметры удара</button></div>
+      <div class="hud-footer-actions"><button type="button" @click="emit('camera', 'top')" aria-label="Вид сверху">{{ keyHint }} · вид сверху</button><button type="button" @click="emit('camera', 'free')">Обзор стола</button><button type="button" class="hud-control-toggle" :aria-expanded="controlsOpen" aria-controls="hud-controls" @click="controlsOpen = !controlsOpen">Параметры удара</button><span class="hud-alt-hint"><kbd>{{ assistKeyLabel || 'Ctrl' }}</kbd> · дополнительные приборы</span></div>
       <span class="hud-footer-instruction">{{ phase === 'aim' ? 'ЛКМ по сцене · подтвердить точку контакта' : phase === 'power' ? 'Зажмите ЛКМ · оттяните вниз и отпустите' : canShoot ? 'ЛКМ по сцене · подтвердить направление' : 'Колесо мыши · приблизиться к битку' }}</span>
-      <div class="hud-footer-right"><button class="hud-room-code" type="button" :title="room ? 'Скопировать код комнаты' : ''" :disabled="!room" @click="emit('copyCode')">{{ room ? `Комната ${room.code}` : 'Стол' }}</button><span>·</span><button class="hud-rules" type="button" aria-label="Правила" @click="emit('rules')">Правила 8-ball</button><button class="hud-touch-assist" type="button" :aria-pressed="Boolean(showAssist)" @click="emit('toggleAssist')">Помощь</button></div>
+      <div class="hud-footer-right"><button class="hud-room-code" type="button" :title="room ? 'Скопировать код комнаты' : ''" :disabled="!room" @click="emit('copyCode')"><template v-if="room">Комната <span data-room-code>{{ room.code }}</span></template><template v-else>Стол</template></button><span>·</span><button class="hud-rules" type="button" aria-label="Правила" @click="emit('rules')">Правила 8-ball</button><button class="hud-touch-assist" type="button" :aria-pressed="Boolean(showAssist)" @click="emit('toggleAssist')">Помощь</button></div>
     </footer>
     <p v-if="canPlace" class="hud-phase-hint">{{ phaseHint }}</p>
 

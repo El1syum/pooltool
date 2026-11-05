@@ -5,6 +5,7 @@ import type { User, Room, Match, ShotResult } from './api'
 import { createGameScene } from './game/createGameScene'
 import { expandTrajectory, numberForPocket } from './game/playback'
 import { DEFAULT_BINDINGS } from './game/types'
+import { bindingLabel, findBindingConflicts, isAssistKeyboardBinding, matchesAssistBinding, normalizeAssistBinding } from './game/assistBinding'
 import type { AimState, BindingAction, CameraMode, GameScene, GameSettings, ShotPhase } from './game/types'
 import MatchHud from './components/MatchHud.vue'
 import ClubMenu from './components/ClubMenu.vue'
@@ -19,6 +20,7 @@ import { emptyVisualAssetProfile, type ModelLibrarySnapshot, type VisualAssetPro
 import { defaultPlayerAssetSelection, readPlayerAssetSelection, reconcilePlayerAssetSelection, resolvePlayerAssets,
   writePlayerAssetSelection, type PlayerAssetSelection } from './models/playerSelection'
 import { createVkPlayEntry, isVkPlayLaunch, type VkPlayConfig, type VkPlayEntryState } from './platform/vkplay'
+import { copyText } from './platform/clipboard'
 
 type View = 'menu' | 'play' | 'lobby' | 'search' | 'match' | 'profile' | 'models'
 const view = ref<View>('menu')
@@ -44,11 +46,13 @@ const settingsOpen = ref(false)
 const gameMenuOpen = ref(false)
 const surrenderConfirmation = ref(false)
 const rulesOpen = ref(false)
-const altHeld = ref(false)
+const assistHeld = ref(false)
+const assistPressedCodes = new Set<string>()
 const assistPinned = ref(false)
 const hudPanelOpen = ref(false)
 const shotPhase = ref<ShotPhase>('overview')
 const bindingCapture = ref<BindingAction | null>(null)
+const bindingCaptureError = ref('')
 const settingsDirty = ref(false)
 const history = ref<Array<Record<string, unknown>>>([])
 const stage = ref<HTMLDivElement | null>(null)
@@ -61,7 +65,8 @@ const defaults = (): GameSettings => ({ quality: 'medium', volume: 0.5, sensitiv
 const settings = ref<GameSettings>(defaults())
 const aimGuidePolicy = computed(() => getAimGuidePolicy(match.value))
 const effectiveSettings = computed(() => applyMatchVisualPolicy(settings.value, match.value))
-const showAssist = computed(() => (altHeld.value || assistPinned.value) && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !appearanceOpen.value && !modelNavigationBusy.value && !bindingCapture.value)
+const assistKeyLabel = computed(() => bindingLabel(normalizeAssistBinding(settings.value.bindings.assist)))
+const showAssist = computed(() => (assistHeld.value || assistPinned.value) && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !appearanceOpen.value && !modelNavigationBusy.value && !bindingCapture.value)
 const modelLibrary = createServerModelLibrary()
 const modelProfile = ref<VisualAssetProfile>(emptyVisualAssetProfile())
 const modelCatalogue = ref<ModelLibrarySnapshot | null>(null)
@@ -90,6 +95,8 @@ let token = vkPlayLaunch ? '' : localStorage.getItem('pooltool.token') || ''
 let heartbeat = 0
 let polling = 0
 let telemetryFlush = false
+const clipboardMessage = ref('')
+let clipboardMessageTimer = 0
 let authSentAt = 0
 let clockCalibrated = false
 let lifecycleGeneration = 0
@@ -132,7 +139,7 @@ function clearGameBookmarks() {
 }
 function mergeSettings(value: unknown): GameSettings {
   const s = value && typeof value === 'object' ? value as Partial<GameSettings> : {}
-  return { ...defaults(), ...s, bindings: { ...DEFAULT_BINDINGS, ...(s.bindings || {}) } }
+  return { ...defaults(), ...s, bindings: { ...DEFAULT_BINDINGS, ...(s.bindings || {}), assist: normalizeAssistBinding(s.bindings?.assist) } }
 }
 const isPlayer = computed(() => Boolean(match.value?.players.some((p) => p.id === user.value?.id)))
 const ownTurn = computed(() => match.value?.players[match.value.currentPlayer]?.id === user.value?.id)
@@ -150,17 +157,8 @@ const remainingBalls = computed(() => {
   const targets = match.value?.snapshot.hittable
   return match.value?.snapshot.balls.filter((b) => b.id !== 'cue' && !b.pocketed && (!Array.isArray(targets) || targets.includes(String(b.id)))) || []
 })
-const captureLabels: Record<BindingAction, string> = { aimLeft: 'Прицел влево', aimRight: 'Прицел вправо', powerUp: 'Увеличить силу', powerDown: 'Уменьшить силу', elevationUp: 'Поднять кий', elevationDown: 'Опустить кий', spinLeft: 'Вращение влево', spinRight: 'Вращение вправо', spinUp: 'Вращение вверх', spinDown: 'Вращение вниз', shoot: 'Удар', resetCamera: 'Сброс камеры', topView: 'Вид сверху', orbit: 'Вращать камеру', cameraLeft: 'Повернуть стол влево', cameraRight: 'Повернуть стол вправо', cueView: 'Вид из-за кия' }
-const bindingConflicts = computed(() => {
-  const seen = new Map<string, string>()
-  const conflicts: string[] = []
-  for (const [action, key] of Object.entries(settings.value.bindings)) {
-    if (!key) continue
-    if (seen.has(key)) conflicts.push(`${captureLabels[action as BindingAction]} и ${seen.get(key)}: ${key}`)
-    else seen.set(key, captureLabels[action as BindingAction])
-  }
-  return conflicts
-})
+const captureLabels: Record<BindingAction, string> = { aimLeft: 'Прицел влево', aimRight: 'Прицел вправо', powerUp: 'Увеличить силу', powerDown: 'Уменьшить силу', elevationUp: 'Поднять кий', elevationDown: 'Опустить кий', spinLeft: 'Вращение влево', spinRight: 'Вращение вправо', spinUp: 'Вращение вверх', spinDown: 'Вращение вниз', shoot: 'Удар', resetCamera: 'Сброс камеры', topView: 'Вид сверху', orbit: 'Вращать камеру', cameraLeft: 'Повернуть стол влево', cameraRight: 'Повернуть стол вправо', cueView: 'Вид из-за кия', assist: 'Дополнительные приборы' }
+const bindingConflicts = computed(() => findBindingConflicts(settings.value.bindings).map(([action, previous, key]) => `${captureLabels[action as BindingAction]} и ${captureLabels[previous as BindingAction]}: ${key}`))
 const reasonLabels: Record<string, string> = { eightBall: 'Партия завершена по правилам восьмёрки', surrender: 'Соперник сдался', left: 'Игрок покинул матч', disconnect: 'Техническое поражение: игрок не вернулся после отключения', abandoned: 'Оба игрока отключились, матч прерван', maximumDuration: 'Превышена максимальная длительность матча' }
 function reasonLabel(value?: string | null) { return value ? reasonLabels[value] || value : '' }
 const resultReason = computed(() => {
@@ -191,7 +189,7 @@ function setShotPhase(phase: ShotPhase) { shotPhase.value = phase; scene?.setSho
 function changeCamera(action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' | 'out') {
   if (action === 'top') { setShotPhase('overview'); scene?.resetCamera(true) }
   else if (action === 'free') { setShotPhase('overview'); scene?.resetCamera() }
-  else if (action === 'cue') scene?.setCameraMode('cue')
+  else if (action === 'cue') { scene?.setCameraMode('cue'); scene?.requestAimPointerLock() }
   else if (action === 'left') scene?.rotateCamera(-0.4)
   else if (action === 'right') scene?.rotateCamera(0.4)
   else scene?.zoomCamera(action === 'in' ? 0.85 : 1.18)
@@ -280,7 +278,7 @@ function applyAuthenticatedUser(value: User) {
   const remoteSettings = mergeSettings(value.settings)
   const cached = restoreJson<GameSettings | null>(`pooltool.settings.${value.id}`, null)
   hydratingSettings = true
-  try { settings.value = cached ? mergeSettings(cached) : remoteSettings }
+  try { settings.value = cached ? mergeSettings({ ...cached, bindings: { ...cached.bindings, assist: cached.bindings?.assist ?? remoteSettings.bindings.assist } }) : remoteSettings }
   finally { hydratingSettings = false }
   settingsDirty.value = JSON.stringify(settings.value) !== JSON.stringify(remoteSettings)
   localStorage.setItem(`pooltool.settings.${value.id}`, JSON.stringify(settings.value))
@@ -300,9 +298,10 @@ function resetPlatformIdentity() {
   departedRooms.clear(); departedMatches.clear(); busy.value = false
   settingsOpen.value = false; gameMenuOpen.value = false; surrenderConfirmation.value = false; rulesOpen.value = false
   appearanceOpen.value = false; modelAdminOpen.value = false; modelNavigationBusy.value = false; hudPanelOpen.value = false
-  altHeld.value = false; assistPinned.value = false; bindingCapture.value = null; placingCue.value = false
+  releaseAssist(); assistPinned.value = false; bindingCapture.value = null; bindingCaptureError.value = ''; placingCue.value = false
   calledBall.value = ''; calledPocket.value = ''; shotPhase.value = 'overview'; toast.value = null
   clearTimeout(toastTimer); settingsRevision++; settingsSync = null
+  clearTimeout(clipboardMessageTimer); clipboardMessage.value = ''
   hydratingSettings = true
   try { settings.value = defaults() } finally { hydratingSettings = false }
   settingsDirty.value = false; error.value = ''; name.value = 'Игрок'
@@ -532,6 +531,7 @@ function updateInteraction() {
   const table = match.value?.snapshot.table
   const canAim = canShoot.value && !hudPanelOpen.value
   scene?.setInteraction({ canShoot: canAim, canPlaceCueBall: canPlace.value && !hudPanelOpen.value, spectator: !isPlayer.value,
+    pointerLockAllowed: !showAssist.value,
     ownTurn: ownTurn.value && match.value?.status === 'active',
     placementRegion: match.value?.snapshot.ballInHandRegion === 'behind_line' && table ? { minY: 0, maxY: table.length / 4 } : undefined })
   // Modals and drawers also toggle canShoot. Only a new authoritative shot (or
@@ -553,6 +553,7 @@ watch(stage, () => {
 }, { flush: 'post' })
 watch([canShoot, canPlace, isPlayer], updateInteraction)
 watch(hudPanelOpen, updateInteraction)
+watch(showAssist, updateInteraction)
 watch([ownTurn, () => match.value?.id, () => match.value?.status, playbackBusy, canPlace, settingsOpen, gameMenuOpen, rulesOpen, appearanceOpen, modelNavigationBusy, hudPanelOpen], () => {
   if (!ownTurn.value || match.value?.status !== 'active' || playbackBusy.value || canPlace.value || settingsOpen.value || gameMenuOpen.value || rulesOpen.value || appearanceOpen.value || modelNavigationBusy.value || hudPanelOpen.value) setShotPhase('overview')
 })
@@ -567,7 +568,10 @@ watch(settings, () => {
   }
 }, { deep: true, flush: 'sync' })
 watch(settingsOpen, () => { settingsDialogRevision++ }, { flush: 'sync' })
-watch(view, value => { if (value !== 'match') { altHeld.value = false; assistPinned.value = false } })
+watch(view, value => { if (value !== 'match') { releaseAssist(); assistPinned.value = false } })
+watch(() => settings.value.bindings.assist, () => { releaseAssist(); assistPinned.value = false })
+watch(bindingCapture, () => { bindingCaptureError.value = ''; releaseAssist() })
+watch([settingsOpen, gameMenuOpen, rulesOpen, appearanceOpen, modelNavigationBusy], values => { if (values.some(Boolean)) releaseAssist() })
 watch(effectiveModelProfile, () => { void applySceneModels() }, { deep: true })
 watch(() => user.value?.id, id => {
   playerAssets.value = reconcilePlayerAssetSelection(readPlayerAssetSelection(localStorage, id), modelCatalogue.value)
@@ -805,13 +809,21 @@ async function logoutModelAdmin() {
   catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось завершить сеанс' }
 }
 function applyModels(value: VisualAssetProfile) { modelProfile.value = value; void loadModelLibrary() }
-function releaseAlt() { altHeld.value = false }
+function releaseAssist() { assistPressedCodes.clear(); assistHeld.value = false }
 function handleAssistKey(event: KeyboardEvent) {
-  if (event.key !== 'Alt') return
-  if (event.type === 'keyup') { releaseAlt(); return }
-  if (view.value === 'match' && !bindingCapture.value && !settingsOpen.value && !appearanceOpen.value && !modelNavigationBusy.value && !(event.target instanceof HTMLInputElement)) {
-    event.preventDefault(); altHeld.value = true
+  const code = event.code || ({ Control: 'ControlLeft', Alt: 'AltLeft', Shift: 'ShiftLeft', Meta: 'MetaLeft' } as Record<string, string>)[event.key] || ''
+  if (event.type === 'keyup') {
+    const wasHeld = assistPressedCodes.has(code)
+    assistPressedCodes.delete(code); assistHeld.value = assistPressedCodes.size > 0
+    if (wasHeld) { event.preventDefault(); event.stopImmediatePropagation() }
+    return
   }
+  if (!matchesAssistBinding(code, settings.value.bindings.assist, event)) return
+  const editable = event.target instanceof HTMLElement && (event.target.isContentEditable || Boolean(event.target.closest('input, textarea, select, [contenteditable="true"]')))
+  if (view.value !== 'match' || bindingCapture.value || settingsOpen.value || gameMenuOpen.value || rulesOpen.value || appearanceOpen.value || modelNavigationBusy.value || editable) return
+  // Assist wins over an unsaved conflicting game binding. A temporary overlap
+  // must never turn an informational hold into a shot/camera action.
+  event.preventDefault(); event.stopImmediatePropagation(); assistPressedCodes.add(code); assistHeld.value = true
 }
 function elevationWheel(event: WheelEvent) {
   if (!event.shiftKey || !canShoot.value || shotPhase.value === 'overview' || !event.deltaY) return
@@ -836,18 +848,40 @@ function captureBinding(event: KeyboardEvent | MouseEvent) {
   }
   event.preventDefault(); event.stopImmediatePropagation()
   if (event instanceof KeyboardEvent && event.code === 'Escape') { bindingCapture.value = null; return }
+  if (bindingCapture.value === 'assist' && (!(event instanceof KeyboardEvent) || !isAssistKeyboardBinding(event.code))) {
+    bindingCaptureError.value = 'Для дополнительных приборов выберите клавишу клавиатуры. Esc — отмена.'
+    return
+  }
   const key = event instanceof KeyboardEvent ? event.code : `Mouse${event.button}`
   settings.value.bindings[bindingCapture.value] = key
   bindingCapture.value = null
 }
-async function copyCode() { if (!room.value) return; try { await navigator.clipboard.writeText(room.value.code) } catch { code.value = room.value.code } }
-function visibilityChanged() { releaseAlt(); telemetry('clientVisibility', { visible: document.visibilityState === 'visible' }); if (document.visibilityState === 'visible' && connected.value) void restoreMatch() }
-onMounted(() => { void authenticate(); void loadModelLibrary(); window.addEventListener('keydown', captureBinding, true); window.addEventListener('mousedown', captureBinding, true); window.addEventListener('keydown', handleAssistKey, true); window.addEventListener('keyup', handleAssistKey, true); window.addEventListener('blur', releaseAlt); document.addEventListener('visibilitychange', visibilityChanged); window.addEventListener('online', connect) })
-onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(clock); clearInterval(polling); clearInterval(heartbeat); clearTimeout(reconnectTimer); socket?.close(); scene?.destroy(); window.removeEventListener('keydown', captureBinding, true); window.removeEventListener('mousedown', captureBinding, true); window.removeEventListener('keydown', handleAssistKey, true); window.removeEventListener('keyup', handleAssistKey, true); window.removeEventListener('blur', releaseAlt); document.removeEventListener('visibilitychange', visibilityChanged); window.removeEventListener('online', connect) })
+async function copyCode() {
+  const invitation = room.value?.code, identity = token, initialView = view.value
+  if (!invitation) return
+  const copied = await copyText(invitation)
+  if (token !== identity || room.value?.code !== invitation || view.value !== initialView
+    || settingsOpen.value || gameMenuOpen.value || rulesOpen.value || appearanceOpen.value || modelAdminOpen.value || modelNavigationBusy.value) return
+  if (!copied) {
+    const element = document.querySelector<HTMLElement>('[data-room-code]')
+    if (element) {
+      (element.closest<HTMLElement>('button') || element).focus({ preventScroll: true })
+      const range = document.createRange(); range.selectNodeContents(element)
+      const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range)
+    }
+  }
+  clipboardMessage.value = copied ? 'Код приглашения скопирован' : 'Браузер запретил копирование. Код выделен — нажмите Ctrl+C.'
+  clearTimeout(clipboardMessageTimer)
+  clipboardMessageTimer = window.setTimeout(() => { clipboardMessage.value = '' }, 4000)
+}
+function visibilityChanged() { releaseAssist(); telemetry('clientVisibility', { visible: document.visibilityState === 'visible' }); if (document.visibilityState === 'visible' && connected.value) void restoreMatch() }
+onMounted(() => { void authenticate(); void loadModelLibrary(); window.addEventListener('keydown', captureBinding, true); window.addEventListener('mousedown', captureBinding, true); window.addEventListener('keydown', handleAssistKey, true); window.addEventListener('keyup', handleAssistKey, true); window.addEventListener('blur', releaseAssist); document.addEventListener('visibilitychange', visibilityChanged); window.addEventListener('online', connect) })
+onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(clock); clearInterval(polling); clearInterval(heartbeat); clearTimeout(reconnectTimer); clearTimeout(clipboardMessageTimer); socket?.close(); scene?.destroy(); window.removeEventListener('keydown', captureBinding, true); window.removeEventListener('mousedown', captureBinding, true); window.removeEventListener('keydown', handleAssistKey, true); window.removeEventListener('keyup', handleAssistKey, true); window.removeEventListener('blur', releaseAssist); document.removeEventListener('visibilitychange', visibilityChanged); window.removeEventListener('online', connect) })
 </script>
 
 <template>
   <div class="app-shell club-app" :class="{ 'in-match': view === 'match' && match, 'in-workshop': view === 'models' }">
+    <div v-if="clipboardMessage" class="clipboard-feedback" role="status">{{ clipboardMessage }}</div>
     <header v-if="loading || !user" class="app-header">
       <button class="brand" :disabled="busy" @click="view = match ? 'match' : 'menu'">Pooltool Online</button>
       <span class="connection" :class="{ offline: !connected }" role="status">{{ connection }}</span>
@@ -883,6 +917,7 @@ onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(c
         :volume="settings.volume" :top-view-key="settings.bindings.topView || DEFAULT_BINDINGS.topView"
         :called-ball="calledBall" :called-pocket="calledPocket" :camera-mode="cameraMode"
         :show-assist="showAssist"
+        :assist-key-label="assistKeyLabel"
         @settings="settingsOpen = true" @menu="gameMenuOpen = true" @mute="toggleSound"
         @rules="rulesOpen = true" @camera="changeCamera" @aim="changeHudAim"
         @shoot="shoot()" @phase="setShotPhase" @select-ball="selectBall" @select-pocket="selectPocket"
@@ -911,11 +946,11 @@ onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(c
         <p>После распределения групп игрок забивает свои цельные или полосатые шары. Восьмёрку нужно забить после всех семи шаров своей группы. Заказывать шар и лузу не требуется, в том числе для восьмёрки.</p>
         <p>Выбор шара и лузы в параметрах удара необязателен и служит для отметки цели. Ошибочный первый контакт, падение битка и другие нарушения оценивает сервер; после фола биток ставится в разрешённой зоне.</p>
         <p>До первого ЛКМ наведите направление удара. Клик по свободному месту сцены фиксирует его и открывает выбор точки контакта кия с битком. Подтвердите точку таким же кликом — попадать по битку не нужно. Затем отдельно зажмите ЛКМ, оттяните кий вниз для выбора силы и отпустите кнопку для удара. Клики по прицельным шарам и лузам сохраняют выбор заказа. Правая кнопка возвращает на предыдущий этап.</p>
-        <p>Удерживайте Alt для дополнительных приборов. Shift + колесо меняет наклон кия. Альтернативное управление доступно в панели «Параметры удара». В рейтинговых матчах линия прицеливания принудительно отключена. Настройки и меню не останавливают таймер сетевой партии.</p>
+        <p>Удерживайте {{ assistKeyLabel }} для дополнительных приборов. Клавиша меняется в настройках управления. Shift + колесо меняет наклон кия. Альтернативное управление доступно в панели «Параметры удара». В рейтинговых матчах линия прицеливания принудительно отключена. Настройки и меню не останавливают таймер сетевой партии.</p>
         <button @click="rulesOpen = false">Закрыть правила</button>
       </section>
     </div>
-    <ClubSettings v-if="settingsOpen" :settings="effectiveSettings" :binding-capture="bindingCapture" :capture-labels="captureLabels" :binding-conflicts="bindingConflicts" :aim-guide-locked="aimGuidePolicy.locked" :in-match="view === 'match'" :user="user" :client-version="CLIENT_VERSION" @update:settings="updateSettings" @capture="bindingCapture = $event" @reset="settings = defaults()" @save="saveSettings" @close="settingsOpen = false; bindingCapture = null" @models="openModels" @appearance="openAppearance" />
+    <ClubSettings v-if="settingsOpen" :settings="effectiveSettings" :binding-capture="bindingCapture" :binding-capture-error="bindingCaptureError" :capture-labels="captureLabels" :binding-conflicts="bindingConflicts" :aim-guide-locked="aimGuidePolicy.locked" :in-match="view === 'match'" :user="user" :client-version="CLIENT_VERSION" @update:settings="updateSettings" @capture="bindingCapture = $event" @reset="settings = defaults()" @save="saveSettings" @close="settingsOpen = false; bindingCapture = null" @models="openModels" @appearance="openAppearance" />
     <PlayerAppearance v-if="appearanceOpen" :library="modelCatalogue" :selection="playerAssets" :snapshot="match?.snapshot" :loading="modelCatalogueLoading" :error="modelCatalogueError" @apply="applyPlayerAssets" @close="closeAppearance" @retry="loadModelLibrary" @manage="openModels" />
     <ModelAdminLogin v-if="modelAdminOpen" :busy="modelAdminBusy" :error="modelAdminError" :configured="modelLibrary.session.value.configured" @submit="loginModelAdmin" @close="modelAdminOpen = false; modelAdminError = ''" />
   </div>

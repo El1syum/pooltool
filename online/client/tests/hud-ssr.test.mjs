@@ -28,6 +28,11 @@ function fixture(overrides = {}) {
   }
 }
 const render = props => renderToString(createSSRApp(Hud, props))
+test('the selectable room-code node excludes the invitation label', async () => {
+  const html = await render(fixture())
+  assert.match(html, /Комната <span data-room-code>ABC123<\/span>/)
+  assert.doesNotMatch(html, /<button[^>]*data-room-code/)
+})
 function articles(html) {
   return [...html.matchAll(/<article\b[^>]*data-player-id="([^"]+)"[^>]*>[\s\S]*?<\/article>/g)]
     .map(match => ({ id: match[1], html: match[0] }))
@@ -79,7 +84,7 @@ test('timers, mapped key hint and the single match-menu action use current value
 
 test('power phase renders original vector gauges as live percent and speed, never elevation', async () => {
   const html = await render(fixture({ phase: 'power', showAssist: true }))
-  for (const name of ['power-reticle', 'wedge-outline']) assert.match(html, new RegExp(`${name}\\.svg`))
+  for (const name of ['power-reticle', 'power-gauge']) assert.match(html, new RegExp(`${name}\\.svg`))
   assert.match(html, /30%/)
   assert.match(html, /2.4 м\/с/)
   assert.match(html, /aria-label="Прибор наклона кия"/)
@@ -108,9 +113,64 @@ test('contact phase preserves its original Figma reticle and locked-direction hi
   assert.match(html, /contact-reticle\.svg/)
 })
 
-test('auxiliary cards and gauges are hidden until Alt help is requested', async () => {
+test('power gauges stay visible without the assist key while auxiliary cards remain opt-in', async () => {
   const html = await render(fixture({ phase: 'power', showAssist: false }))
   assert.doesNotMatch(html, /data-testid="alt-assist"/)
-  assert.doesNotMatch(html, /role="meter"/)
+  assert.equal([...html.matchAll(/role="meter"/g)].length, 2)
+  assert.match(html, /aria-valuemax="100" aria-valuenow="30"/)
+  assert.match(html, /aria-valuemax="8" aria-valuenow="2.4"/)
   assert.match(html, /power-reticle\.svg/)
+  assert.doesNotMatch(html, /aria-label="Прибор (?:силы удара|наклона кия|точки контакта)"/)
+})
+
+test('contact and heading states never show power gauges, with or without assistance', async () => {
+  for (const phase of ['overview', 'aim']) {
+    for (const showAssist of [false, true]) {
+      const html = await render(fixture({ phase, cameraMode: 'cue', showAssist }))
+      assert.doesNotMatch(html, /role="meter"/)
+      assert.equal(html.includes('data-testid="alt-assist"'), showAssist)
+    }
+  }
+})
+
+test('finished matches hide both power meters and optional assist cards', async () => {
+  const props = fixture({ phase: 'power', showAssist: true })
+  props.match.status = 'finished'
+  const html = await render(props)
+  assert.doesNotMatch(html, /role="meter"|data-testid="alt-assist"/)
+})
+
+test('own cue heading uses the direction design without confirming contact', async () => {
+  for (const canShoot of [true, false]) {
+    const html = await render(fixture({ cameraMode: 'cue', canShoot }))
+    assert.match(html, /hud-heading/)
+    assert.match(html, /data-shot-phase="overview"/)
+    assert.match(html, /direction-arrow\.svg/)
+    assert.doesNotMatch(html, /hud-overview-instruction/)
+    assert.doesNotMatch(html, /role="meter"/)
+  }
+})
+
+test('the general overview instruction and ball legend do not require the assist key', async () => {
+  const html = await render(fixture({ phase: 'overview', cameraMode: 'free', showAssist: false }))
+  assert.match(html, /hud-overview-instruction/)
+  assert.match(html, /Обозначения состояния шаров/)
+  assert.doesNotMatch(html, /data-testid="alt-assist"/)
+})
+
+test('the contact leader appears only with own-turn keyboard assistance', async () => {
+  const base = fixture({ phase: 'aim', showAssist: false })
+  assert.doesNotMatch(await render(base), /contact-leader\.svg/)
+  assert.match(await render({ ...base, showAssist: true }), /contact-leader\.svg/)
+  assert.doesNotMatch(await render({ ...base, showAssist: true, user: { id: 'b' } }), /contact-leader\.svg|data-testid="alt-assist"/)
+})
+
+test('assist hints and slider labels follow the configured keyboard binding', async () => {
+  for (const assistKeyLabel of ['Ctrl', 'H']) {
+    const html = await render(fixture({ phase: 'power', showAssist: true, assistKeyLabel }))
+    assert.match(html, new RegExp(`Удерживается ${assistKeyLabel}`))
+    assert.match(html, new RegExp(`aria-label="Сила удара ${assistKeyLabel}"`))
+    assert.match(html, new RegExp(`aria-label="Наклон кия ${assistKeyLabel}"`))
+    assert.doesNotMatch(html, /Удерживается Alt|Сила удара Alt|Наклон кия Alt/)
+  }
 })

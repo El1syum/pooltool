@@ -3,11 +3,12 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 const modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
-const { chromium } = await import(path.isAbsolute(modulePath) ? pathToFileURL(modulePath).href : modulePath)
+const playwright = await import(path.isAbsolute(modulePath) ? pathToFileURL(modulePath).href : modulePath)
+const engine = process.env.BROWSER || 'chromium'
 const base = process.env.POOLTOOL_URL || 'http://127.0.0.1:4321'
 const artifacts = process.env.ARTIFACT_DIR || path.resolve('tests/artifacts/club-menu')
 await mkdir(artifacts, { recursive: true })
-const browser = await chromium.launch({ headless: true })
+const browser = await playwright[engine].launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const errors = []
 page.on('pageerror', error => errors.push(error.message))
@@ -41,6 +42,15 @@ try {
   await page.screenshot({ path: path.join(artifacts, 'join-1440.png') })
   await page.getByRole('button', { name: 'В главное меню', exact: true }).click()
   await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  assert.equal(await page.getByTestId('graphics-summary').textContent(), 'Средняя')
+  assert.equal(await page.getByTestId('volume-summary').textContent(), '50%')
+  await page.getByRole('dialog').locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())))
+  const settingAssets = await page.getByRole('dialog').locator('nav[aria-label="Разделы настроек"] .club-action').evaluateAll(buttons => buttons.slice(0, 3).map(button => {
+    const images = [...button.querySelectorAll('img')]
+    return images.map(image => ({ name: image.src.split('/').at(-1), width: image.getBoundingClientRect().width, height: image.getBoundingClientRect().height, loaded: image.complete && image.naturalWidth > 0 }))
+  }))
+  assert.deepEqual(settingAssets, ['monitor.svg', 'volume.svg', 'mouse.svg'].map(name => [{ name, width: 20, height: 20, loaded: true }]), 'Figma settings slots contain their original native-size icons and live summaries, not additional chevrons')
+  await page.screenshot({ path: path.join(artifacts, 'settings-index-1440.png') })
   await page.getByRole('button', { name: 'Графика', exact: true }).click()
   await page.getByLabel('Качество графики', { exact: true }).selectOption('high')
   assert.equal(await page.evaluate(() => window.clubFixture.settings.quality), 'high')
@@ -51,6 +61,7 @@ try {
   await page.screenshot({ path: path.join(artifacts, 'graphics-1440.png') })
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
   await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  assert.equal(await page.getByTestId('graphics-summary').textContent(), 'Высокая', 'Summary follows the actual selected quality after reopening')
   await page.getByRole('button', { name: 'Управление', exact: true }).click()
   await page.getByLabel('Чувствительность', { exact: true }).fill('1.8')
   assert.equal(await page.evaluate(() => window.clubFixture.settings.sensitivity), 1.8)
@@ -75,6 +86,11 @@ try {
     await page.screenshot({ path: path.join(artifacts, `profile-${width}.png`) })
     await page.getByRole('button', { name: 'В главное меню', exact: true }).click()
     await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+    const summaryBounds = await page.getByTestId('graphics-summary').evaluate(node => {
+      const bounds = node.getBoundingClientRect(), parent = node.closest('button').getBoundingClientRect()
+      return { left: bounds.left, right: bounds.right, buttonLeft: parent.left, buttonRight: parent.right }
+    })
+    assert.ok(summaryBounds.left >= summaryBounds.buttonLeft && summaryBounds.right <= summaryBounds.buttonRight, JSON.stringify(summaryBounds))
     await page.getByRole('button', { name: 'Управление', exact: true }).click()
     const controlSize = await page.evaluate(() => ({ viewport: innerWidth, shell: document.querySelector('.club-settings-shell').scrollWidth }))
     assert.ok(controlSize.shell <= controlSize.viewport + 1, JSON.stringify(controlSize))
@@ -82,5 +98,5 @@ try {
     await page.getByRole('button', { name: 'Закрыть настройки', exact: true }).click()
   }
   assert.deepEqual(errors, [])
-  console.log('Club menu browser checks passed: navigation, room, code, ready, settings, ranked lock and 320/390/768/1440 layouts.')
+  console.log(JSON.stringify({ engine, tests: 'navigation, room, code, ready, live Figma settings summaries and original icon geometry, ranked lock, 320/390/768/1440 layouts', jsErrors: errors.length }))
 } finally { await browser.close() }

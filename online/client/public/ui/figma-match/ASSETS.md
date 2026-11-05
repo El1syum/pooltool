@@ -19,14 +19,17 @@ Source: [Pooltool Figma design](https://www.figma.com/design/qLURhvhuM4AZ0xibHYe
 
 Call sites: `MatchHud.vue`, `ShotPowerGauge.vue` and `FigmaBallBadge.vue`. Player names, ball numbers, counts, timers, room codes and shot parameters are live data, not the example values in Figma.
 
-The two composite wedge exports are retained as reference assets only. Their
-static example fills are no longer used at runtime. `ShotPowerGauge.vue` references
-the unmodified `wedge-outline.svg#Vector%203` with external SVG `use`, and applies
-a dynamic gradient fill without copying or redrawing the exported path. The two
-gauges show the same `V0 / 8` fill in percent and m/s, per the user's clarification.
-The percent gauge is at (-181, 173) relative to the 316px reticle; the speed gauge
-is at (252, 12), matching frame 73:327. The exported outline's native orientation
-is used on the left; the right wrapper rotates it 180°.
+These earlier wedge exports are retained as reference assets only. Runtime
+`ShotPowerGauge.vue` now references the current Figma export
+`ui/figma-assist/power-gauge.svg#Vector%203` (149.714×82.5888); see that folder's
+ASSETS.md for provenance and hashes. Dynamic fill still uses external SVG `use`,
+without copying or redrawing the path. Both gauges show the same `V0 / 8` in
+percent and m/s, per the user's clarification, and remain visible without the
+assistance key. Native orientation is on the right; the left rotates 180°.
+
+`ball-shading.svg` was refreshed from the latest file `YPQR5qd4bL3LUjSRBzTuQH`,
+general frame `102:16962` (original export `d0b20.svg`, 26×26).
+SHA256: `c7fedebe7cfe8a33976efad8f319665cc5e0ba84f8bb806b75dde6900f8f283d`.
 
 The Figma `image 1` layers are references for future 3D artwork. They are deliberately not shipped as the game background: the actual interactive Three.js canvas remains in their place until the new models are supplied.
 

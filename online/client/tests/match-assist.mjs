@@ -37,7 +37,7 @@ try {
     }, fraction)
     await page.waitForTimeout(30)
     const rows = []
-    for (const label of ['Сила удара Alt', 'Наклон кия Alt']) {
+    for (const label of ['Сила удара Ctrl', 'Наклон кия Ctrl']) {
       const container = page.getByRole('slider', { name: label, exact: true }).locator('..')
       const bytes = await container.screenshot({ path: path.join(artifacts, `${engine}-${fraction}-${label.startsWith('Сила') ? 'power' : 'elevation'}.png`) })
       const png = PNG.sync.read(bytes)
@@ -54,12 +54,12 @@ try {
     else assert.ok(rows.every((row, index) => row.gold > fills.at(-1).rows[index].gold + 25), `Both slider fills must grow: ${JSON.stringify({ fraction, rows, fills })}`)
     fills.push({ fraction, rows })
   }
-  await page.getByRole('slider', { name: 'Сила удара Alt', exact: true }).focus()
+  await page.getByRole('slider', { name: 'Сила удара Ctrl', exact: true }).focus()
   await page.keyboard.press('Home')
   assert.equal(await page.evaluate(() => window.assistFixture.aim.V0), .2)
   await page.keyboard.press('End')
   assert.equal(await page.evaluate(() => window.assistFixture.aim.V0), 8)
-  await page.getByRole('slider', { name: 'Наклон кия Alt', exact: true }).focus()
+  await page.getByRole('slider', { name: 'Наклон кия Ctrl', exact: true }).focus()
   await page.keyboard.press('Home')
   assert.equal(await page.evaluate(() => window.assistFixture.aim.theta), 0)
   await page.keyboard.press('End')
@@ -94,6 +94,16 @@ try {
   assert.equal(await page.evaluate(() => window.assistFixture.aim.a), .05, 'Spectator input must not change aim')
   await page.evaluate(() => { window.assistFixture.showAssist = false })
   assert.equal(await page.getByTestId('alt-assist').count(), 0)
+  assert.equal(await page.getByRole('meter').count(), 0, 'Contact selection must not show power gauges')
+  await page.evaluate(() => { window.assistFixture.phase = 'power' })
+  await page.getByRole('meter', { name: 'Сила удара в процентах', exact: true }).waitFor()
+  assert.equal(await page.getByRole('meter').count(), 2, 'Power meters must stay available without assist cards')
+  assert.equal(await page.getByTestId('alt-assist').count(), 0)
+  await page.evaluate(() => { window.assistFixture.showAssist = true })
+  await page.getByTestId('alt-assist').waitFor()
+  assert.equal(await page.getByRole('meter').count(), 2, 'Assistance must not duplicate the base power meters')
+  await page.evaluate(() => { window.assistFixture.showAssist = false })
+  assert.equal(await page.getByRole('meter').count(), 2, 'Releasing the assist toggle must leave the base power meters intact')
   await page.evaluate(() => { window.assistFixture.phase = 'overview'; window.assistFixture.user = { id: 'spectator' } })
   const overview = await page.locator('.hud-player, .hud-clock, .hud-match-status').evaluateAll(nodes => nodes.map(node => {
     const rect = node.getBoundingClientRect()

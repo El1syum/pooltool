@@ -45,6 +45,7 @@ try {
       window.game.setShotPhase('overview');
       window.frames=(count=20)=>new Promise(resolve=>{const tick=()=>--count<=0?resolve():requestAnimationFrame(tick);requestAnimationFrame(tick)});
       window.pose=()=>window.camera.position.toArray();
+      window.cueProjection=()=>new THREE.Vector3(0,.828575,.635).project(window.camera).toArray();
       window.ready=true;
     </script>` }))
   await page.goto(base + '/cue-camera-fixture')
@@ -69,6 +70,9 @@ try {
     const expected=[-Math.cos(radians)*.95,.828575+.18+.95*.3,.635+Math.sin(radians)*.95];
     return window.camera.position.distanceTo({x:expected[0],y:expected[1],z:expected[2]})<.015;
   })
+  const cueProjection = await page.evaluate(() => window.cueProjection())
+  assert.ok(Math.abs(cueProjection[0]) < .001 && Math.abs(cueProjection[1]) < .001,
+    `The direction reticle must align with the projected real cue ball, not empty felt: ${cueProjection}`)
   await page.mouse.move(500,350)
   const beforeHeading = await page.evaluate(() => window.game.getAim().phi)
   await page.mouse.move(560,350)

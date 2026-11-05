@@ -1,6 +1,7 @@
 :root { font-family: system-ui, sans-serif; color: #edf3f4; background: #10191c; font-synthesis: none; color-scheme: dark; }
 * { box-sizing: border-box; }
-body { margin: 0; }
+body { margin: 0; -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable="true"], [data-room-code] { -webkit-user-select: text; user-select: text; }
 button, input, select { font: inherit; }
 button { padding: .65rem 1rem; border: 1px solid #70868a; border-radius: .3rem; color: inherit; background: #263b40; cursor: pointer; }
 button:hover:not(:disabled) { background: #3b555b; }

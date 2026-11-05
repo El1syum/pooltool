@@ -63,6 +63,18 @@ test('settings is an accessible real-settings component with safe server render'
   assert.match(html, /Модели стола и окружения/)
   assert.doesNotMatch(html, /club-background\.webp/)
 })
+test('settings index uses Figma summary slots with current values instead of samples or chevrons', async () => {
+  for (const [quality, summary, volume] of [['low', 'Низкая', 0], ['medium', 'Средняя', .37], ['high', 'Высокая', 1]]) {
+    const html = await render(Settings, { settings: { quality, volume, sensitivity: 1, bindings, showAimGuide: true, showPocketLabels: true }, bindingCapture: null, captureLabels: {}, bindingConflicts: [], aimGuideLocked: false, inMatch: false, user, clientVersion: 'test' })
+    assert.ok(html.includes(`data-testid="graphics-summary">${summary}</small>`))
+    assert.ok(html.includes(`data-testid="volume-summary">${Math.round(volume * 100)}%</small>`))
+    assert.ok(html.includes('>Мышь и клавиатура</small>'))
+    assert.match(html, /ВАШ КОМФОРТ/)
+    assert.match(html, /Настройте атмосферу и почувствуйте игру/)
+    for (const label of ['Графика', 'Звук', 'Управление']) assert.ok(!html.includes(`${label}</span><img`))
+  }
+})
+
 test('all referenced original SVG assets have valid standalone SVG metadata', async () => {
   const assets = ['online-dot', 'play', 'chevron-dark', 'chevron-gold', 'settings', 'user', 'exit', 'shuffle', 'trophy', 'users', 'eye', 'arrow-left', 'circle-dot', 'sliders', 'plus', 'key', 'log-in', 'eye-muted', 'eye-dark', 'copy', 'wait-dot', 'search-arc', 'x', 'pencil', 'profile-trophy', 'check-dark', 'monitor', 'volume', 'mouse', 'exit-large', 'exit-dark', 'chevron-down', 'toggle-on', 'toggle-off']
   for (const asset of assets) {

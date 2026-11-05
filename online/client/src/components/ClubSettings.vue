@@ -2,11 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { User } from '../api'
 import { DEFAULT_BINDINGS, type BindingAction, type GameSettings } from '../game/types'
+import { bindingLabel, normalizeAssistBinding } from '../game/assistBinding'
 import '../club-menu.css'
 
 const props = withDefaults(defineProps<{
   settings: GameSettings; bindingCapture: BindingAction | null
-  captureLabels: Record<BindingAction, string>; bindingConflicts: string[]
+  captureLabels: Record<BindingAction, string>; bindingConflicts: string[]; bindingCaptureError?: string
   aimGuideLocked: boolean; inMatch: boolean; user?: User | null; clientVersion: string
 }>(), { user: null })
 const emit = defineEmits<{
@@ -22,12 +23,14 @@ const localError = ref('')
 const dialog = ref<HTMLElement | null>(null)
 const base = import.meta.env.BASE_URL || '/'
 const asset = (name: string, ext = 'svg') => `${base}ui/club-menu/${name}.${ext}`
-const titles = { index: ['Настройки', 'Клуб под ваш вкус.'], graphics: ['Графика', 'Идеальный вид на вашу следующую партию.'], sound: ['Звук', 'Знакомый стук шаров. Тихая музыка клуба.'], controls: ['Управление', 'Точность начинается с удобства.'] }
+const titles = { index: ['Настройки', 'Настройте атмосферу и почувствуйте игру.'], graphics: ['Графика', 'Каждый блик. Каждая деталь сукна.'], sound: ['Звук', 'Знакомый стук шаров. Тихая музыка клуба.'], controls: ['Управление', 'Точность начинается с удобства.'] }
 const title = computed(() => titles[tab.value])
+const graphicsSummary = computed(() => ({ low: 'Низкая', medium: 'Средняя', high: 'Высокая' }[props.settings.quality]))
 const initial = computed(() => (props.user?.displayName || 'Игрок').trim().split(/\s+/).slice(0, 2).map(x => [...x][0]).join('').toUpperCase())
 const shadowValue = computed(() => props.settings.quality === 'low' ? 'Выкл.' : props.settings.quality === 'high' ? 'Высокое · 2048 px' : 'Среднее · 1024 px')
-const actions = computed(() => (Object.keys(props.captureLabels) as BindingAction[]).filter(action => !['shoot', 'topView', 'cueView', 'orbit'].includes(action)))
-const shortBinding = (binding: string | undefined) => binding?.replace(/^Key/, '').replace(/^Digit/, '').replace('Arrow', '↔ ').replace('Mouse0', 'ЛКМ').replace('Mouse1', 'СКМ').replace('Mouse2', 'ПКМ').replace('Space', 'Пробел') || 'Не назначено'
+const actions = computed(() => (Object.keys(props.captureLabels) as BindingAction[]).filter(action => !['shoot', 'topView', 'cueView', 'orbit', 'assist'].includes(action)))
+const shortBinding = bindingLabel
+const assistLabel = computed(() => bindingLabel(normalizeAssistBinding(props.settings.bindings.assist)))
 function update<K extends keyof GameSettings>(key: K, value: GameSettings[K]) { emit('update:settings', { ...props.settings, [key]: value, bindings: { ...props.settings.bindings } }) }
 function close() { emit('close') }
 function updateWindow() { resolution.value = `${window.innerWidth} × ${window.innerHeight}`; fullscreen.value = Boolean(document.fullscreenElement); fullscreenAvailable.value = Boolean(document.fullscreenEnabled) }
@@ -60,15 +63,15 @@ onBeforeUnmount(() => { window.removeEventListener('resize', updateWindow); docu
     </header>
     <section class="club-content">
       <div class="club-section" :class="{ 'club-section-wide': tab === 'graphics' || tab === 'sound', 'club-settings-controls': tab === 'controls' }">
-        <div class="club-section-title"><p>{{ tab === 'index' ? 'ВАШ КЛУБ' : 'НАСТРОЙКИ' }}</p><h1 id="club-settings-title">{{ title[0] }}</h1><span>{{ title[1] }}</span></div>
+        <div class="club-section-title"><p>{{ tab === 'index' ? 'ВАШ КОМФОРТ' : 'НАСТРОЙКИ' }}</p><h1 id="club-settings-title">{{ title[0] }}</h1><span>{{ title[1] }}</span></div>
         <template v-if="tab === 'index'">
           <nav class="club-actions" aria-label="Разделы настроек">
-            <button class="club-action" @click="tab = 'graphics'"><img :src="asset('monitor')" alt="" /><span>Графика</span><img :src="asset('chevron-gold')" alt="" /></button>
-            <button class="club-action" @click="tab = 'sound'"><img :src="asset('volume')" alt="" /><span>Звук</span><img :src="asset('chevron-gold')" alt="" /></button>
-            <button class="club-action" @click="tab = 'controls'"><img :src="asset('mouse')" alt="" /><span>Управление</span><img :src="asset('chevron-gold')" alt="" /></button>
+            <button class="club-action" aria-label="Графика" aria-describedby="club-graphics-summary" @click="tab = 'graphics'"><img :src="asset('monitor')" alt="" /><span>Графика</span><small id="club-graphics-summary" data-testid="graphics-summary">{{ graphicsSummary }}</small></button>
+            <button class="club-action" aria-label="Звук" aria-describedby="club-volume-summary" @click="tab = 'sound'"><img :src="asset('volume')" alt="" /><span>Звук</span><small id="club-volume-summary" data-testid="volume-summary">{{ Math.round(settings.volume * 100) }}%</small></button>
+            <button class="club-action" aria-label="Управление" aria-describedby="club-input-summary" @click="tab = 'controls'"><img :src="asset('mouse')" alt="" /><span>Управление</span><small id="club-input-summary">Мышь и клавиатура</small></button>
             <button class="club-action" @click="emit('appearance')"><img :src="asset('monitor')" alt="" /><span>Оформление</span><img :src="asset('chevron-gold')" alt="" /></button>
             <button class="club-action club-action-back" @click="close"><img :src="asset('arrow-left')" alt="" /><span>Назад</span></button>
-          </nav><p class="club-footnote">Внешний вид, звук и точность под вашим контролем.</p>
+          </nav><p class="club-footnote">Параметры сохраняются для вашего профиля.</p>
           <button class="club-text-button" @click="emit('models')">Модели стола и окружения</button>
         </template>
         <section v-else class="club-card">
@@ -95,17 +98,18 @@ onBeforeUnmount(() => { window.removeEventListener('resize', updateWindow); docu
             <div class="club-control-columns">
               <div class="club-control-bindings"><p class="club-settings-kicker">МЫШЬ И КЛАВИАТУРА</p>
                 <div class="club-parameter"><span>Прицеливание</span><span class="club-fixed-value club-binding-value">Мышь</span></div>
-                <div v-for="action in (['shoot', 'topView', 'cueView', 'orbit'] as BindingAction[])" :key="action" class="club-parameter"><span>{{ captureLabels[action] }}</span><button class="club-value-button club-binding-value" :class="{ 'club-binding-capture': bindingCapture === action }" :aria-label="`Назначение: ${captureLabels[action]}`" @click="emit('capture', action)">{{ bindingCapture === action ? 'Нажмите клавишу…' : shortBinding(settings.bindings[action] || DEFAULT_BINDINGS[action]) }}</button></div>
+                <div v-for="action in (['shoot', 'topView', 'cueView', 'orbit', 'assist'] as BindingAction[])" :key="action" class="club-parameter"><span>{{ captureLabels[action] }}</span><button class="club-value-button club-binding-value" :class="{ 'club-binding-capture': bindingCapture === action }" :aria-label="`Назначение: ${captureLabels[action]}`" @click="emit('capture', action)">{{ bindingCapture === action ? 'Нажмите клавишу…' : shortBinding(settings.bindings[action] || DEFAULT_BINDINGS[action]) }}</button></div>
                 <div class="club-parameter"><span>Меню матча</span><span class="club-fixed-value club-binding-value">Esc</span></div>
               </div>
               <div class="club-control-mouse"><p class="club-settings-kicker">ПАРАМЕТРЫ МЫШИ</p><label class="club-parameter"><span>Чувствительность</span><span class="club-range-value"><input type="range" :value="settings.sensitivity" min="0.1" max="3" step="0.1" aria-label="Чувствительность" :style="{ '--club-range': `${(settings.sensitivity - 0.1) / 2.9 * 100}%` }" @input="update('sensitivity', Number(($event.target as HTMLInputElement).value))" /><output>{{ settings.sensitivity.toFixed(1) }}×</output></span></label>
-                <div class="club-control-hint"><strong>Подготовка удара</strong><p>Выберите направление до первого ЛКМ. Затем задайте точку контакта, подтвердите ЛКМ и выберите силу. ПКМ возвращает на предыдущий шаг. Удерживайте Alt для дополнительных подсказок.</p></div>
-                <p class="club-small-note">Нажмите назначение и затем нужную клавишу или кнопку мыши. Esc отменяет переназначение.</p>
+                <div class="club-control-hint"><strong>Подготовка удара</strong><p>Выберите направление до первого ЛКМ. Затем задайте точку контакта, подтвердите ЛКМ и выберите силу. ПКМ возвращает на предыдущий шаг. Удерживайте {{ assistLabel }} для дополнительных подсказок.</p></div>
+                <p class="club-small-note">Нажмите назначение и затем нужную клавишу или кнопку мыши. Для дополнительных приборов — только клавиатуру. Esc отменяет переназначение.</p>
               </div>
             </div>
             <details class="club-extra-bindings"><summary>Дополнительные назначения</summary><div class="club-extra-binding-grid"><div v-for="action in actions" :key="action" class="club-parameter"><span>{{ captureLabels[action] }}</span><button class="club-value-button club-binding-value" :class="{ 'club-binding-capture': bindingCapture === action }" :aria-label="`Назначение: ${captureLabels[action]}`" @click="emit('capture', action)">{{ bindingCapture === action ? 'Нажмите клавишу…' : shortBinding(settings.bindings[action] || DEFAULT_BINDINGS[action]) }}</button></div></div></details>
           </template>
           <p v-if="localError" class="club-settings-warning" role="alert">{{ localError }}</p>
+          <p v-if="bindingCaptureError" class="club-settings-warning" role="alert">{{ bindingCaptureError }}</p>
           <p v-for="conflict in bindingConflicts" :key="conflict" class="club-settings-warning" role="alert">Конфликт: {{ conflict }}</p>
           <div class="club-divider"></div><p class="club-small-note">Изменения применяются сразу. Сохраните их для следующей игры.</p>
           <div class="club-actions-inline"><button class="club-action club-action-back" @click="tab = 'index'"><img :src="asset('arrow-left')" alt="" /><span>Назад</span></button><button class="club-action club-action-primary" :disabled="bindingConflicts.length > 0 || bindingCapture !== null" @click="emit('save')"><img :src="asset('check-dark')" alt="" /><span>Сохранить</span><img :src="asset('chevron-dark')" alt="" /></button></div>

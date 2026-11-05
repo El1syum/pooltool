@@ -30,10 +30,11 @@ The actual 3D scene remains procedural until final art models are supplied.
 
 The match HUD lives in `online/client/src/components/MatchHud.vue`, with the
 Figma SVG exports in `public/ui/figma-match`, self-hosted Inter/Lora fonts and
-scoped `match-hud.css` plus `match-design.css`. New Alt-assist originals are in
-`public/ui/figma-assist`. Additional contact/power/elevation cards and the live
-%/m/s gauges appear while Alt is held (touch has a Help toggle); blur/visibility
-loss releases Alt. Shift+wheel changes cue elevation. Ranked matches force the
+scoped `match-hud.css` plus `match-design.css`. Assisted-shot originals are in
+`public/ui/figma-assist`. Contact/power/elevation cards appear while the configurable
+assistance key is held (default Ctrl; touch has a Help toggle); blur/visibility
+loss releases it. Live %/m/s gauges are always visible during power selection,
+without holding Ctrl. Shift+wheel changes cue elevation. Ranked matches force the
 aim line off, including spectators and reconnects, without overwriting the
 saved casual preference. App.vue remains the network/state authority. Preparation
 phases are overview (heading before first LMB) → aim (heading fixed, cue-contact
@@ -297,6 +298,45 @@ physics, equal final ball states and finish → menu → play without a reload.
 Chromium's initial load timed out once; its direct-network rerun passed.
 No JS/static-resource failures in the successful runs. Published client hash
 matches the tested local build. Guest mode remains on; VK Play remains disabled.
+
+## Full interface audit and input/copy fixes (2026-11-05)
+
+Latest batch: see `online/docs/FIGMA_AUDIT_20261105.md`. High-fidelity contexts for
+all six game states and 15 club/settings frames were checked. The power gauges
+were mistakenly hidden with Alt help; they now remain visible without help,
+using the actual latest 149.714×82.5888 SVG from floating Figma groups. Sidecards
+still require the help key, changed to Ctrl at the user's request, configurable
+in settings and persisted per profile. Modifier sides are equivalent; native
+Ctrl/Meta copy chords remain available, conflicting assist keys cannot shoot.
+
+Cue heading gets the compact direction layout with original ring/arrow; general
+view gets its stage instruction/legend, assisted contact gets the original
+leader and live contact description. Responsive widget layout is checked for
+overlap, central-ball clearance and clipping down to 320px and short desktops.
+Settings index shows real right-hand quality/volume/input summaries.
+
+First-person aiming uses Pointer Lock when granted (hidden cursor, unbounded
+movement deltas), releasing at first LMB/contact, UI interaction, turn loss and
+all lifecycle exits. Denied/unsupported browsers use continuous edge turning,
+not unreachable aim sectors. Native Chromium and fallback WebKit are tested
+separately; headless WebKit native permission is not claimed.
+
+History uses five stable columns, including an empty Elo cell. General UI text
+is nonselectable; room invitation codes and editable input remain selectable.
+Clipboard copy falls back to a user-gesture legacy copy path on HTTP, restores
+focus/selection, reports success or selects the code for manual copying, and
+rejects late identity/navigation-owned feedback. No backend runtime change or
+platform publication is required for this batch.
+
+Verification: production build/typecheck, 87 client pure/SSR checks, 164 Python
+tests +520 subtests, 84 real-component layout/state combinations across
+Chromium/WebKit, pixel fills and native SVG geometry, actual insecure-HTTP copy
+events plus App feedback, real persisted assistance-key remapping and native
+copy chords, pointer-lock/fallback and projected cue-ball alignment all passed.
+The compiled three-client match/HUD test and four-finished-match menu/replay
+test per browser passed with zero JS/static-resource errors. Code review
+APPROVE; independent architecture review CLEAR. Only the pre-existing Starlette
+test-client deprecation warning remains.
 
 ## Git identity
 

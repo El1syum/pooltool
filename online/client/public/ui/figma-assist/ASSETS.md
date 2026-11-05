@@ -17,6 +17,9 @@
 | `power-reticle.svg` | [104:4567](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=104-4567) | `Group 513`, ориентир направления и прицел | 264 × 264 |
 | `direction-arrow.svg` | [102:17183](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=102-17183) | «Горизонтальная регулировка» | 214.121 × 15.0607 |
 | `menu.svg` | [102:16962](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=102-16962) | `menu` | 20 × 20 |
+| `power-gauge.svg` | [105:4605](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=105-4605) | Актуальный Group 511; неизменённый Vector 3 используется для динамических индикаторов | 149.714 × 82.5888 |
+| `legend-live.svg` | [102:17173](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=102-17173) | Яркий шар в легенде общего вида | 10 × 10 |
+| `legend-pocketed.svg` | [102:17176](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=102-17176) | Приглушённый шар в легенде общего вида | 10 × 10 |
 
 ## Динамические части без изменения оригинала
 
@@ -39,4 +42,7 @@ dacb7ef4a5839898d1e702791bafb51f4fdb7ef032b57c451d1999c138401b35  cue-ball.svg
 684caf2a1e5b6694d2bcdc6b6e452b6bc75ef10bb3dd57250254f657d9677fe0  menu.svg
 d2be962b4c90445f8bb0420c6a09bf4b16e3a767ee93191a00918d8eac6f4251  power-reticle.svg
 1cc016b9bf428f0d0bc67364f5c4fad3997f0ae0d00d0374c04e8823c69104c5  power-track.svg
+0acf008430cd15af7d69ca1d8b579ab2052f7615754f69e4b53b1a3dd0a3d8f6  power-gauge.svg
+c7fce4ccf5fbbaecf4b4e6f8d7d0b831b14eb2c14b82b93d741a257a96d1018f  legend-live.svg
+4063be5d97150ce986d5525a7233c437c1ef214207d84240b4d92e3a78f95f71  legend-pocketed.svg
 ```

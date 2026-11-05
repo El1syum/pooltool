@@ -352,6 +352,20 @@ def test_restart_removes_compulsory_calls_only_from_current_state(tmp_path, stat
             "SELECT payload,physics,pending,updated_at FROM matches WHERE id=?", (finished["id"],)).fetchone()) == finished_row
 
 
+def test_assist_keyboard_binding_persists_per_profile(setup):
+    client, _, _ = setup
+    first, _ = login(client, "Приборы A")
+    second, _ = login(client, "Приборы B")
+    original_second = client.get("/api/me/settings", headers=second).json()["settings"]
+    values = {"quality": "medium", "bindings": {"shoot": "Space", "assist": "KeyH"}}
+    saved = client.put("/api/me/settings", headers=first, json=values)
+    assert saved.status_code == 200
+    assert saved.json()["settings"]["bindings"]["assist"] == "KeyH"
+    assert client.get("/api/me/settings", headers=first).json()["settings"] == values
+    assert client.get("/api/me", headers=first).json()["user"]["settings"]["bindings"]["assist"] == "KeyH"
+    assert client.get("/api/me/settings", headers=second).json()["settings"] == original_second
+
+
 def test_profile_settings_and_client_telemetry_dedupe_security(setup):
     client, _, _ = setup
     a, data_a = login(client, "А")

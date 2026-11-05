@@ -1,4 +1,5 @@
 import type { VisualAssetLoadReport, VisualAssetProfile } from '../models/types'
+import { DEFAULT_ASSIST_BINDING } from './assistBinding'
 
 export type Vec3Tuple = [number, number, number]
 export type QuaternionTuple = [number, number, number, number]
@@ -69,13 +70,13 @@ export type BindingAction =
   | 'aimLeft' | 'aimRight' | 'powerUp' | 'powerDown'
   | 'elevationUp' | 'elevationDown' | 'spinLeft' | 'spinRight'
   | 'spinUp' | 'spinDown' | 'shoot' | 'resetCamera' | 'topView' | 'orbit'
-  | 'cameraLeft' | 'cameraRight' | 'cueView'
+  | 'cameraLeft' | 'cameraRight' | 'cueView' | 'assist'
 
 export const DEFAULT_BINDINGS: Record<BindingAction, string> = {
   aimLeft: 'ArrowLeft', aimRight: 'ArrowRight', powerUp: 'ArrowUp', powerDown: 'ArrowDown',
   elevationUp: 'KeyW', elevationDown: 'KeyS', spinLeft: 'KeyA', spinRight: 'KeyD',
   spinUp: 'KeyR', spinDown: 'KeyF', shoot: 'Space', resetCamera: 'KeyC', topView: 'KeyT', orbit: 'Mouse2',
-  cameraLeft: 'KeyQ', cameraRight: 'KeyE', cueView: 'KeyV',
+  cameraLeft: 'KeyQ', cameraRight: 'KeyE', cueView: 'KeyV', assist: DEFAULT_ASSIST_BINDING,
 }
 
 /** 'free': orbit around the table; 'cue': follow behind the cue along the aim. */
@@ -102,6 +103,8 @@ export interface SceneInteraction {
   spectator: boolean
   /** Authoritative active-turn ownership, independent of modal/busy input locks. */
   ownTurn?: boolean
+  /** Release mouse lock for auxiliary UI without disabling its shot controls. */
+  pointerLockAllowed?: boolean
   /** Display a remote player's cue without giving the viewer input permissions. */
   showRemoteAim?: boolean
   /** Bounds in pooltool metres. Server remains the authority for placement. */
@@ -144,6 +147,8 @@ export interface GameScene {
   setDefaultAimCamera: (mode: CameraMode) => void
   /** A new authoritative own shot, not a temporary UI permission change. Clears camera overrides. */
   beginAimTurn: () => void
+  /** Call from a direct user gesture to hide the cursor for unbounded cue heading. */
+  requestAimPointerLock: () => void
   /** null restores legacy input; phase changes cancel any unfinished pointer gesture. */
   setShotPhase: (phase: ShotPhase | null) => void
   /** Radians around the vertical axis; switches the cue view to the free camera. */

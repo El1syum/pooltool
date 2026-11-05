@@ -1,4 +1,5 @@
 /* Latest Figma: YPQR5qd4bL3LUjSRBzTuQH / Игра. The scene remains real 3D. */
+.clipboard-feedback { position: fixed; z-index: 120; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 12px 18px; border: 1px solid #c7aa72; border-radius: 6px; background: #1b231ff5; color: #f1ede1; font: 13px/1.5 'Pooltool Inter', sans-serif; text-align: center; pointer-events: none; }
 .hud-modern::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, #07100deb 0%, #07100d10 22%, #07100d00 68%, #07100de0 100%); }
 .hud-modern .hud-identity, .hud-modern.hud-compact .hud-identity { left: 40px; top: 36px; }
 .hud-modern .hud-seal { width: 42px; height: 42px; font-size: 30px; }
@@ -21,7 +22,23 @@
 .hud-modern .hud-contact-reticle { left: 81px; top: 81px; width: 154px; height: 154px; }
 .hud-modern .hud-contact-reticle .hud-reticle-center { left: 49px; top: 49px; }
 .hud-power-reticle { position: absolute; left: 26px; top: 26px; }
-.hud-modern .hud-charge { position: absolute; inset: 0; transform: scale(.59766); transform-origin: center; }
+.hud-modern .hud-charge { position: absolute; inset: 0; }
+.hud-modern .hud-percent-wedge { left: -77px; top: 181px; transform: rotate(180deg); }
+.hud-modern .hud-speed-wedge { left: 242.786px; top: 45px; transform: none; }
+.hud-modern .hud-power-number, .hud-modern .hud-speed-number { top: 143px; font-size: 23px; line-height: 28px; transform: translateX(-50%); }
+.hud-modern .hud-power-number { left: -27.5px; }
+.hud-modern .hud-speed-number { left: 345.5px; }
+.hud-target-caption, .hud-direction-control > span { position: absolute; top: 355px; left: 50%; transform: translateX(-50%); width: 300px; text-align: center; font-size: 13px; line-height: 16px; color: #f1ede1; }
+.hud-direction-control > img { position: absolute; left: 50.94px; top: 323px; }
+.hud-contact-annotation { position: absolute; pointer-events: none; }
+.hud-contact-annotation > img { position: absolute; left: 0; top: 0; }
+.hud-contact-annotation > span { position: absolute; left: 72px; top: 69px; width: 265px; font-size: 14px; line-height: 17px; color: #f1ede1; }
+.hud-ball-legend { position: absolute; left: 40px; top: 86.1111%; display: flex; gap: 20px; align-items: center; padding: 12px 16px; background: #1b231ff0; border-radius: 5px; color: #a5aea6; font-size: 12px; line-height: 15px; }
+.hud-ball-legend > span { display: flex; gap: 8px; align-items: center; }
+.hud-ball-legend > span:first-child { color: #f1ede1; }
+.hud-pocketed-row > .hud-ball { opacity: .48; }
+.hud-alt-hint { color: #a5aea6; font-size: 11px; line-height: 16px; white-space: nowrap; }
+.hud-alt-hint kbd { color: #c7aa72; font: inherit; }
 .hud-assist-panels { position: absolute; inset: 0; pointer-events: none; }
 .hud-stage-instruction { position: absolute; left: 40px; top: 220px; width: 320px; }
 .hud-stage-instruction > span { font-size: 11px; letter-spacing: 2px; color: #c7aa72; }
@@ -30,11 +47,11 @@
 .assist-card { position: absolute; display: flex; flex-direction: column; gap: 16px; padding: 24px; border: 1px solid #465048; border-radius: 12px; background: #1b231ff0; pointer-events: auto; color: #f1ede1; }
 .assist-card h2 { margin: 0; font: 400 12px/1.3 'Pooltool Inter', sans-serif; letter-spacing: 1.5px; color: #c7aa72; }
 .assist-card p { margin: 0; font-size: 12px; line-height: 1.5; color: #a5aea6; }
-.assist-card .assist-key { font-size: 13px; color: #f1ede1; }
+.assist-card .assist-key { font-size: 13px; line-height: 16px; color: #f1ede1; }
 .assist-power { left: 42px; top: 43.15%; width: 294px; gap: 20px; }
 .assist-elevation { right: 40px; top: 25.93%; width: 310px; }
 .assist-value { display: flex; align-items: baseline; justify-content: space-between; }
-.assist-value strong { font-size: 36px; line-height: 1.2; font-weight: 400; }
+.assist-value strong { font-size: 36px; line-height: 44px; font-weight: 400; }
 .assist-regulator { display: flex; align-items: center; gap: 18px; }
 .assist-regulator > span:not(.assist-range) { flex: 1; color: #c7aa72; text-align: right; font-size: 14px; }
 .assist-endpoints { display: flex; justify-content: space-between; color: #a5aea6; font-size: 11px; }
@@ -56,19 +73,40 @@
 .assist-axis-x { position: absolute; left: 22px; top: 71px; width: 100px; height: 1px; background: #65706570; }
 .assist-axis-y { position: absolute; left: 71px; top: 22px; width: 1px; height: 100px; background: #65706570; }
 .assist-contact-value { font-size: 13px; font-weight: 400; }
-@media (max-width: 1740px) { .hud-modern:not(.hud-compact) .hud-scoreboard { top: 96px; } .hud-modern .hud-stage-instruction { top: 245px; } }
+.assist-contact > p { line-height: 1.6; }
+@media (max-width: 1740px) { .hud-modern:not(.hud-compact) .hud-scoreboard { top: 96px; } .hud-modern:not(.hud-compact) .hud-stage-instruction { top: 245px; } }
 @media (max-width: 1200px) {
   .hud-modern .hud-identity, .hud-modern.hud-compact .hud-identity { left: 24px; top: 24px; }
   .hud-root .hud-match-menu { right: 24px; top: 24px; width: 150px; }
   .hud-modern.hud-compact .hud-scoreboard { top: 30px; }
   .hud-modern .hud-footer { width: calc(100% - 48px); gap: 10px; }
   .hud-modern .hud-footer button, .hud-footer-instruction { font-size: 10px; }
-  .hud-stage-instruction { left: 24px; width: 220px; top: 185px; }
+  .hud-modern .hud-stage-instruction { left: 24px; width: 220px; top: 185px; }
   .hud-stage-instruction h2 { font-size: 24px; }
   .hud-stage-instruction p { font-size: 12px; }
   .assist-power { left: 24px; transform: scale(.78); transform-origin: top left; }
   .assist-elevation { right: 24px; transform: scale(.78); transform-origin: top right; }
   .assist-contact { right: 24px; transform: scale(.78); transform-origin: top right; }
+  .hud-ball-legend { left: 24px; }
+  .hud-contact-annotation { transform: scale(.8); transform-origin: top left; }
+}
+@media (max-width: 1000px) {
+  .hud-modern.hud-compact .hud-stage-instruction { top: 150px; width: 180px; }
+  .hud-modern.hud-compact .hud-stage-instruction h2 { font-size: 20px; }
+  .hud-modern.hud-compact .hud-stage-instruction p { font-size: 11px; line-height: 1.5; }
+  .assist-power, .assist-elevation, .assist-contact { transform: scale(.6); }
+  .hud-modern .hud-footer { grid-template-columns: 1fr auto; }
+  .hud-footer-instruction { grid-row: 2; grid-column: 1 / -1; }
+  .hud-alt-hint { font-size: 10px; }
+  .hud-contact-annotation { transform: scale(.62); }
+}
+@media (min-width: 1001px) and (max-height: 1000px) {
+  .hud-modern.hud-compact .hud-stage-instruction { top: 160px; width: 260px; }
+  .hud-modern.hud-compact .hud-stage-instruction h2 { font-size: 26px; }
+  .hud-modern.hud-compact .hud-stage-instruction p { font-size: 12px; line-height: 1.5; }
+  .assist-elevation { top: 24%; transform: scale(.78); transform-origin: top right; }
+  .assist-contact { transform: scale(.78); transform-origin: top right; }
+  .assist-contact-lower { top: auto; bottom: 110px; transform-origin: bottom right; }
 }
 @media (max-width: 760px) {
   .hud-modern .hud-identity, .hud-modern.hud-compact .hud-identity { left: 14px; top: 17px; }
@@ -87,12 +125,22 @@
   .hud-footer-actions { flex-direction: column; align-items: flex-start; gap: 5px; }
   .hud-footer-right { flex-wrap: wrap; max-width: 155px; font-size: 9px; }
   .hud-root .hud-touch-assist { display: inline; }
-  .hud-stage-instruction { left: 14px; top: 150px; width: 170px; }
+  .hud-modern .hud-stage-instruction { left: 14px; top: 170px; width: 170px; }
   .hud-stage-instruction h2 { font-size: 20px; margin: 7px 0; }
   .hud-stage-instruction p { font-size: 10px; line-height: 1.4; }
   .assist-power { left: 12px; top: auto; bottom: 115px; transform: scale(.6); transform-origin: bottom left; }
   .assist-elevation { right: 12px; top: 160px; transform: scale(.6); transform-origin: top right; }
   .assist-contact { right: 12px; top: auto; bottom: 115px; transform: scale(.6); transform-origin: bottom right; }
+  .hud-ball-legend { left: 14px; top: auto; bottom: 130px; gap: 8px; padding: 6px; font-size: 8px; }
+  .hud-alt-hint { display: none; }
+  .hud-contact-annotation { transform: scale(.52); }
+}
+@media (max-width: 360px) {
+  .hud-modern.hud-compact .hud-stage-instruction { top: 170px; width: 130px; }
+  .hud-modern.hud-compact .hud-stage-instruction h2 { font-size: 16px; }
+  .hud-modern.hud-compact .hud-stage-instruction p { display: none; }
+  .assist-elevation { top: 145px; transform: scale(.48); }
+  .assist-power, .assist-contact { transform: scale(.48); }
 }
 @media (max-width: 620px) {
   .hud-modern:not(.hud-compact) .hud-match-status { top: 304px; }
@@ -100,10 +148,16 @@
 }
 @media (max-height: 600px) and (min-width: 761px) {
   .hud-modern.hud-compact .hud-scoreboard { top: 20px; }
-  .hud-stage-instruction { top: 130px; }
+  .hud-modern .hud-stage-instruction { top: 130px; }
   .assist-power, .assist-elevation, .assist-contact { transform: scale(.62); }
   .assist-power { top: 45%; }
   .assist-contact { top: auto; bottom: 80px; transform-origin: bottom right; }
+  .assist-elevation { top: 120px; transform: scale(.52); }
+  .assist-contact { transform: scale(.52); }
+  .hud-modern.hud-compact .hud-stage-instruction { top: 120px; width: 190px; }
+  .hud-modern.hud-compact .hud-stage-instruction h2 { font-size: 18px; }
+  .hud-modern.hud-compact .hud-stage-instruction p { font-size: 10px; line-height: 1.4; }
+  .hud-ball-legend { top: auto; bottom: 100px; }
 }
 .club-app:not(.in-match):not(.in-workshop) { max-width: none; padding: 0; min-height: 100dvh; }
 .club-app > .error-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 100; max-width: min(90vw, 800px); }

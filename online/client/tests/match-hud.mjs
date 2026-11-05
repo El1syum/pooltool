@@ -47,7 +47,15 @@ async function until(callback, message, timeout = 30_000) {
 async function clickNamed(page, names) {
   for (const name of names) {
     const button = page.getByRole('button', { name, exact: true }).first()
-    if (await button.count() && await button.isVisible()) { await button.click(); return button }
+    if (await button.count() && await button.isVisible()) {
+      const owner = button.page()
+      const locked = await button.evaluate(() => Boolean(document.pointerLockElement))
+      // The actual heading UX releases the captured cursor while Ctrl is held;
+      // never bypass that workflow with evaluate(document.exitPointerLock()).
+      if (locked) { await owner.keyboard.down('ControlLeft'); await owner.waitForFunction(() => !document.pointerLockElement) }
+      try { await button.click() } finally { if (locked) await owner.keyboard.up('ControlLeft') }
+      return button
+    }
   }
   throw new Error(`No visible action: ${names.join(', ')}`)
 }
@@ -332,33 +340,47 @@ for (const engineName of engines) {
     await current.mouse.click(confirmationPoint.x, confirmationPoint.y)
     await current.locator('[data-testid="match-hud"][data-shot-phase="power"]').waitFor()
     assert.equal(sent.get(current).filter(frame => frame.type === 'command' && frame.command?.type === 'shot').length, beforeBackgroundConfirm, 'A second background confirmation must not shoot')
-    assert.equal(await current.getByTestId('alt-assist').count(), 0, 'Extra instruments are hidden without Alt')
-    await current.keyboard.down('Alt')
+    assert.equal(await current.getByTestId('alt-assist').count(), 0, 'Extra instruments are hidden without the configured assist key')
+    await current.getByRole('meter', { name: 'Сила удара в процентах', exact: true }).waitFor()
+    assert.equal(await current.getByRole('meter').count(), 2, 'Both base power gauges must be visible before Ctrl is pressed')
+    await current.keyboard.down('Control')
     await current.getByTestId('alt-assist').waitFor()
     await current.locator('.hud-percent-wedge').waitFor()
     await new Promise(resolve => setTimeout(resolve, 750))
     await current.screenshot({ path: path.join(artifacts, `${engineName}-power-state.png`), fullPage: true })
-    await current.waitForFunction(() => [...document.querySelectorAll('.hud-power-gauge use')].every(use => use.getBBox().width > 200))
+    await current.waitForFunction(() => [...document.querySelectorAll('.hud-power-gauge use')].every(use => use.getBBox().width > 140))
     const wedgeGeometry = await current.locator('.hud-charge svg').evaluateAll(gauges => gauges.map(gauge => {
       const rect = gauge.getBoundingClientRect()
       return { name: gauge.getAttribute('aria-label'), natural: [gauge.width.baseVal.value, gauge.height.baseVal.value], rendered: [rect.width, rect.height] }
     }))
     assert.equal(wedgeGeometry.length, 2)
     assert.ok(wedgeGeometry.every(asset => asset.natural[0] > 0 && asset.rendered[0] > 0 && asset.rendered[1] > 0))
+    await current.keyboard.up('Control')
+    await current.getByTestId('alt-assist').waitFor({ state: 'hidden' })
+    assert.equal(await current.getByRole('meter').count(), 2, 'Releasing Ctrl hides only the side cards, never the power gauges')
+    await current.keyboard.down('Control')
+    await current.getByTestId('alt-assist').waitFor()
+    await current.evaluate(() => window.dispatchEvent(new Event('blur')))
+    await current.getByTestId('alt-assist').waitFor({ state: 'hidden' })
+    assert.equal(await current.getByRole('meter').count(), 2, 'Window blur releases assist cards without removing the base power gauges')
+    await current.keyboard.up('Control')
+    await current.keyboard.down('Control')
+    await current.getByTestId('alt-assist').waitFor()
     const phaseCanvas = current.locator('.game-stage canvas')
     const phaseBounds = await phaseCanvas.boundingBox()
     assert.ok(phaseBounds)
     for (const phase of ['aim', 'overview']) {
       await phaseCanvas.click({ button: 'right', position: { x: phaseBounds.width * 0.25, y: phaseBounds.height * 0.4 } })
       await current.locator(`[data-testid="match-hud"][data-shot-phase="${phase}"]`).waitFor()
+      assert.equal(await current.getByRole('meter').count(), 0, `${phase} must not retain power-only gauges`)
     }
-    await current.keyboard.up('Alt')
+    await current.keyboard.up('Control')
     await current.getByTestId('alt-assist').waitFor({ state: 'hidden' })
-    await current.keyboard.down('Alt')
+    await current.keyboard.down('Control')
     await current.getByTestId('alt-assist').waitFor()
     await current.evaluate(() => window.dispatchEvent(new Event('blur')))
     await current.getByTestId('alt-assist').waitFor({ state: 'hidden' })
-    await current.keyboard.up('Alt')
+    await current.keyboard.up('Control')
     await assertStableCanvas()
 
     // Pulling the cue changes real bounded parameters; Escape cancels before release.
@@ -366,7 +388,7 @@ for (const engineName of engines) {
     await clickNamed(current, ['Прицелиться'])
     await current.getByRole('button', { name: 'Точка удара по битку. Нажмите для выбора силы', exact: true }).click()
     await current.locator('[data-testid="match-hud"][data-shot-phase="power"]').waitFor()
-    await current.keyboard.down('Alt')
+    await current.keyboard.down('Control')
     const beforeDrag = sent.get(current).filter(frame => frame.type === 'command' && frame.command?.type === 'shot').length
     const oldPower = await current.locator('.hud-power-number').innerText()
     const pullX = phaseBounds.x + phaseBounds.width * 0.25
@@ -387,7 +409,7 @@ for (const engineName of engines) {
     assert.equal(sent.get(current).filter(frame => frame.type === 'command' && frame.command?.type === 'shot').length, beforeDrag, 'Cancelling a pull must not submit a shot')
     await phaseCanvas.click({ button: 'right', position: { x: phaseBounds.width * 0.25, y: phaseBounds.height * 0.4 } })
     await current.locator('[data-testid="match-hud"][data-shot-phase="overview"]').waitFor()
-    await current.keyboard.up('Alt')
+    await current.keyboard.up('Control')
 
     // This control panel is intentionally secondary: opening it cannot remove canvas.
     await clickNamed(current, ['Параметры удара', 'Управление ударом'])

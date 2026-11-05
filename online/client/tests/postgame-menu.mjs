@@ -68,7 +68,13 @@ async function startSolo(page, actor) {
   return state
 }
 async function surrender(page, actor, matchId) {
-  await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
+  // Hold the actual help key even if a newly created scene's native lock grant
+  // is still pending; checking pointerLockElement once races that browser event.
+  await page.keyboard.down('ControlLeft')
+  await page.locator('[data-testid="match-hud"].hud-assist-visible').waitFor()
+  await page.waitForFunction(() => !document.pointerLockElement)
+  try { await page.getByRole('button', { name: 'Меню матча', exact: true }).click() }
+  finally { await page.keyboard.up('ControlLeft') }
   await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
   await page.getByRole('button', { name: 'Да, сдаться', exact: true }).click()
   await page.locator('.result-panel').waitFor()

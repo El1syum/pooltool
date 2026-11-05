@@ -98,6 +98,9 @@ try{
   const arrived=new Promise(resolve=>lateArrived=resolve)
   await frame.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
   await arrived
+  await frame.locator('.game-stage canvas').focus()
+  await page.keyboard.down('ControlLeft')
+  await frame.getByTestId('alt-assist').waitFor()
   socketA.close({code:1008,reason:'Test session invalidated'})
   await frame.getByTestId('vkplay-entry').waitFor()
   assert.equal(await frame.getByTestId('match-hud').count(),0)
@@ -115,6 +118,13 @@ try{
   assert.doesNotMatch(JSON.stringify(storage),/platform-session-[AB]|otp-123|otp-456/)
   assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);assert.equal(inflightCommands,1,'The old shot must not replay after identity change')
   await page.screenshot({path:path.join(artifacts,`${engine}-identity-B.png`),fullPage:true})
+
+  // Holding the old account's assist modifier must not reopen cards when the
+  // next identity enters a fresh active match, even before that key is released.
+  socketB.send(JSON.stringify({type:'match',match:{...replayMatch,status:'active',finishedAt:null},serverTime:Date.now()}))
+  await frame.getByTestId('match-hud').waitFor()
+  assert.equal(await frame.getByTestId('alt-assist').count(),0,'Assist hold state must not cross platform identities')
+  await page.keyboard.up('ControlLeft')
 
   // A pending "play again" is an intent owned by B. Deliberately delay only
   // its fake leave response, switch to A with an empty account, then release B.
@@ -142,7 +152,7 @@ try{
   assert.equal(exchanges.length,3);assert.equal(authFrames.length,3)
   assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[])
   await page.screenshot({path:path.join(artifacts,`${engine}-replay-identity-A.png`),fullPage:true})
-  console.log(JSON.stringify({engine,fakePlatform:true,actualApp:true,guestTokenUntouched:true,platformSessionMemoryOnly:true,freshIdentityAfterDeniedSession:true,latePrivateMatchRejected:true,crossIdentityReplayRejected:true,newIdentityMenuEnabled:true,sdkLoads,exchanges:exchanges.length,jsErrors:errors.length}))
+  console.log(JSON.stringify({engine,fakePlatform:true,actualApp:true,guestTokenUntouched:true,platformSessionMemoryOnly:true,freshIdentityAfterDeniedSession:true,latePrivateMatchRejected:true,assistHoldIdentityIsolated:true,crossIdentityReplayRejected:true,newIdentityMenuEnabled:true,sdkLoads,exchanges:exchanges.length,jsErrors:errors.length}))
   await context.close();await browser.close();browser=null
  }
 }finally{await browser?.close();await server.close()}
