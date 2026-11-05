@@ -37,6 +37,12 @@ class Store:
             created_at REAL NOT NULL, expires_at REAL NOT NULL,
             client_version TEXT NOT NULL DEFAULT 'unknown'
         );
+        CREATE TABLE IF NOT EXISTS external_identities(
+            provider TEXT NOT NULL, app_id TEXT NOT NULL, external_id TEXT NOT NULL,
+            user_id TEXT NOT NULL REFERENCES users(id), created_at REAL NOT NULL,
+            PRIMARY KEY(provider, app_id, external_id)
+        );
+        CREATE INDEX IF NOT EXISTS external_identities_user ON external_identities(user_id);
         CREATE TABLE IF NOT EXISTS rooms(
             id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL,
             payload TEXT NOT NULL, updated_at REAL NOT NULL

@@ -225,6 +225,28 @@ The public three-client WebKit match test also passed with the actual shared AI
 table loaded in all three clients, a real charged shot and identical final ball
 states; no JavaScript or static-resource failures.
 
+## Optional VK Play authentication preparation (2026-11-05)
+
+The web VK Play adapter is opt-in and disabled by default. Ordinary URLs retain
+the guest workflow; only `?platform=vkplay` selects the future iframe entry.
+No GMRID/secret are provisioned and no VK Play publication has been performed.
+`/api/auth/config` exposes safe enabled/configured/appId data; `/api/auth/vkplay`
+exchanges a `getAuthToken()` ticket for our session only after fixed-endpoint GAS
+verification, with safe launch signatures, total timeout and bounded one-use
+request idempotence. No OTP/secret is persisted or reflected in errors/logs.
+
+External identities are namespaced by provider/app/external ID in a new table,
+not merged into guest or VK Mini Apps identities. Platform tokens/pending
+commands are memory-only; guest storage is untouched. Reauth/account changes
+clear identity-owned game state and reject old HTTP/WS completions. Read
+`online/docs/VK_PLAY_AUTH.md` before enabling with real keys/HTTPS and performing
+real SDK/GAS acceptance. Test SDK callbacks/transports are explicitly fake.
+
+Verification: 163 Python tests +520 subtests, 74 client checks, explicit fake
+platform App bootstrap/account-switch tests in Chromium/WebKit, real disabled
+mode+guest-persistence checks in both browsers, and real three-client physical
+match/HUD checks in both browsers passed. No live platform login is claimed.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

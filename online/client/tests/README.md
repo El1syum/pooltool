@@ -108,6 +108,23 @@ For remote Chromium verification only, `DIRECT_NETWORK=1` adds the browser's
 returning intermittent 502 responses; it does not change the application or the
 user's proxy settings. Without the flag the normal browser network is used.
 
+## VK Play preparation
+
+`vkplay-disabled-integration.mjs` runs the actual App against the real API with
+VK Play explicitly disabled and unconfigured. It checks ordinary guest creation,
+no cached-guest fallback/SDK request on `?platform=vkplay`, safe retry and the same
+guest when returning to the normal URL. It can run locally or as a non-mutating
+platform smoke on the testing preview (only a disposable guest is created).
+
+The platform controller/SDK tests use explicit fake callbacks, not a live VK Play
+account. Server tests use `httpx.MockTransport` for GAS; they do not contact the
+real platform. Actual GMRID/secret acceptance remains a later release step.
+`src/platform/vkplay.test.mjs` covers the controller and callback ownership;
+`vkplay-bootstrap.mjs` runs the actual App inside a test iframe with explicitly
+stubbed SDK/exchange/WebSocket, including A→expired session→B with a late old
+response/in-flight command. It must retain the guest token/bookmarks/pending
+command and never persist the platform token or OTP.
+
 ## Prepared models and personal appearance
 
 `admin-library-integration.mjs` verifies the actual App and real API in both

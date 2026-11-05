@@ -47,6 +47,18 @@ Runtime configuration: `/opt/pooltool-online/shared/server.env` (mode 600).
 Use HTTPS/WSS behind a reverse proxy before VK integration or public production
 authentication. The direct HTTP port is intended for functional testing.
 
+## Optional VK Play authentication (not published yet)
+
+The ordinary preview keeps guest authentication. VK Play is disabled by default;
+do not add production credentials or publish a platform page during preparation.
+Later set `VKPLAY_ENABLED=true`, `VKPLAY_GMRID` and `VKPLAY_SECRET` in a private
+service environment, configure HTTPS/WSS and use the iframe entry
+`/?platform=vkplay`. Restart to reload these values. Public `/api/auth/config`
+reports only enabled/configured/appId and never the secret. An enabled-but-missing
+configuration and an invalid ticket fail closed without guest fallback.
+Read `online/docs/VK_PLAY_AUTH.md` for trusted client IPv4, GAS single-use/retry
+semantics, account namespaces and the required real-platform acceptance step.
+
 ## Shared visual model library
 
 The model workshop uses a separate administrator login, not the guest player's

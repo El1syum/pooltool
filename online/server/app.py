@@ -23,6 +23,7 @@ from .auth import verify_vk_launch_params
 from .assets import AssetLibrary, MAX_MODEL_BYTES, asset_router
 from .service import GameService
 from .storage import Store, encode
+from .vkplay import VkPlayAuth, VkPlayConfig, parse_login as parse_vkplay_login
 
 
 class StrictModel(BaseModel):
@@ -194,13 +195,14 @@ class RateLimiter:
             self.entries = defaultdict(deque, {k: v for k, v in self.entries.items() if v and v[-1] > now - 60})
 
 
-def create_app(*, database=None, engine=None, process_pool=True, now=time.time, background=True, assets_root=None):
+def create_app(*, database=None, engine=None, process_pool=True, now=time.time, background=True, assets_root=None, vkplay_transport=None):
     hub = Hub()
     limiter = RateLimiter()
     model_preview = None
 
     @asynccontextmanager
     async def lifespan(application):
+        application.state.vkplay_auth = VkPlayAuth(VkPlayConfig.from_env(), transport=vkplay_transport)
         database_path = database or os.getenv("POOLTOOL_DB", "online/data/pooltool.sqlite3")
         store = Store(database_path)
         model_root = assets_root or os.getenv("POOLTOOL_ASSET_ROOT") or (Path(database_path).resolve().parent / "assets")
@@ -229,6 +231,7 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
             application.state.service = None
             timer = None
         yield
+        await application.state.vkplay_auth.close()
         if timer:
             timer.cancel()
         if service:
@@ -305,6 +308,22 @@ def create_app(*, database=None, engine=None, process_pool=True, now=time.time, 
     async def guest(body: GuestLogin, request: Request, current=Depends(service)):
         limiter.check(f"guest:{request.client.host if request.client else 'unknown'}", count=int(os.getenv("GUEST_LOGINS_PER_MINUTE", "20")))
         return await current.authenticate(body.displayName, body.clientVersion)
+
+    @application.get("/api/auth/config")
+    async def auth_config(request: Request):
+        return request.app.state.vkplay_auth.config.public()
+
+    @application.post("/api/auth/vkplay")
+    async def vkplay(request: Request, current=Depends(service)):
+        limiter.check(f"vkplay:{request.client.host if request.client else 'unknown'}", count=30)
+        auth = request.app.state.vkplay_auth
+        body = await parse_vkplay_login(request)
+
+        async def authenticate(verified_uid):
+            return await current.authenticate_external(provider="vkplay", app_id=auth.config.app_id,
+                external_id=verified_uid, display_name=f"Игрок VK Play {verified_uid}", client_version=body.client_version)
+
+        return await auth.exchange(body, request.client.host if request.client else None, authenticate)
 
     @application.post("/api/auth/vk")
     async def vk(body: VkLogin, request: Request, current=Depends(service)):

@@ -6,6 +6,7 @@ import asyncio
 import copy
 import math
 import os
+import re
 import secrets
 import time
 import uuid
@@ -246,6 +247,40 @@ class GameService:
                 if not row:
                     db.execute("INSERT INTO users(id,vk_id,display_name,created_at) VALUES(?,?,?,?)",
                                (user_id, vk_id, display_name, self.now()))
+                token = new_token()
+                db.execute("INSERT INTO sessions VALUES(?,?,?,?,?)", (token_hash(token), user_id,
+                           self.now(), self.now() + 30 * 86400, client_version))
+        return {"token": token, "user": self._user(user_id)}
+
+    async def authenticate_external(self, *, provider: str, app_id: str, external_id: str,
+                                    display_name="Игрок", client_version="unknown"):
+        """Issue our session ONLY after a platform adapter verifies its ticket.
+
+        A numeric VK Play UID is not a VK Mini Apps user ID. Provider and app
+        namespaces must be part of the lookup, and names are never identifiers.
+        This deliberately does not merge a guest or another platform's account.
+        """
+        if not isinstance(provider, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", provider):
+            raise ValueError("Некорректный провайдер авторизации")
+        for value in (app_id, external_id):
+            if (not isinstance(value, str) or not 1 <= len(value) <= 160
+                    or value != value.strip() or any(ord(char) < 33 or ord(char) == 127 for char in value)):
+                raise ValueError("Некорректный внешний идентификатор")
+        if not isinstance(display_name, str) or not display_name.strip() or any(ord(char) < 32 or ord(char) == 127 for char in display_name):
+            raise ValueError("Некорректное имя игрока")
+        display_name = display_name.strip()[:32]
+        async with self.lock:
+            with self.store.transaction() as db:
+                row = db.execute(
+                    "SELECT user_id FROM external_identities WHERE provider=? AND app_id=? AND external_id=?",
+                    (provider, app_id, external_id),
+                ).fetchone()
+                user_id = row["user_id"] if row else uid()
+                if not row:
+                    db.execute("INSERT INTO users(id,display_name,created_at) VALUES(?,?,?)",
+                               (user_id, display_name, self.now()))
+                    db.execute("INSERT INTO external_identities VALUES(?,?,?,?,?)",
+                               (provider, app_id, external_id, user_id, self.now()))
                 token = new_token()
                 db.execute("INSERT INTO sessions VALUES(?,?,?,?,?)", (token_hash(token), user_id,
                            self.now(), self.now() + 30 * 86400, client_version))

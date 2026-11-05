@@ -77,6 +77,8 @@ Library objects are cosmetic and do not modify server-authoritative physics.
 |---|---|---|
 | POST `/api/auth/guest` | `{displayName?,clientVersion?}` | `{token,user}` |
 | POST `/api/auth/vk` | `{launchParams,clientVersion?}` | `{token,user}` |
+| GET `/api/auth/config` | — | `{guestEnabled:true,vkPlay:{enabled,configured,appId}}`; no secrets |
+| POST `/api/auth/vkplay` | `{uid,hash,requestId,launchParams?,clientVersion?}` | `{token,user}` after GAS verification |
 | GET `/api/me` | — | `{user}` |
 | PATCH `/api/me` | `{displayName}` | `{user}` |
 | GET `/api/me/settings` | — | `{settings}` |
@@ -88,6 +90,30 @@ Library objects are cosmetic and do not modify server-authoritative physics.
 Guest identity persists by retaining the token in browser storage. VK identities
 are linked only after HMAC signature, application ID, user ID and timestamp checks.
 Configure `VK_APP_ID` and `VK_APP_SECRET`; missing credentials return 503.
+
+VK Play is a separate opt-in adapter, not the VK Mini Apps endpoint above.
+`VKPLAY_ENABLED` defaults to false; later configure `VKPLAY_GMRID` and
+`VKPLAY_SECRET` on the server and explicitly enable it. Guests remain available
+on the ordinary testing URL. The future iframe entry `/?platform=vkplay` never
+falls back to a cached guest after a configuration/SDK/ticket failure. GMRID is a
+canonical positive integer within JavaScript's safe-integer range; UID is kept
+as a canonical decimal string, not rounded through a number.
+
+`hash` is the one-time `getAuthToken()` ticket, not the `userInfo()` hash. The
+server validates any supplied signed launch query, then calls only the fixed
+HTTPS GAS endpoint using the trusted ASGI client IPv4. The total GAS deadline is
+8 seconds; redirects and automatic GAS retries are disabled. A UUID `requestId`
+allows a short replay of the same own exchange response, bound to the request
+fingerprint and IP, without sending the ticket to GAS twice. Reusing the ID with
+different data or reusing the ticket for another ID is rejected. An ambiguous
+failure requires a fresh ticket. The response cache is process-local and short
+lived; it is not durable ticket recovery after a restart.
+
+External accounts are keyed by `(provider,app_id,external_id)` separately from
+guests and the legacy `users.vk_id`. There is no automatic guest/profile linking.
+Once verified, ordinary hashed server sessions and HTTP/WS authority are reused.
+See `online/docs/VK_PLAY_AUTH.md` for deployment prerequisites and test boundaries;
+real SDK/GAS acceptance awaits an actual configured VK Play project.
 
 ## Rooms and matchmaking
 

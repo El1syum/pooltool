@@ -66,6 +66,7 @@ export class ApiError extends Error {
 let accessToken = ''
 export function setToken(token: string) { accessToken = token }
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const requestToken = accessToken
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 65_000)
   try {
@@ -74,11 +75,12 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(requestToken ? { Authorization: `Bearer ${requestToken}` } : {}),
         ...options.headers,
       },
     })
     const data = await response.json().catch(() => ({}))
+    if (requestToken !== accessToken) throw new ApiError('Учётная запись изменилась. Повторите действие.', 409, 'identity_changed')
     if (!response.ok) {
       const detail = typeof data.detail === 'string' ? data.detail : data.detail?.message
       throw new ApiError(detail || `Ошибка сервера (${response.status})`, response.status, data.code || data.detail?.code)

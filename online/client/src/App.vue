@@ -18,6 +18,7 @@ import { profileFromLibrary } from './models/libraryProfile'
 import { emptyVisualAssetProfile, type ModelLibrarySnapshot, type VisualAssetProfile } from './models/types'
 import { defaultPlayerAssetSelection, readPlayerAssetSelection, reconcilePlayerAssetSelection, resolvePlayerAssets,
   writePlayerAssetSelection, type PlayerAssetSelection } from './models/playerSelection'
+import { createVkPlayEntry, isVkPlayLaunch, type VkPlayConfig, type VkPlayEntryState } from './platform/vkplay'
 
 type View = 'menu' | 'play' | 'lobby' | 'search' | 'match' | 'profile' | 'models'
 const view = ref<View>('menu')
@@ -29,6 +30,9 @@ const loading = ref(true)
 const error = ref('')
 const connection = ref('Подключение')
 const connected = ref(false)
+const vkPlayLaunch = isVkPlayLaunch(location.search)
+const vkPlayEntryState = ref<VkPlayEntryState>({ phase: 'loading', message: 'Подключаемся к VK Play…' })
+let vkPlayEntry: ReturnType<typeof createVkPlayEntry<User>> | null = null
 const now = ref(Date.now())
 const serverClockOffset = ref(0)
 const name = ref(localStorage.getItem('pooltool.name') || 'Игрок')
@@ -80,7 +84,8 @@ let reconnectAttempt = 0
 let disposed = false
 let lastPlayedShot = ''
 let latestPlayback: { matchId: string; shot: ShotResult } | null = null
-let token = localStorage.getItem('pooltool.token') || ''
+// The platform never restores a cached guest identity, including on shared PCs.
+let token = vkPlayLaunch ? '' : localStorage.getItem('pooltool.token') || ''
 let heartbeat = 0
 let polling = 0
 let telemetryFlush = false
@@ -95,6 +100,8 @@ let settingsDialogRevision = 0
 let settingsSync: Promise<boolean> | null = null
 type CommandResponse = { match: Match; result?: ShotResult }
 class SocketUnavailable extends Error {}
+type PendingCommand = { matchId: string; command: Record<string, unknown>; userId?: string }
+let platformPendingCommand: PendingCommand | null = null
 // Commands sent over the open socket, keyed by commandId (resolved by commandResult).
 const socketCommands = new Map<string, { resolve: (value: CommandResponse) => void; reject: (error: Error) => void; timer: number }>()
 const departedRooms = new Set<string>()
@@ -106,6 +113,18 @@ function uuid(): string {
 }
 function restoreJson<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || 'null') || fallback } catch { return fallback }
+}
+function rememberPending(value: PendingCommand | null) {
+  if (vkPlayLaunch) platformPendingCommand = value ? { ...value, userId: user.value?.id } : null
+  else if (value) localStorage.setItem('pooltool.pendingCommand', JSON.stringify(value))
+  else localStorage.removeItem('pooltool.pendingCommand')
+}
+function pendingCommand(): PendingCommand | null {
+  if (vkPlayLaunch) return platformPendingCommand?.userId === user.value?.id ? platformPendingCommand : null
+  return restoreJson<PendingCommand | null>('pooltool.pendingCommand', null)
+}
+function clearGameBookmarks() {
+  if (!vkPlayLaunch) { localStorage.removeItem('pooltool.room'); localStorage.removeItem('pooltool.match') }
 }
 function mergeSettings(value: unknown): GameSettings {
   const s = value && typeof value === 'object' ? value as Partial<GameSettings> : {}
@@ -221,9 +240,12 @@ function summarizeShot(shot: ShotResult) {
 }
 async function perform(action: () => Promise<void>) {
   if (busy.value) return
+  const generation = lifecycleGeneration
   busy.value = true
   error.value = ''
-  try { await action() } catch (e) { error.value = e instanceof Error ? e.message : 'Не удалось выполнить действие' } finally { busy.value = false }
+  try { await action() } catch (e) {
+    if (generation === lifecycleGeneration && !(e instanceof ApiError && e.code === 'identity_changed')) error.value = e instanceof Error ? e.message : 'Не удалось выполнить действие'
+  } finally { if (generation === lifecycleGeneration) busy.value = false }
 }
 function telemetry(type: string, data: Record<string, unknown> = {}) {
   if (!user.value) return
@@ -245,7 +267,56 @@ async function flushTelemetry() {
     localStorage.setItem(key, JSON.stringify(restoreJson<Array<Record<string, unknown>>>(key, []).filter((e) => !accepted.has(String(e.id)))))
   } catch { /* bounded queue retained for reconnect */ } finally { telemetryFlush = false }
 }
-async function authenticate() {
+function applyAuthenticatedUser(value: User) {
+  user.value = value
+  name.value = value.displayName
+  const remoteSettings = mergeSettings(value.settings)
+  const cached = restoreJson<GameSettings | null>(`pooltool.settings.${value.id}`, null)
+  hydratingSettings = true
+  try { settings.value = cached ? mergeSettings(cached) : remoteSettings }
+  finally { hydratingSettings = false }
+  settingsDirty.value = JSON.stringify(settings.value) !== JSON.stringify(remoteSettings)
+  localStorage.setItem(`pooltool.settings.${value.id}`, JSON.stringify(settings.value))
+  connect()
+}
+function resetPlatformIdentity() {
+  lifecycleGeneration++; modelSceneGeneration++
+  clearTimeout(reconnectTimer); clearInterval(heartbeat); clearInterval(polling)
+  const previous = socket; socket = null; previous?.close()
+  for (const pending of socketCommands.values()) { clearTimeout(pending.timer); pending.reject(new ApiError('Учётная запись изменилась.', 409, 'identity_changed')) }
+  socketCommands.clear(); platformPendingCommand = null
+  token = ''; setToken(''); user.value = null; connected.value = false; reconnectAttempt = 0
+  scene?.destroy(); scene = null
+  room.value = null; match.value = null; history.value = []; view.value = 'menu'; modelReturnView.value = 'menu'
+  latestPlayback = null; lastPlayedShot = ''; pendingSummary = null; playbackBusy.value = false
+  departedRooms.clear(); departedMatches.clear(); busy.value = false
+  settingsOpen.value = false; gameMenuOpen.value = false; surrenderConfirmation.value = false; rulesOpen.value = false
+  appearanceOpen.value = false; modelAdminOpen.value = false; modelNavigationBusy.value = false; hudPanelOpen.value = false
+  altHeld.value = false; assistPinned.value = false; bindingCapture.value = null; placingCue.value = false
+  calledBall.value = ''; calledPocket.value = ''; shotPhase.value = 'overview'; toast.value = null
+  clearTimeout(toastTimer); settingsRevision++; settingsSync = null
+  hydratingSettings = true
+  try { settings.value = defaults() } finally { hydratingSettings = false }
+  settingsDirty.value = false; error.value = ''; name.value = 'Игрок'
+}
+async function authenticate(retryGuest = true) {
+  if (vkPlayLaunch) {
+    resetPlatformIdentity()
+    if (!vkPlayEntry) vkPlayEntry = createVkPlayEntry<User>({
+      search: location.search, embedded: window.parent !== window,
+      clientVersion: CLIENT_VERSION,
+      fetchConfig: () => request<VkPlayConfig>('/api/auth/config'),
+      exchange: body => post<{ token: string; user: User }>('/api/auth/vkplay', body),
+      onState: value => { vkPlayEntryState.value = value; loading.value = value.phase === 'loading' },
+      onSession: value => {
+        // Intentionally memory-only. Keep the test guest token untouched.
+        token = value.token; setToken(token); error.value = ''
+        applyAuthenticatedUser(value.user)
+      },
+    })
+    await vkPlayEntry.start()
+    return
+  }
   setToken(token)
   try {
     if (!token) {
@@ -258,20 +329,12 @@ async function authenticate() {
       const result = await request<User | { user: User }>('/api/me')
       user.value = 'user' in result ? result.user : result
     }
-    name.value = user.value.displayName
-    const remoteSettings = mergeSettings(user.value.settings)
-    const cached = restoreJson<GameSettings | null>(`pooltool.settings.${user.value.id}`, null)
-    hydratingSettings = true
-    try { settings.value = cached ? mergeSettings(cached) : remoteSettings }
-    finally { hydratingSettings = false }
-    settingsDirty.value = JSON.stringify(settings.value) !== JSON.stringify(remoteSettings)
-    localStorage.setItem(`pooltool.settings.${user.value.id}`, JSON.stringify(settings.value))
-    connect()
+    applyAuthenticatedUser(user.value)
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) {
+    if (e instanceof ApiError && e.status === 401 && retryGuest) {
       token = ''
       localStorage.removeItem('pooltool.token')
-      await authenticate()
+      await authenticate(false)
     } else error.value = e instanceof Error ? e.message : 'Не удалось подключиться'
   } finally { loading.value = false }
 }
@@ -283,6 +346,7 @@ function connect() {
   socket = current
   current.onopen = () => { authSentAt = Date.now(); clockCalibrated = false; current.send(JSON.stringify({ type: 'auth', token, clientVersion: CLIENT_VERSION })) }
   current.onmessage = (event) => {
+    if (current !== socket || disposed) return
     try {
       const message = JSON.parse(event.data)
       if (message.type === 'authenticated') {
@@ -322,8 +386,17 @@ function connect() {
       } else if (message.type === 'error') error.value = message.detail || message.message || 'Ошибка соединения'
     } catch { error.value = 'Сервер прислал некорректное сообщение' }
   }
-  current.onclose = () => {
+  current.onclose = (event) => {
     if (current !== socket) return
+    if (vkPlayLaunch && event.code === 1008) {
+      // Reject old commands as identity changes, never as retryable socket loss.
+      // Otherwise submitCommand would replay A's command via HTTP after logout.
+      vkPlayEntry?.dispose(); vkPlayEntry = null
+      resetPlatformIdentity()
+      vkPlayEntryState.value = { phase: 'error', message: 'Сессия VK Play больше не подтверждена. Повторите вход через платформу.' }
+      loading.value = false
+      return
+    }
     connected.value = false
     connection.value = 'Связь потеряна. Партия сохраняется на сервере.'
     clearInterval(heartbeat)
@@ -343,7 +416,7 @@ function receiveServerView(value: View) {
 function receiveRoom(value: Room | null) {
   if (!value || departedRooms.has(value.code)) return
   room.value = value
-  localStorage.setItem('pooltool.room', value.code)
+  if (!vkPlayLaunch) localStorage.setItem('pooltool.room', value.code)
   if (value.matchId) { if (value.matchId !== match.value?.id) loadMatchInBackground(value.matchId) }
   else if (value.status !== 'closed') receiveServerView('lobby')
 }
@@ -354,7 +427,7 @@ function receiveMatch(value: Match, result?: ShotResult) {
   if (replay) latestPlayback = { matchId: value.id, shot: replay }
   else if (latestPlayback?.matchId !== value.id) latestPlayback = null
   if (calledBall.value && !remainingBalls.value.some(ball => String(ball.id) === calledBall.value)) calledBall.value = ''
-  localStorage.setItem('pooltool.match', value.id)
+  if (!vkPlayLaunch) localStorage.setItem('pooltool.match', value.id)
   receiveServerView('match')
   if (view.value === 'match' && !modelNavigationBusy.value) applyMatchPlayback(value, result)
   updateInteraction()
@@ -386,6 +459,7 @@ function applyMatchPlayback(value: Match, result?: ShotResult) {
   } else if (!playbackBusy.value) scene?.setState(value.snapshot)
 }
 function reportBackgroundError(failure: unknown) {
+  if (failure instanceof ApiError && failure.code === 'identity_changed') return
   if (!disposed) error.value = failure instanceof Error ? failure.message : 'Не удалось обновить данные. Текущее состояние партии сохранено.'
 }
 function loadMatchInBackground(id: string) {
@@ -406,7 +480,8 @@ async function restoreMatch() {
     if (state.match) receiveMatch(state.match)
     if (state.queue?.queued) { searchMode.value = state.queue.mode; receiveServerView('search') }
   } catch (e) {
-    if (e instanceof ApiError && [403, 404, 410].includes(e.status)) { localStorage.removeItem('pooltool.match'); localStorage.removeItem('pooltool.room') }
+    if (generation !== lifecycleGeneration || (e instanceof ApiError && e.code === 'identity_changed')) return
+    if (e instanceof ApiError && [403, 404, 410].includes(e.status)) clearGameBookmarks()
     else error.value = e instanceof Error ? e.message : 'Ошибка восстановления'
   }
 }
@@ -509,28 +584,28 @@ async function sendCommand(type: string, payload: Record<string, unknown>) {
   if (!match.value || !isPlayer.value || busy.value) return
   const command = { commandId: uuid(), expectedRevision: match.value.revision, type, payload }
   const pending = { matchId: match.value.id, command }
-  localStorage.setItem('pooltool.pendingCommand', JSON.stringify(pending))
+  rememberPending(pending)
   await perform(async () => {
     try {
       const response = await submitCommand(pending.matchId, command)
-      localStorage.removeItem('pooltool.pendingCommand')
+      rememberPending(null)
       if (type === 'placeCueBall') placingCue.value = false
       receiveMatch(response.match, response.result)
     } catch (e) {
-      if (e instanceof ApiError && e.status < 500) { localStorage.removeItem('pooltool.pendingCommand'); await loadMatch(pending.matchId).catch(() => {}) }
+      if (e instanceof ApiError && e.status < 500 && e.code !== 'identity_changed') { rememberPending(null); await loadMatch(pending.matchId).catch(() => {}) }
       throw e
     }
   })
 }
 async function resumePendingCommand() {
-  const pending = restoreJson<{ matchId: string; command: Record<string, unknown> } | null>('pooltool.pendingCommand', null)
+  const pending = pendingCommand()
   if (!pending) return
   try {
     const response = await post<{ match: Match; result?: ShotResult }>(`/api/matches/${pending.matchId}/commands`, pending.command)
-    localStorage.removeItem('pooltool.pendingCommand')
+    rememberPending(null)
     receiveMatch(response.match, response.result)
   } catch (e) {
-    if (e instanceof ApiError && e.status < 500) localStorage.removeItem('pooltool.pendingCommand')
+    if (e instanceof ApiError && e.status < 500 && e.code !== 'identity_changed') rememberPending(null)
   }
 }
 async function shoot(value = scene?.getAim() ?? aim.value) {
@@ -603,7 +678,7 @@ async function leave() {
     if (previousMatch) departedMatches.add(previousMatch)
     try { if (previousRoom) await post(`/api/rooms/${previousRoom}/leave`) }
     catch (error) { if (previousRoom) departedRooms.delete(previousRoom); if (previousMatch) departedMatches.delete(previousMatch); throw error }
-    localStorage.removeItem('pooltool.room'); localStorage.removeItem('pooltool.match'); localStorage.removeItem('pooltool.pendingCommand')
+    clearGameBookmarks(); rememberPending(null)
     room.value = null; match.value = null; lastPlayedShot = ''; latestPlayback = null; gameMenuOpen.value = false; rulesOpen.value = false; hudPanelOpen.value = false; placingCue.value = false; shotPhase.value = 'overview'; view.value = 'menu'
   })
 }
@@ -611,12 +686,12 @@ async function showProfile() {
   await perform(async () => { await refreshUser(); history.value = (await request<{ matches: Array<Record<string, unknown>> }>('/api/me/history')).matches; view.value = 'profile' })
 }
 async function saveName() {
-  await perform(async () => { await request('/api/me', { method: 'PATCH', body: JSON.stringify({ displayName: name.value.trim() }) }); localStorage.setItem('pooltool.name', name.value.trim()); await refreshUser() })
+  await perform(async () => { await request('/api/me', { method: 'PATCH', body: JSON.stringify({ displayName: name.value.trim() }) }); if (!vkPlayLaunch) localStorage.setItem('pooltool.name', name.value.trim()); await refreshUser() })
 }
 async function synchronizeSettings(): Promise<boolean> {
   if (!user.value || bindingConflicts.value.length) return false
   if (settingsSync) return settingsSync
-  settingsSync = (async () => {
+  const currentSync = (async () => {
     try {
       // Serialize writes and send a new snapshot if the user edits while a PUT
       // is in flight. An older response never clears newer unsaved changes.
@@ -630,12 +705,14 @@ async function synchronizeSettings(): Promise<boolean> {
       }
       return true
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'identity_changed') return false
       error.value = e instanceof Error ? e.message : 'Настройки сохранены локально; синхронизация повторится после подключения'
       return false
     }
   })()
-  try { return await settingsSync }
-  finally { settingsSync = null }
+  settingsSync = currentSync
+  try { return await currentSync }
+  finally { if (settingsSync === currentSync) settingsSync = null }
 }
 async function saveSettings() {
   const revision = settingsRevision, dialogRevision = settingsDialogRevision
@@ -681,14 +758,16 @@ function applyPlayerAssets(value: PlayerAssetSelection) {
 }
 async function openModels() {
   if (modelNavigationBusy.value) return
+  const generation = lifecycleGeneration
   modelNavigationBusy.value = true
   modelReturnView.value = view.value === 'models' ? 'menu' : view.value
   settingsOpen.value = false; gameMenuOpen.value = false; appearanceOpen.value = false; bindingCapture.value = null
   try {
     await modelLibrary.refreshSession().catch(() => {})
     await loadModelLibrary()
+    if (generation !== lifecycleGeneration) return
     view.value = 'models'
-  } finally { modelNavigationBusy.value = false }
+  } finally { if (generation === lifecycleGeneration) modelNavigationBusy.value = false }
 }
 async function loginModelAdmin(credentials: { username: string; password: string }) {
   modelAdminBusy.value = true; modelAdminError.value = ''
@@ -741,7 +820,7 @@ function captureBinding(event: KeyboardEvent | MouseEvent) {
 async function copyCode() { if (!room.value) return; try { await navigator.clipboard.writeText(room.value.code) } catch { code.value = room.value.code } }
 function visibilityChanged() { releaseAlt(); telemetry('clientVisibility', { visible: document.visibilityState === 'visible' }); if (document.visibilityState === 'visible' && connected.value) void restoreMatch() }
 onMounted(() => { void authenticate(); void loadModelLibrary(); window.addEventListener('keydown', captureBinding, true); window.addEventListener('mousedown', captureBinding, true); window.addEventListener('keydown', handleAssistKey, true); window.addEventListener('keyup', handleAssistKey, true); window.addEventListener('blur', releaseAlt); document.addEventListener('visibilitychange', visibilityChanged); window.addEventListener('online', connect) })
-onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(polling); clearInterval(heartbeat); clearTimeout(reconnectTimer); socket?.close(); scene?.destroy(); window.removeEventListener('keydown', captureBinding, true); window.removeEventListener('mousedown', captureBinding, true); window.removeEventListener('keydown', handleAssistKey, true); window.removeEventListener('keyup', handleAssistKey, true); window.removeEventListener('blur', releaseAlt); document.removeEventListener('visibilitychange', visibilityChanged); window.removeEventListener('online', connect) })
+onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(clock); clearInterval(polling); clearInterval(heartbeat); clearTimeout(reconnectTimer); socket?.close(); scene?.destroy(); window.removeEventListener('keydown', captureBinding, true); window.removeEventListener('mousedown', captureBinding, true); window.removeEventListener('keydown', handleAssistKey, true); window.removeEventListener('keyup', handleAssistKey, true); window.removeEventListener('blur', releaseAlt); document.removeEventListener('visibilitychange', visibilityChanged); window.removeEventListener('online', connect) })
 </script>
 
 <template>
@@ -753,8 +832,14 @@ onBeforeUnmount(() => { disposed = true; clearInterval(clock); clearInterval(pol
     </header>
     <div v-if="error" class="error-banner" role="alert">{{ error }} <button @click="error = ''" aria-label="Закрыть ошибку">×</button></div>
     <div v-if="modelNavigationBusy" class="model-game-notice" role="status">Открываем мастерскую…</div>
-    <main v-if="loading" class="panel" aria-busy="true"><h1>Загрузка игры</h1><p>Подключаемся к серверу и восстанавливаем профиль.</p></main>
-    <main v-else-if="!user" class="panel"><h1>Соединение недоступно</h1><p>Проверьте подключение и повторите попытку.</p><button @click="authenticate">Повторить</button></main>
+    <main v-if="vkPlayLaunch && !user" class="panel" data-testid="vkplay-entry" :aria-busy="loading">
+      <h1>Вход через VK Play</h1><p :role="vkPlayEntryState.phase === 'error' ? 'alert' : 'status'">{{ vkPlayEntryState.message }}</p>
+      <button v-if="vkPlayEntryState.phase === 'login'" @click="vkPlayEntry?.continueEntry()">Войти через VK Play</button>
+      <button v-else-if="vkPlayEntryState.phase === 'register'" @click="vkPlayEntry?.continueEntry()">Продолжить с VK Play</button>
+      <button v-else-if="vkPlayEntryState.phase === 'error'" @click="authenticate()">Повторить вход</button>
+    </main>
+    <main v-else-if="loading" class="panel" aria-busy="true"><h1>Загрузка игры</h1><p>Подключаемся к серверу и восстанавливаем профиль.</p></main>
+    <main v-else-if="!user" class="panel"><h1>Соединение недоступно</h1><p>Проверьте подключение и повторите попытку.</p><button @click="authenticate()">Повторить</button></main>
     <main v-else-if="view === 'models'" class="model-library-page">
       <div class="model-session-bar"><span>Общая библиотека · {{ modelLibrary.session.value.authenticated ? `Администратор: ${modelLibrary.session.value.username}` : 'Режим просмотра' }}</span><button v-if="modelLibrary.session.value.authenticated" @click="logoutModelAdmin">Выйти из админки</button><button v-else @click="modelAdminError = ''; modelAdminOpen = true">Вход администратора</button></div>
       <ModelWorkshop :library="modelLibrary.adapter" :can-manage="modelLibrary.session.value.authenticated" :initial-profile="modelProfile" @apply="applyModels" @request-admin="modelAdminError = ''; modelAdminOpen = true" @close="view = modelReturnView" />
