@@ -287,6 +287,17 @@ per browser), extended platform identity/replay regression, and three-client
 physical match → finish → responsive main menu all passed in Chromium/WebKit.
 Independent code and architecture review found no unresolved blocker.
 
+Deployed `b3bb88e`; default client `/assets/index-CinJDzaL.js`, CSS unchanged.
+Static update installed HTML last and retained old chunks; backend PID 328303
+was not restarted. Backup: `/opt/pooltool-online/shared/backup-cue-menu-b3bb88e`.
+All 52 previously completed match payloads were preserved, database integrity
+checked and model catalogue unchanged. Public Chromium/WebKit three-client
+tests passed with the actual shared AI table in all clients, real charged
+physics, equal final ball states and finish → menu → play without a reload.
+Chromium's initial load timed out once; its direct-network rerun passed.
+No JS/static-resource failures in the successful runs. Published client hash
+matches the tested local build. Guest mode remains on; VK Play remains disabled.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
