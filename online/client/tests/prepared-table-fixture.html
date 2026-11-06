@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { createGameScene } from '/src/game/createGameScene.ts'
 window.preparedErrors=[];window.preparedStats=[]
-let raw=null,runtime=null,renderScene=null,reference=null
+let raw=null,runtime=null,renderScene=null,reference=null,initialProceduralPocketDisks=0
 const visible=object=>{for(let node=object;node;node=node.parent)if(!node.visible)return false;return true}
 const allMeshes=root=>{const meshes=[];root.traverse(object=>{if(object.isMesh&&visible(object))meshes.push(object)});return meshes}
 const profile={version:1,table:{name:'Prepared QA',source:{kind:'url',url:'/models/library/prepared-table.glb'},position:[0,0,0],rotation:[0,0,0],scale:[1,1,1],replaceProcedural:true,material:{},materials:{},hiddenNodes:[]},environment:null}
@@ -61,6 +61,7 @@ window.preparedQa={
   runtime.setSettings({quality:'medium',volume:0,showAimGuide:false,showPocketLabels:false})
   runtime.setState(snapshot)
   runtime.setInteraction({canShoot:false,canPlaceCueBall:false,spectator:true})
+  initialProceduralPocketDisks=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='CircleGeometry'&&mesh.userData.pocketId!==undefined).length
   const report=await runtime.setVisualAssets(profile)
   runtime.resetCamera(true)
   return report
@@ -76,7 +77,9 @@ window.preparedQa={
    const hit=ray.intersectObjects(meshes,false)[0]
    return{id:String(ball.userData.ballId),uuid:ball.uuid,y:p.y,firstHitBall:hit?.object.userData.ballId===undefined?null:String(hit.object.userData.ballId),firstHitName:hit?.object.name??null}
   })
-  return{container:!!container,containerY:container?.position.y,cloth:cloth?{min:cloth.min.toArray(),max:cloth.max.toArray()}:null,ballChecks,visibleProceduralBeds:meshes.filter(mesh=>mesh.geometry.type==='BoxGeometry'&&mesh.geometry.parameters.height===.025).length}
+  return{container:!!container,containerY:container?.position.y,cloth:cloth?{min:cloth.min.toArray(),max:cloth.max.toArray()}:null,ballChecks,visibleProceduralBeds:meshes.filter(mesh=>mesh.geometry.type==='BoxGeometry'&&mesh.geometry.parameters.height===.025).length,
+   initialProceduralPocketDisks,visibleProceduralPocketDisks:meshes.filter(mesh=>mesh.geometry.type==='CircleGeometry'&&mesh.userData.pocketId!==undefined).length,
+   pocketMarkers:meshes.filter(mesh=>mesh.geometry.type==='TorusGeometry'&&mesh.userData.pocketId!==undefined).map(mesh=>({id:String(mesh.userData.pocketId),uuid:mesh.uuid}))}
  },
  shadowQuality(quality){runtime.setSettings({quality})},
  async disposeReload(){
@@ -85,12 +88,14 @@ window.preparedQa={
   for(const geometry of geometries)geometry.addEventListener('dispose',()=>counts.geometry++)
   for(const material of materials)material.addEventListener('dispose',()=>counts.material++)
   for(const texture of textures)texture.addEventListener('dispose',()=>counts.texture++)
-  const uuids=allMeshes(renderScene).filter(mesh=>mesh.userData.ballId!==undefined).map(mesh=>mesh.uuid).sort()
+  const uuids=allMeshes(renderScene).filter(mesh=>mesh.userData.ballId!==undefined).map(mesh=>mesh.uuid).sort(),markerUuids=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='TorusGeometry'&&mesh.userData.pocketId!==undefined).map(mesh=>mesh.uuid).sort()
   await runtime.setVisualAssets({version:1,table:null,environment:null})
-  const removed=!container.parent,restoredBeds=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='BoxGeometry'&&mesh.geometry.parameters.height===.025).length
+  const removed=!container.parent,restoredBeds=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='BoxGeometry'&&mesh.geometry.parameters.height===.025).length,
+   restoredPocketDisks=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='CircleGeometry'&&mesh.userData.pocketId!==undefined).length
   const firstCounts={...counts}
   const report=await runtime.setVisualAssets(profile)
-  return{removed,restoredBeds,counts:firstCounts,expected:{geometry:geometries.size,material:materials.size,texture:textures.size},freshContainer:renderScene.getObjectByName('pooltool-Prepared QA')!==container,ballsStable:JSON.stringify(uuids)===JSON.stringify(allMeshes(renderScene).filter(mesh=>mesh.userData.ballId!==undefined).map(mesh=>mesh.uuid).sort()),report}
+  return{removed,restoredBeds,restoredPocketDisks,counts:firstCounts,expected:{geometry:geometries.size,material:materials.size,texture:textures.size},freshContainer:renderScene.getObjectByName('pooltool-Prepared QA')!==container,ballsStable:JSON.stringify(uuids)===JSON.stringify(allMeshes(renderScene).filter(mesh=>mesh.userData.ballId!==undefined).map(mesh=>mesh.uuid).sort()),
+   pocketMarkersStable:JSON.stringify(markerUuids)===JSON.stringify(allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='TorusGeometry'&&mesh.userData.pocketId!==undefined).map(mesh=>mesh.uuid).sort()),report}
  },
  destroy(){runtime?.destroy();runtime=null;return document.querySelectorAll('#stage canvas').length},
 }

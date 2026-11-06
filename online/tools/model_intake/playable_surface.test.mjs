@@ -37,3 +37,11 @@ test('approaches have no raised decorative lip before a ball reaches capture',()
 test('the flat receiving surface opts out of self-shadow casting, not receiving',()=>{
   const bed=surface.getObjectByName('Rebuilt_Flat_Cloth_Open_Pockets');assert.equal(bed.userData.pooltoolCastShadow,false);assert.equal(bed.material.roughness,.94);assert.equal(bed.material.metalness,0);
 });
+
+test('cloth edges stay behind the pocket lining instead of intersecting its bore',()=>{
+  const bed=surface.getObjectByName('Rebuilt_Flat_Cloth_Open_Pockets');
+  for(const hole of holes)for(let sample=0;sample<96;sample++){
+    const angle=(sample+.371)*Math.PI*2/96,radius=hole.radius+.0002;
+    assert.equal(cast(hole.x+Math.cos(angle)*radius,hole.z+Math.sin(angle)*radius,[bed]).length,0,`Fabric protrudes into leather lining at ${hole.id}`);
+  }
+});

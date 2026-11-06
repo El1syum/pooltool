@@ -1,9 +1,8 @@
 /** Offline art preparation only. The engine remains the collision authority. */
-import TABLE_REFERENCE from './table-reference.json' with {type:'json'};
-export {TABLE_REFERENCE};
-
-export function renderPoint(point, reference=TABLE_REFERENCE){return [point[0]-reference.width/2,point[2]||0,reference.length/2-point[1]];}
-export function pocketHoles(reference=TABLE_REFERENCE,extra=0){return reference.pockets.map(p=>{const[x,,z]=renderPoint(p.center,reference);return{x,z,radius:p.radius+extra,id:p.id};});}
+import {TABLE_REFERENCE,renderPoint,pocketHoles} from './table_coordinates.mjs';
+import {buildCushionRails} from './cushion_geometry.mjs';
+import {buildPocketLinings} from './pocket_surround.mjs';
+export {TABLE_REFERENCE,renderPoint,pocketHoles};
 
 function split(poly, plane){
   const inside=[],outside=[];
@@ -42,16 +41,16 @@ export function clipGeometry(THREE, geometry,{inner=null,holes=[],circleSegments
   const output=new THREE.BufferGeometry();output.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));output.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));output.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));return output;
 }
 
-function boxGeometry(THREE,points){const indices=[0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,3,7,6,3,6,2,0,4,7,0,7,3,1,2,6,1,6,5];const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(points.flat(),3));g.setIndex(indices);g.computeVertexNormals();return g;}
-
 export function buildPlayingSurface(THREE,reference=TABLE_REFERENCE,options={}){
   const group=new THREE.Group();group.name='Rebuilt_Engine_Aligned_Playing_Surface';
   const cloth=new THREE.MeshStandardMaterial({name:'Rebuilt_Cloth_Muted_Turquoise',color:options.clothColor||'#18776e',roughness:.94,metalness:0});
   const rubber=new THREE.MeshStandardMaterial({name:'Rebuilt_Cushions_Turquoise',color:options.cushionColor||'#135f58',roughness:.87,metalness:0});
-  const pocketMaterial=new THREE.MeshStandardMaterial({name:'Rebuilt_Pocket_Leather',color:'#090d0d',roughness:.9,metalness:0,side:THREE.DoubleSide});
-  const trimMaterial=new THREE.MeshStandardMaterial({name:'Rebuilt_Pocket_Trim_Graphite',color:'#313b3c',roughness:.4,metalness:.55,side:THREE.DoubleSide});
+  const pocketMaterial=new THREE.MeshStandardMaterial({name:'Rebuilt_Pocket_Leather',color:'#111816',roughness:.91,metalness:0});
   const halfX=options.bedHalfX??reference.width/2+.115,halfZ=options.bedHalfZ??reference.length/2+.115;
-  const holes=pocketHoles(reference),steps=96;
+  // The fabric terminates behind the leather bore, not through its differently
+  // tessellated cylinder. A sub-millimetre upholstery clearance prevents teal
+  // stitching/z-fighting inside the well; the visible bore keeps its exact R.
+  const holes=pocketHoles(reference,.0006),steps=96;
   // Triangulate the complete planar region once. Repeated per-triangle boolean
   // subtraction creates T-junctions, visible as subpixel cracks on flat cloth.
   const contour=[new THREE.Vector2(-halfX,-halfZ),new THREE.Vector2(halfX,-halfZ)],interiorHoles=[];
@@ -75,29 +74,8 @@ export function buildPlayingSurface(THREE,reference=TABLE_REFERENCE,options={}){
   for(const tri of triangles){const[a,b,c]=tri.map(i=>points[i]);const cross=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);indices.push(...(cross<0?tri:[tri[0],tri[2],tri[1]]));}
   const bed=new THREE.BufferGeometry();bed.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));bed.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));bed.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));bed.setIndex(indices);
   const bedMesh=new THREE.Mesh(bed,cloth);bedMesh.name='Rebuilt_Flat_Cloth_Open_Pockets';bedMesh.userData.pooltoolCastShadow=false;group.add(bedMesh);
-  const cushionMeshes=[];
-  for(const segment of reference.linear){
-    const a=renderPoint(segment.p1,reference),b=renderPoint(segment.p2,reference);const dx=b[0]-a[0],dz=b[2]-a[2],length=Math.hypot(dx,dz);let nx=-dz/length,nz=dx/length;if(nx*(a[0]+b[0])+nz*(a[2]+b[2])<0){nx=-nx;nz=-nz;}
-    const profile=[[0,.004],[.052,.004],[.052,.054],[0,segment.p1[2]+segment.noseRadius]];
-    const vertices=[...profile.map(([out,y])=>[a[0]+nx*out,y,a[2]+nz*out]),...profile.map(([out,y])=>[b[0]+nx*out,y,b[2]+nz*out])];
-    const geometry=boxGeometry(THREE,vertices);const mesh=new THREE.Mesh(geometry,rubber);mesh.name=`Rebuilt_Cushion_Body_${segment.id}`;cushionMeshes.push(mesh);
-    const noseGeometry=new THREE.CylinderGeometry(segment.noseRadius,segment.noseRadius,length,12,1,false);noseGeometry.rotateX(Math.PI/2);noseGeometry.rotateY(Math.atan2(dx,dz));noseGeometry.translate((a[0]+b[0])/2,a[1],(a[2]+b[2])/2);const nose=new THREE.Mesh(noseGeometry,rubber);nose.name=`Rebuilt_Collision_Nose_${segment.id}`;cushionMeshes.push(nose);
-  }
-  for(const segment of reference.circular){
-    const center=renderPoint(segment.center,reference),tangents=[];
-    for(const line of reference.linear)for(const endpoint of[line.p1,line.p2]){const p=renderPoint(endpoint,reference);if(Math.abs(Math.hypot(p[0]-center[0],p[2]-center[2])-segment.radius)<1e-6&&!tangents.some(t=>Math.hypot(t[0]-p[0],t[2]-p[2])<1e-6))tangents.push(p);}
-    if(tangents.length!==2)throw Error(`Expected two tangent points for rounded jaw ${segment.id}`);
-    let start=Math.atan2(tangents[0][2]-center[2],tangents[0][0]-center[0]),end=Math.atan2(tangents[1][2]-center[2],tangents[1][0]-center[0]);let delta=((end-start+Math.PI*3)%(Math.PI*2))-Math.PI;if(delta<0){start=end;delta=-delta;}
-    const steps=Math.max(8,Math.ceil(delta*16)),tube=new THREE.TorusGeometry(segment.radius,.005,8,steps,delta);tube.rotateX(Math.PI/2);tube.rotateY(-start);tube.translate(...center);const nose=new THREE.Mesh(tube,rubber);nose.name=`Rebuilt_Rounded_Jaw_Nose_${segment.id}`;cushionMeshes.push(nose);
-    const points=[];
-    for(let i=0;i<steps;i++){const a=start+delta*i/steps,b=start+delta*(i+1)/steps;const pa=[center[0]+Math.cos(a)*segment.radius,center[1]+.004,center[2]+Math.sin(a)*segment.radius],pb=[center[0]+Math.cos(b)*segment.radius,center[1]+.004,center[2]+Math.sin(b)*segment.radius],back=[center[0],.054,center[2]];points.push(...back,...pb,...pa);points.push(pa[0],.004,pa[2],...pa,...pb,pa[0],.004,pa[2],...pb,pb[0],.004,pb[2]);}
-    const body=new THREE.BufferGeometry();body.setAttribute('position',new THREE.Float32BufferAttribute(points,3));body.computeVertexNormals();const mesh=new THREE.Mesh(body,rubber);mesh.name=`Rebuilt_Rounded_Jaw_Body_${segment.id}`;cushionMeshes.push(mesh);
-  }
-  for(const mesh of cushionMeshes){const original=mesh.geometry;mesh.geometry=clipGeometry(THREE,original,{holes,circleSegments:48});original.dispose();group.add(mesh);}
-  for(const p of holes){
-    const wellGeometry=new THREE.CylinderGeometry(p.radius+.001,p.radius+.001,.22,48,1,true);wellGeometry.translate(p.x,-.11,p.z);const well=new THREE.Mesh(wellGeometry,pocketMaterial);well.name=`Rebuilt_Open_Pocket_Well_${p.id}`;group.add(well);
-    const lip=new THREE.RingGeometry(p.radius+.001,p.radius+.023,48);lip.rotateX(-Math.PI/2);lip.translate(p.x,.0015,p.z);const mouth=new THREE.Mesh(lip,trimMaterial);mouth.name=`Rebuilt_Pocket_Trim_${p.id}`;group.add(mouth);
-  }
+  group.add(...buildCushionRails(THREE,reference,rubber));
+  group.add(...buildPocketLinings(THREE,reference,pocketMaterial));
   group.userData={preparation:'New flat cloth and collision-aligned cushions/pocket cuts. Cosmetic only; generated from current Pooltool eight-ball dimensions.',reference:{width:reference.width,length:reference.length,height:reference.height}};
   return group;
 }

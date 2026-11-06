@@ -36,6 +36,11 @@ node online/tools/model_intake/prepare_ai_hybrid.mjs --input online/client/tests
 node online/tools/model_intake/verify_prepared_model.mjs --input online/client/tests/artifacts/model-intake/ai/pooltool-ai-hybrid.glb
 node --test online/tools/model_intake/playable_surface.test.mjs
 
+# Strict audit of actual exported triangles, winding, pocket bores and wood UVs.
+node --test online/tools/model_intake/pocket_topology.test.mjs
+node online/tools/model_intake/audit_pocket_model.mjs --input online/assets/prepared/AI-Hybrid-Playable.glb --strict --report online/client/tests/artifacts/pocket-audit/report.json
+node online/tools/model_intake/pocket_closeups.mjs --input online/assets/prepared/AI-Hybrid-Playable.glb --output-dir online/client/tests/artifacts/pocket-audit/final --label "Repaired pockets"
+
 # Uses the installed client Vite and Playwright Chromium for visual inspection.
 node online/tools/model_intake/render_ai.mjs --input online/client/tests/artifacts/model-intake/ai/pooltool-ai-hybrid.glb
 ```
@@ -63,11 +68,12 @@ frame/lower-body geometry and its original base-color texture, with matte
 material treatment. These parts are newly authored/rebuilt:
 
 - one planar cloth region, triangulated once with Earcut;
-- 18 linear cushion segments and 12 rounded jaw arcs from the actual engine;
-- six through-cuts, open wells and nearly flush graphite pocket trims;
+- six closed cushion shells joining the actual engine's 18 lines and 12 jaw arcs;
+- a continuous wooden deck/apron, reusing a clean patch of the original atlas;
+- six open leather-lined wells with separate smoothing groups at hard creases;
 - four matching supports and leveling feet.
 
-The final candidate is 3,235,040 bytes, 81,003 triangles, 67,503 vertices,
+The revised candidate is 3,080,684 bytes, 81,066 triangles, 64,056 vertices,
 seven material/mesh groups, with two embedded 2048² textures. It is calibrated
 to the current `.9906 × 1.9812 m` playing field, `.708 m` cloth height. The GLB
 itself has cloth at local Y=0; the game adds its authoritative table height.
@@ -76,6 +82,13 @@ No Draco, Meshopt or KTX2 runtime decoder is required.
 Proof: 561 playing-field rays hit the single cloth at Y=0, all six pocket center
 rays are open through the cabinet, and 24 entrance rays stay at 0–1.5 mm above
 cloth. Browser/server gameplay remains a separate required integration check.
+The pocket repair additionally checks closed/manifold cushion, wood and lining
+shells, outward normals, 294 unobstructed bore rays and 14,784 wood UV samples.
+The cloth has 0.6 mm upholstery clearance behind the lining to avoid tessellation
+slivers; physical pocket radii/contact paths are unchanged. The runtime hides
+procedural opaque pocket caps with the body, retaining colored pocket markers.
+See `online/docs/POCKET_REPAIR_20261106.md` for validation and publication details.
+
 The cloth's `pooltoolCastShadow:false` extras let it receive ball shadows without
 self-shadow artifacts when the renderer supports that cosmetic hint.
 

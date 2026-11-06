@@ -309,7 +309,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       well.rotation.x = -Math.PI / 2
       well.position.copy(position)
       well.userData.pocketId = String(pocket.id)
-      tableGroup.add(well)
+      // Only fallback art needs this flat cap. Imported tables own their wells.
+      tableBodyGroup.add(well)
       const number = numberForPocket(String(pocket.id), index)
       const color = POCKET_COLORS[number - 1] ?? POCKET_COLORS[0]!
       const mouth = new THREE.Mesh(new THREE.TorusGeometry(pocket.radius, 0.005, 8, 40), new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: color, emissiveIntensity: 0.1 }))

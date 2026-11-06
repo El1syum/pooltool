@@ -446,6 +446,33 @@ passed: server calculations 1.090/0.846 s, all delivery leads positive
 Chromium run saw transient HTTP 502 for two ball PNGs; both URLs then returned
 200 and the unchanged strict retry passed. No checks were weakened.
 
+## Table pocket geometry repair (2026-11-06)
+
+Read `online/docs/POCKET_REPAIR_20261106.md`. The shared AI table's six rail
+chains are now closed, correctly wound lofts, replacing overlapping boxes,
+cylinders and fan patches at pocket jaws. A continuous wood deck/closed apron
+replaces the warped upper AI shell; the original embedded wood atlas is reused
+with clean UVs. Open leather liners have separate hard-crease normals; 0.6 mm
+cloth clearance eliminates teal tessellation slivers inside their bores. The
+retained lower AI cabinet is decorative. Actual contact lines/arcs, pocket
+radii, game physics, table height and ball state are unchanged.
+
+Procedural flat black pocket caps now belong to the replaceable table body,
+so custom wells are no longer obscured. Colored markers/labels and picking stay
+unchanged. Prepared GLB: 3,080,684 bytes, 81,066 triangles, 64,056 vertices,
+seven groups; SHA-256 `12a337bb1a6a6f7b2f24301662379f28557ecad6ee47c00a4dc10be58ab000cc`.
+Original source files remain untouched. Generator/artifact guards reject
+input/output/sidecar aliases including hardlinks; model-intake README has exact
+commands. Older intake statistics in the 20261103 report describe revision 1.
+
+Validation before publication: 15 geometry tests, strict actual-GLB topology/
+normals/winding audit (0 defects), 294 open-bore rays, 14,784 clean wood UV samples,
+561 legacy cloth rays, 45 Python asset/reference/admin tests, 92 client checks,
+build/typecheck. Real renderer Chromium/WebKit: 1711 cloth rays, all 16 balls
+visible, six open pockets, cap replacement/reset 6→0→6, stable marker UUIDs,
+disposal/reload and JS0. Independent code review APPROVE; architecture CLEAR.
+Final closeups and overview checked, including lower cabinet/apron continuity.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
