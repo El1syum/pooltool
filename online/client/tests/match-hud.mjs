@@ -49,7 +49,8 @@ async function clickNamed(page, names) {
     const button = page.getByRole('button', { name, exact: true }).first()
     if (await button.count() && await button.isVisible()) {
       const owner = button.page()
-      const locked = await button.evaluate(() => Boolean(document.pointerLockElement))
+      const locked = await button.evaluate(() => Boolean(document.pointerLockElement)
+        || Boolean(document.querySelector('[data-testid="match-hud"][data-camera-mode="cue"][data-shot-phase="overview"]')))
       // The actual heading UX releases the captured cursor while Ctrl is held;
       // never bypass that workflow with evaluate(document.exitPointerLock()).
       if (locked) { await owner.keyboard.down('ControlLeft'); await owner.waitForFunction(() => !document.pointerLockElement) }
@@ -364,6 +365,8 @@ for (const engineName of engines) {
     await current.getByTestId('alt-assist').waitFor({ state: 'hidden' })
     assert.equal(await current.getByRole('meter').count(), 2, 'Window blur releases assist cards without removing the base power gauges')
     await current.keyboard.up('Control')
+    await current.getByTestId('game-input-resume').getByRole('button', { name: 'Продолжить игру', exact: true }).click()
+    assert.equal(await current.getByTestId('match-hud').getAttribute('data-shot-phase'), 'power', 'Explicit resume does not confirm or reset the power phase')
     await current.keyboard.down('Control')
     await current.getByTestId('alt-assist').waitFor()
     const phaseCanvas = current.locator('.game-stage canvas')
@@ -381,6 +384,8 @@ for (const engineName of engines) {
     await current.evaluate(() => window.dispatchEvent(new Event('blur')))
     await current.getByTestId('alt-assist').waitFor({ state: 'hidden' })
     await current.keyboard.up('Control')
+    await current.getByTestId('game-input-resume').getByRole('button', { name: 'Продолжить игру', exact: true }).click()
+    assert.equal(await current.getByTestId('match-hud').getAttribute('data-shot-phase'), 'overview', 'Resume restores heading input without confirming it')
     await assertStableCanvas()
 
     // Pulling the cue changes real bounded parameters; Escape cancels before release.

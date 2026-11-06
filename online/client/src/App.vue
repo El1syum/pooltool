@@ -57,6 +57,7 @@ const settingsDirty = ref(false)
 const history = ref<Array<Record<string, unknown>>>([])
 const stage = ref<HTMLDivElement | null>(null)
 const playbackBusy = ref(false)
+const sceneInputSuspended = ref(false)
 const placingCue = ref(false)
 const calledBall = ref('')
 const calledPocket = ref('')
@@ -186,6 +187,8 @@ function toggleSound() {
   else settings.value.volume = audibleVolume || 0.5
 }
 function setShotPhase(phase: ShotPhase) { shotPhase.value = phase; scene?.setShotPhase(phase) }
+function inputIsSuspended() { return scene?.isInputSuspended() ?? sceneInputSuspended.value }
+function changeHudPhase(phase: ShotPhase) { if (!inputIsSuspended()) setShotPhase(phase) }
 function changeCamera(action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' | 'out') {
   if (action === 'top') { setShotPhase('overview'); scene?.resetCamera(true) }
   else if (action === 'free') { setShotPhase('overview'); scene?.resetCamera() }
@@ -194,8 +197,9 @@ function changeCamera(action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' |
   else if (action === 'right') scene?.rotateCamera(0.4)
   else scene?.zoomCamera(action === 'in' ? 0.85 : 1.18)
 }
-function changeHudAim(value: AimState) { aim.value = { ...value }; updateAim() }
+function changeHudAim(value: AimState) { if (!inputIsSuspended()) { aim.value = { ...value }; updateAim() } }
 function toggleCuePlacement() {
+  if (inputIsSuspended()) return
   placingCue.value = !placingCue.value
   setShotPhase('overview')
   if (placingCue.value) scene?.resetCamera(true)
@@ -213,8 +217,8 @@ const foulReasons: Record<string, string> = {
   '8-ball sunk illegally (out of turn or wrong pocket)!': 'восьмёрка забита не по правилам',
   'Shot clock expired': 'истекло время хода',
 }
-function selectBall(id: string) { calledBall.value = calledBall.value === id ? '' : id }
-function selectPocket(id: string) { calledPocket.value = calledPocket.value === id ? '' : id }
+function selectBall(id: string) { if (!inputIsSuspended()) calledBall.value = calledBall.value === id ? '' : id }
+function selectPocket(id: string) { if (!inputIsSuspended()) calledPocket.value = calledPocket.value === id ? '' : id }
 function showToast(value: NonNullable<typeof toast.value>) {
   toast.value = value
   clearTimeout(toastTimer)
@@ -496,6 +500,7 @@ async function refreshUser() { const result = await request<User | { user: User 
 function ensureScene() {
   if (!stage.value || scene || !match.value) return
   try {
+    const keepSuspended = sceneInputSuspended.value
     scene = createGameScene(stage.value, {
       onAimChange: (value) => { aim.value = { ...value } },
       onShoot: (value) => { void shoot(value) },
@@ -504,6 +509,7 @@ function ensureScene() {
       onSelectPocket: (id) => { calledPocket.value = id },
       onCameraModeChange: (mode) => { cameraMode.value = mode },
       onShotPhaseChange: (phase) => { shotPhase.value = phase || 'overview' },
+      onInputSuspendedChange: (value) => { sceneInputSuspended.value = value },
       onPlaybackComplete: () => {
         playbackBusy.value = false
         if (match.value) scene?.setState(match.value.snapshot)
@@ -516,6 +522,7 @@ function ensureScene() {
     aimTurnKey = ''
     cameraMode.value = scene.getCameraMode()
     scene.setDefaultAimCamera('cue')
+    if (keepSuspended) scene.suspendInput()
     scene.setSettings(effectiveSettings.value)
     scene.setState(match.value.snapshot)
     scene.setAim(aim.value)
@@ -633,7 +640,7 @@ async function resumePendingCommand() {
   }
 }
 async function shoot(value = scene?.getAim() ?? aim.value) {
-  if (!canShoot.value || canPlace.value) return
+  if (!canShoot.value || canPlace.value || inputIsSuspended()) return
   scene?.strike()
   await sendCommand('shot', { ...value, ...(calledBall.value ? { ballCall: calledBall.value } : {}), ...(calledPocket.value ? { pocketCall: calledPocket.value } : {}) })
   if (!playbackBusy.value) scene?.cancelStrike()
@@ -826,7 +833,7 @@ function handleAssistKey(event: KeyboardEvent) {
   event.preventDefault(); event.stopImmediatePropagation(); assistPressedCodes.add(code); assistHeld.value = true
 }
 function elevationWheel(event: WheelEvent) {
-  if (!event.shiftKey || !canShoot.value || shotPhase.value === 'overview' || !event.deltaY) return
+  if (inputIsSuspended() || !event.shiftKey || !canShoot.value || shotPhase.value === 'overview' || !event.deltaY) return
   event.preventDefault(); event.stopImmediatePropagation()
   changeHudAim({ ...aim.value, theta: Math.max(0, Math.min(60, aim.value.theta + (event.deltaY < 0 ? 1 : -1))) })
 }
@@ -905,13 +912,14 @@ onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(c
     <main v-else-if="view === 'match' && match" class="match-screen figma-match-screen">
       <div class="stage-wrap">
         <div ref="stage" class="game-stage" aria-label="Игровой бильярдный стол" @wheel.capture="elevationWheel"></div>
+        <div v-if="sceneInputSuspended && ownTurn && match.status === 'active' && !playbackBusy && !settingsOpen && !gameMenuOpen && !rulesOpen && !appearanceOpen && !hudPanelOpen" class="game-resume-notice" data-testid="game-input-resume" role="status"><span>Управление приостановлено. Параметры удара сохранены.</span><button type="button" @click="scene?.resumeInput()">Продолжить игру</button><small>Клик по столу также вернёт управление — без изменения удара.</small></div>
         <Transition name="toast"><div v-if="toast" class="shot-toast" :class="toast.tone" role="status"><strong>{{ toast.title }}</strong><span v-for="line in toast.lines" :key="line">{{ line }}</span></div></Transition>
         <div v-if="(modelSceneLoading || modelSceneErrors.length) && !settingsOpen && !appearanceOpen && !gameMenuOpen" class="model-game-notice" role="status"><span v-if="modelSceneLoading">Загружаем оформление…</span><template v-else><span>Оформление не загрузилось — используется базовая геометрия.</span><small v-for="message in modelSceneErrors" :key="message">{{ message }}</small><button @click="applySceneModels">Повторить загрузку</button></template></div>
       </div>
       <MatchHud
         :match="match" :user="user" :room="room" :aim="aim" :phase="shotPhase"
-        :can-shoot="canShoot" :can-place="canPlace"
-        :can-reposition="turnReady && Boolean(match.snapshot.ballInHand) && !match.snapshot.needsPlacement"
+        :can-shoot="canShoot && !sceneInputSuspended" :can-place="canPlace && !sceneInputSuspended"
+        :can-reposition="!sceneInputSuspended && turnReady && Boolean(match.snapshot.ballInHand) && !match.snapshot.needsPlacement"
         :placing-cue="placingCue" :connected="connected" :connection="connection"
         :remaining="remaining" :elapsed="elapsed" :status-text="matchStatusText"
         :volume="settings.volume" :top-view-key="settings.bindings.topView || DEFAULT_BINDINGS.topView"
@@ -920,7 +928,7 @@ onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(c
         :assist-key-label="assistKeyLabel"
         @settings="settingsOpen = true" @menu="gameMenuOpen = true" @mute="toggleSound"
         @rules="rulesOpen = true" @camera="changeCamera" @aim="changeHudAim"
-        @shoot="shoot()" @phase="setShotPhase" @select-ball="selectBall" @select-pocket="selectPocket"
+        @shoot="shoot()" @phase="changeHudPhase" @select-ball="selectBall" @select-pocket="selectPocket"
         @place-cue="toggleCuePlacement" @copy-code="copyCode" @panel-open="hudPanelOpen = $event"
         @toggle-assist="assistPinned = !assistPinned"
       />

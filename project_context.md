@@ -350,6 +350,38 @@ native copy event, exact code, success feedback and no leaked temporary fields.
 Published JS/CSS/SVG hashes match the tested local originals. Guest entry remains
 enabled and VK Play remains disabled/unconfigured; no credentials changed.
 
+## Safe cursor resume after external focus loss (2026-11-06)
+
+External blur/hidden/unexpected native unlock now creates a persistent local
+input-suspension boundary, revoking automatic recapture. Merely returning focus,
+network snapshots, new turns and scene recreation cannot clear it. The prepared
+heading/contact/power parameters stay unchanged; in-progress pulls are cancelled
+without firing. The first foreground scene click is consumed solely to resume
+input, before raycast, mouse bindings, placement or phase confirmation. A visible
+«Продолжить игру» button provides the same explicit action. The next click is
+the normal gameplay action. The network shot clock continues.
+
+HUD contact hover, ranges, phase/shot controls and synchronous handlers are gated
+too, without disabling underlying scene eligibility (avoids a resume deadlock).
+Native ownership is checked synchronously because pointerLockElement can change
+before its queued event. Capture requests have generation/owner guards; a late
+old completion cannot cancel a newer valid lease or capture an inactive scene.
+Only the scene's own canvas is ever released. Touch activation on pointerup and
+cancelled resume gestures are handled separately; denied/unsupported Pointer Lock
+keeps the edge-turn fallback after explicit resume.
+
+Read `online/docs/CURSOR_INPUT_LIFECYCLE.md`. New renderer and actual-App/API
+regressions distinguish real Chromium native capture from explicitly simulated
+focus/API events; headless tab bringToFront is not claimed to certify OS Alt+Tab.
+
+Validation: build/typecheck and all 87 pure/SSR checks passed. Real renderer
+cursor-resume and actual-App/API regressions passed Chromium/WebKit, including
+late native ownership changes without accidental shot commands. Strict default
+cue-camera tests catch false pauses during ordinary UI/camera/turn changes;
+three consecutive Chromium runs and WebKit passed. Legacy shot workflow and
+four completed-match/menu cycles per browser passed. Independent code review
+APPROVE and architecture review CLEAR.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

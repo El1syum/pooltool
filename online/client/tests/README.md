@@ -1,5 +1,15 @@
 # Browser smoke checks
 
+## Foreground cursor ownership (2026-11-06)
+
+`cursor-resume.mjs` tests explicit resume without altering the prepared shot,
+touch/pointercancel, background transitions and stale capture completions. It
+reports native Pointer Lock separately from explicitly simulated focus/API cases.
+Headless `bringToFront()` is not presented as a physical OS Alt+Tab certification.
+`cursor-resume-app.mjs` covers the same boundary in the actual App and real API,
+including contact-reticle hover outside the renderer and scene recreation.
+See [CURSOR_INPUT_LIFECYCLE.md](../../docs/CURSOR_INPUT_LIFECYCLE.md).
+
 ## Interface and controls regression (2026-11-05)
 
 - `design-game-states.mjs`: real Vue HUD and both production CSS files, six

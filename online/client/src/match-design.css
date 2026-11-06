@@ -1,4 +1,7 @@
 /* Latest Figma: YPQR5qd4bL3LUjSRBzTuQH / Игра. The scene remains real 3D. */
+.game-resume-notice { position: absolute; z-index: 8; left: 50%; bottom: 100px; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); display: grid; gap: 10px; padding: 16px 20px; border: 1px solid #6f6246; border-radius: 8px; background: #1b231ff5; color: #f1ede1; text-align: center; font: 13px/1.5 'Pooltool Inter', sans-serif; pointer-events: auto; }
+.game-resume-notice button { border-color: #c7aa72; background: #c7aa72; color: #141c1b; }
+.game-resume-notice small { color: #a5aea6; font-size: 11px; }
 .clipboard-feedback { position: fixed; z-index: 120; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 12px 18px; border: 1px solid #c7aa72; border-radius: 6px; background: #1b231ff5; color: #f1ede1; font: 13px/1.5 'Pooltool Inter', sans-serif; text-align: center; pointer-events: none; }
 .hud-modern::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, #07100deb 0%, #07100d10 22%, #07100d00 68%, #07100de0 100%); }
 .hud-modern .hud-identity, .hud-modern.hud-compact .hud-identity { left: 40px; top: 36px; }

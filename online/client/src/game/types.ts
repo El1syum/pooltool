@@ -122,6 +122,8 @@ export interface SceneCallbacks {
   onPerformance?: (data: { fps: number; drawCalls: number; triangles: number }) => void
   onCameraModeChange?: (mode: CameraMode) => void
   onShotPhaseChange?: (phase: ShotPhase | null) => void
+  /** External focus/lock loss freezes scene and HUD input until explicit resume. */
+  onInputSuspendedChange?: (suspended: boolean) => void
 }
 
 export interface GameScene {
@@ -149,6 +151,12 @@ export interface GameScene {
   beginAimTurn: () => void
   /** Call from a direct user gesture to hide the cursor for unbounded cue heading. */
   requestAimPointerLock: () => void
+  /** Foreground user gesture only; never confirms a shot-preparation phase. */
+  resumeInput: () => void
+  /** Preserve the external-focus boundary if a match scene is recreated. */
+  suspendInput: () => void
+  /** Synchronously validates foreground/native ownership before HUD input. */
+  isInputSuspended: () => boolean
   /** null restores legacy input; phase changes cancel any unfinished pointer gesture. */
   setShotPhase: (phase: ShotPhase | null) => void
   /** Radians around the vertical axis; switches the cue view to the free camera. */

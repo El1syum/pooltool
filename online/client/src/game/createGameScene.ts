@@ -179,11 +179,16 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   let edgeTurn = 0
   let edgeSince = 0
   let lockWanted = false
-  let lockPending = false
+  let lockGeneration = 0
+  let lockIntentGeneration: number | null = null
+  let pendingLock: { owner: symbol; generation: number; promise: boolean; cleanup: () => void } | null = null
   let lockAttempted = false
   let lockSuppressed = false
   let lockCanReenter = false
   let lockExiting = false
+  let ownLockHeld = false
+  let inputSuspended = false
+  let resumePointer: number | null = null
   let powerDrag: { id: number; x: number; y: number; dx: number; dy: number; aim: AimParameters; width: number; height: number } | null = null
   const activePointers = new Set<number>()
   const keys = new Set<string>()
@@ -532,27 +537,43 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
 
   // --- Camera ------------------------------------------------------------------------
 
+  function foreground(): boolean { return document.hasFocus() && document.visibilityState !== 'hidden' }
+
+  function isInputSuspended(): boolean {
+    // Native ownership can disappear before pointerlockchange is dispatched.
+    // Check the lease synchronously before accepting any input, not just in
+    // that queued event, so even an immediate return click cannot edit a shot.
+    if (!foreground() || (ownLockHeld && document.pointerLockElement !== canvas)) suspendInput()
+    // Do not interpret clicks/keys while the browser is still deciding a
+    // capture request. A grant/loss can overtake its queued DOM notifications.
+    return inputSuspended || pendingLock !== null
+  }
+
   function canLockAimPointer(): boolean {
     return defaultAimCamera === 'cue' && cameraMode === 'cue' && shotPhase === 'overview'
-      && isEnabled() && interaction.pointerLockAllowed !== false
+      && isEnabled() && interaction.pointerLockAllowed !== false && !inputSuspended && resumePointer === null && foreground()
   }
 
   function stopEdgeTurn(): void { edgeTurn = 0; edgeSince = 0 }
 
-  function releaseAimPointerLock(): void {
+  function releaseAimPointerLock(allowReenter = !inputSuspended): void {
+    lockGeneration++
+    lockIntentGeneration = null
     lockWanted = false
-    lockPending = false
+    ownLockHeld = false
+    if (!allowReenter) lockCanReenter = false
     stopEdgeTurn()
     if (document.pointerLockElement === canvas) {
-      lockCanReenter = true
+      lockCanReenter = allowReenter
       lockExiting = true
       document.exitPointerLock?.()
     }
   }
 
   function requestAimPointerLock(explicit = true): void {
+    if (isInputSuspended()) return
     if (explicit) { lockSuppressed = false; lockAttempted = false }
-    if (!canLockAimPointer() || destroyed || lockPending || lockExiting || lockSuppressed || lockAttempted
+    if (!canLockAimPointer() || destroyed || pendingLock || lockExiting || lockSuppressed || lockAttempted
       || document.visibilityState === 'hidden' || !document.hasFocus()
       || typeof canvas.requestPointerLock !== 'function' || document.pointerLockElement) return
     // The first lock requires a user gesture. After our own programmatic unlock,
@@ -560,38 +581,99 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     if (!explicit && !navigator.userActivation?.isActive && !lockCanReenter) return
     lockAttempted = true
     lockWanted = true
-    lockPending = true
+    const owner = Symbol('pointer-lock-request'), generation = lockGeneration
+    lockIntentGeneration = generation
+    let timer = 0
+    const cleanup = () => {
+      clearTimeout(timer)
+      document.removeEventListener('pointerlockchange', settled)
+      document.removeEventListener('pointerlockerror', settled)
+      if (pendingLock?.owner === owner) pendingLock = null
+    }
+    const failed = () => {
+      const ownsRequest = pendingLock?.owner === owner
+      cleanup()
+      if (ownsRequest && generation === lockGeneration && !destroyed && document.pointerLockElement !== canvas) { lockWanted = false; lockIntentGeneration = null }
+    }
+    const settled = (event?: Event) => {
+      // A document error carries no request identity. Legacy void APIs can
+      // release their in-flight slot, but must not invalidate another lease.
+      if (event?.type === 'pointerlockerror') { cleanup(); return }
+      if (document.pointerLockElement !== canvas) return
+      // This listener outlives scene teardown while a legacy void request is
+      // pending. A late grant cannot revive a blurred/disposed scene's intent.
+      // An older Promise may settle after a newer request already captured this
+      // same canvas. Never release that newer, still-valid foreground intent.
+      if (destroyed || lockIntentGeneration !== lockGeneration || !lockWanted || !canLockAimPointer()) document.exitPointerLock?.()
+      else ownLockHeld = true
+      cleanup()
+    }
+    pendingLock = { owner, generation, promise: false, cleanup }
+    document.addEventListener('pointerlockchange', settled)
+    timer = window.setTimeout(() => { failed(); if (generation === lockGeneration) releaseAimPointerLock(false) }, 15_000)
     canvas.focus({ preventScroll: true })
     try {
       const request = canvas.requestPointerLock()
       // Older implementations return void and report errors only as DOM events.
-      if (request && typeof request.catch === 'function') void request.catch(() => { lockPending = false; lockWanted = false })
-    } catch { lockPending = false; lockWanted = false }
+      if (request && typeof request.then === 'function') {
+        if (pendingLock?.owner === owner) pendingLock.promise = true
+        void request.then(() => {
+          // A successful grant may already have been lost before either queued
+          // DOM event ran. The owned Promise proves that lease existed; a bare
+          // global NONE event does not (it may belong to an older UI unlock).
+          if (generation === lockGeneration && lockWanted && lockIntentGeneration === generation
+            && document.pointerLockElement !== canvas && canLockAimPointer()) suspendInput()
+          else settled()
+          cleanup()
+        }, failed)
+      }
+      else document.addEventListener('pointerlockerror', settled)
+    } catch { failed() }
   }
 
   function syncAimPointerLock(): void {
+    if (isInputSuspended()) return
     if (!canLockAimPointer()) { lockAttempted = false; releaseAimPointerLock() }
     else requestAimPointerLock(false)
   }
 
   function pointerLockChanged(): void {
-    lockPending = false
     aimHoverX = null
     stopEdgeTurn()
     if (document.pointerLockElement === canvas) {
-      if (!lockWanted || !canLockAimPointer()) releaseAimPointerLock()
+      if (lockIntentGeneration !== lockGeneration || !lockWanted || !canLockAimPointer()) releaseAimPointerLock()
+      else ownLockHeld = true
     } else if (lockExiting) {
       lockExiting = false
       lockAttempted = false
       syncAimPointerLock()
-    } else if (lockWanted) {
+    } else if (ownLockHeld || (pendingLock && !pendingLock.promise && lockWanted
+      && lockIntentGeneration === lockGeneration && canLockAimPointer())) {
       // Esc is an explicit user escape; do not immediately capture it again.
-      lockWanted = false
       lockSuppressed = true
+      suspendInput()
     }
   }
 
-  function pointerLockFailed(): void { lockPending = false; lockWanted = false }
+  function suspendInput(): void {
+    clearKeys()
+    if (defaultAimCamera !== 'cue' || destroyed) return
+    lockCanReenter = false
+    resumePointer = null
+    controls.enabled = false
+    if (!inputSuspended) { inputSuspended = true; callbacks.onInputSuspendedChange?.(true) }
+    releaseAimPointerLock(false)
+  }
+
+  function resumeInput(capture = true): void {
+    if (destroyed || !foreground() || (navigator.userActivation && !navigator.userActivation.isActive)) return
+    isInputSuspended()
+    cancelShotGesture()
+    aimHoverX = null
+    if (inputSuspended) { inputSuspended = false; callbacks.onInputSuspendedChange?.(false) }
+    controls.enabled = cameraMode === 'free'
+    if (capture) requestAimPointerLock()
+  }
 
   function lockedMouseMove(event: MouseEvent): void {
     if (document.pointerLockElement !== canvas || !canLockAimPointer() || event.buttons !== 0) return
@@ -608,13 +690,13 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     edgeTurn = direction
   }
 
-  function visibilityChanged(): void { if (document.visibilityState === 'hidden') clearKeys() }
+  function visibilityChanged(): void { if (document.visibilityState === 'hidden') suspendInput() }
 
   function applyCameraMode(mode: CameraMode): void {
     if (mode === cameraMode) return
     cameraMode = mode
     aimHoverX = null
-    controls.enabled = mode === 'free'
+    controls.enabled = mode === 'free' && !inputSuspended
     callbacks.onCameraModeChange?.(mode)
     syncAimPointerLock()
   }
@@ -654,6 +736,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
 
   function setDefaultAimCamera(mode: CameraMode): void {
     defaultAimCamera = mode
+    if (mode === 'cue' && !foreground()) suspendInput()
     if (shotPhase === 'overview' && isEnabled()) applyHeadingCamera()
   }
 
@@ -798,7 +881,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function cancelShotGesture(): void {
-    const id = powerDrag?.id ?? pointer?.id
+    const id = resumePointer ?? powerDrag?.id ?? pointer?.id
+    resumePointer = null
     powerDrag = null
     pointer = null
     aimHoverX = null
@@ -852,6 +936,17 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function pointerDown(event: PointerEvent): void {
+    if (!foreground()) { suspendInput(); return }
+    if (isInputSuspended() || resumePointer !== null) {
+      event.preventDefault(); event.stopImmediatePropagation()
+      if (inputSuspended && event.button === 0 && event.isTrusted) {
+        // Touch activation is granted on pointerup, not on pointerdown.
+        if (event.pointerType === 'mouse') resumeInput(false)
+        resumePointer = event.pointerId
+        canvas.setPointerCapture(event.pointerId)
+      }
+      return
+    }
     audio.unlock()
     stopEdgeTurn()
     canvas.focus({ preventScroll: true })
@@ -919,6 +1014,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function pointerMove(event: PointerEvent): void {
+    if (!foreground()) { suspendInput(); return }
+    if (isInputSuspended() || resumePointer !== null) return
     if (document.pointerLockElement === canvas) return // Native mousemove carries unbounded deltas.
     updateEdgeTurn(event)
     if (powerDrag?.id === event.pointerId) {
@@ -965,6 +1062,19 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function pointerUp(event: PointerEvent): void {
+    if (!foreground()) { suspendInput(); event.preventDefault(); return }
+    if (isInputSuspended() || resumePointer !== null) {
+      event.preventDefault(); event.stopImmediatePropagation()
+      if (resumePointer === event.pointerId) {
+        if (inputSuspended && event.isTrusted && event.button === 0) resumeInput(false)
+        resumePointer = null
+        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+        aimHoverX = null
+        // The entire resume click is not an aiming/placement/shot gesture.
+        if (event.pointerType === 'mouse') requestAimPointerLock()
+      }
+      return
+    }
     if (powerDrag?.id === event.pointerId) {
       const drag = powerDrag
       powerDrag = null
@@ -1020,6 +1130,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function cancelPointer(event: PointerEvent): void {
+    if (resumePointer === event.pointerId) { suspendInput(); return }
     if (powerDrag?.id === event.pointerId) cancelShotGesture()
     if (event.pointerType === 'mouse') keys.delete(`Mouse${event.button}`)
     activePointers.delete(event.pointerId)
@@ -1034,6 +1145,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function keyDown(event: KeyboardEvent): void {
+    if (isInputSuspended() || resumePointer !== null || !foreground()) return
     if (isEditing(event) || !container.contains(document.activeElement) || destroyed) return
     if ((event.ctrlKey || event.metaKey) && !['ControlLeft', 'ControlRight', 'MetaLeft', 'MetaRight'].includes(event.code)) return
     const bindings = settings.bindings
@@ -1054,6 +1166,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   function clearKeys(): void { keys.clear(); updateOrbitButtons(); cancelShotGesture(); placement.visible = false; releaseAimPointerLock() }
 
   function updateKeys(delta: number): void {
+    if (isInputSuspended() || resumePointer !== null || !foreground()) return
     const held = (action: BindingAction) => keys.has(settings.bindings[action] ?? DEFAULT_BINDINGS[action]) ? 1 : 0
     const turn = held('cameraRight') - held('cameraLeft')
     if (turn) rotateCamera(turn * delta * 1.3)
@@ -1067,6 +1180,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function shoot(): boolean {
+    if (isInputSuspended() || resumePointer !== null || !foreground()) return false
     if (!isEnabled()) return false
     releaseAimPointerLock()
     audio.unlock()
@@ -1151,9 +1265,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   canvas.addEventListener('webglcontextlost', handleContextLost)
   window.addEventListener('keydown', keyDown)
   window.addEventListener('keyup', keyUp)
-  window.addEventListener('blur', clearKeys)
+  window.addEventListener('blur', suspendInput)
   document.addEventListener('pointerlockchange', pointerLockChanged)
-  document.addEventListener('pointerlockerror', pointerLockFailed)
   document.addEventListener('visibilitychange', visibilityChanged)
   createTable()
   setSettings(DEFAULT_SETTINGS)
@@ -1231,6 +1344,9 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     setDefaultAimCamera,
     beginAimTurn,
     requestAimPointerLock,
+    suspendInput,
+    isInputSuspended,
+    resumeInput,
     setShotPhase,
     rotateCamera,
     zoomCamera,
@@ -1248,9 +1364,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       visualAssets.destroy()
       window.removeEventListener('keydown', keyDown)
       window.removeEventListener('keyup', keyUp)
-      window.removeEventListener('blur', clearKeys)
+      window.removeEventListener('blur', suspendInput)
       document.removeEventListener('pointerlockchange', pointerLockChanged)
-      document.removeEventListener('pointerlockerror', pointerLockFailed)
       document.removeEventListener('visibilitychange', visibilityChanged)
       canvas.removeEventListener('pointerdown', pointerDown, true)
       canvas.removeEventListener('pointermove', pointerMove)

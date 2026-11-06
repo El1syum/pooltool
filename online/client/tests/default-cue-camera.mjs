@@ -25,17 +25,18 @@ try {
   const threeModule = sceneModule.match(/import\s+\*\s+as\s+THREE\s+from\s+["']([^"']+)["']/)?.[1]
   assert.ok(threeModule)
   await page.route('**/cue-camera-fixture', route => route.fulfill({ contentType: 'text/html', body: `
-    <style>body{margin:0}#stage{width:100vw;height:100vh}</style><div id="stage"></div>
+    <meta charset="utf-8"><style>body{margin:0}#stage{width:100vw;height:100vh}</style><div id="stage"></div>
     <script type="module">
       import { createGameScene } from '/src/game/createGameScene.ts';
       import * as THREE from ${JSON.stringify(threeModule)};
       const beforeRender = THREE.Scene.prototype.onBeforeRender;
       THREE.Scene.prototype.onBeforeRender = function(renderer,scene,camera,...rest) { window.camera=camera;return beforeRender?.call(this,renderer,scene,camera,...rest); };
-      window.events={phases:[],shots:[],playbacks:0};
+      window.events={phases:[],shots:[],playbacks:0,suspensions:[]};
       window.game=createGameScene(document.querySelector('#stage'),{
         onShotPhaseChange:phase=>{window.phase=phase;window.events.phases.push(phase)},
         onShoot:aim=>window.events.shots.push(aim),
         onPlaybackComplete:()=>window.events.playbacks++,
+        onInputSuspendedChange:suspended=>window.events.suspensions.push(suspended),
       });
       window.snapshot={cueBallId:'cue',table:{width:1.27,length:2.54,height:.8,pockets:[]},balls:[
         {id:'cue',position:[.635,.635,.028575],radius:.028575},
@@ -132,6 +133,7 @@ try {
   })
   assert.equal(await mode(),'free','The explicit free-camera toggle also survives temporary input locking')
   await page.evaluate(() => { window.game.beginAimTurn(); return window.frames(45) })
+  assert.equal(await page.evaluate(()=>window.game.isInputSuspended()),false,'Ordinary camera transitions must not pause input')
   const orbitBefore=await pose()
   await page.mouse.move(500,350)
   await page.mouse.down({button:'right'})
@@ -190,6 +192,12 @@ try {
   })
   assert.equal(await mode(),'free','Even an accidental canShoot flag cannot force a spectator into the player camera')
 
+  // The portable synthetic touch check is not a native mouse-lock test. Leave
+  // the captured mouse through the same public UI permission used by help
+  // cards. Ordinary programmatic transitions must not introduce a focus pause.
+  await page.evaluate(() => window.game.setInteraction({pointerLockAllowed:false}))
+  await page.waitForFunction(() => !document.pointerLockElement)
+  assert.equal(await page.evaluate(()=>window.game.isInputSuspended()),false,'Ordinary player/placement/spectator transitions must not pause input')
   await page.evaluate(() => {
     window.game.setInteraction({canShoot:true,spectator:false});
     window.game.beginAimTurn();
@@ -212,9 +220,10 @@ try {
   assert.equal(await phase(),'aim','A separate touch tap confirms the chosen direction')
   assert.equal(await page.evaluate(()=>window.game.getAim().phi),touchHeading,'Touch confirmation does not recalculate the first-person direction from a table ray')
   assert.equal(await page.evaluate(()=>window.events.shots.length),0)
+  assert.equal(await page.evaluate(()=>window.events.suspensions.includes(true)),false,'Programmatic phase/camera/UI transitions never require a new resume gesture')
   assert.deepEqual(errors,[])
   await page.evaluate(()=>window.game.destroy())
-  console.log(JSON.stringify({engine:engineName,defaultCueView:true,headingBeforeConfirmation:true,contactLock:true,topFreeOverride:true,modalOverridePreserved:true,orbitFromCue:true,newTurnReset:true,timeoutOverview:true,placementAndSpectatorFree:true,playbackReset:true,touchHeading:true,jsErrors:errors.length}))
+  console.log(JSON.stringify({engine:engineName,defaultCueView:true,headingBeforeConfirmation:true,contactLock:true,topFreeOverride:true,modalOverridePreserved:true,orbitFromCue:true,newTurnReset:true,timeoutOverview:true,placementAndSpectatorFree:true,playbackReset:true,touchHeading:true,programmaticTransitionsDoNotPause:true,jsErrors:errors.length}))
 } finally {
   await browser?.close()
   await viteServer?.close()
