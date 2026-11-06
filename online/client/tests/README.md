@@ -172,6 +172,21 @@ stubbed SDK/exchange/WebSocket, including A→expired session→B with a late ol
 response/in-flight command. It must retain the guest token/bookmarks/pending
 command and never persist the platform token or OTP.
 
+## Action button geometry
+
+`button-layout.mjs` starts/stops its own loopback Vite fixture and uses the actual
+ClubMenu/ClubSettings/appearance/workshop/admin-login/HUD components and CSS.
+Run `node tests/button-layout.mjs` from `online/client`, with `PLAYWRIGHT_MODULE`
+as above; both Chromium/WebKit run by default. It checks same-role button groups
+at 1920/1440/760/481/390/320px, text bounds, multiline/long-word growth, disabled
+states and a negative control reproducing the original 48-vs-62px Back defect.
+It never performs an API mutation. Compact close/icons/switches keep their own
+intentional geometry. Results/screenshots live in ignored `tests/artifacts`.
+
+The isolated real-App `postgame-menu.mjs` additionally audits actual match-menu,
+surrender and result action groups at desktop/mobile/landscape sizes, including
+scroll reachability of the last action, while retaining the full lifecycle flow.
+
 ## Prepared models and personal appearance
 
 `admin-library-integration.mjs` verifies the actual App and real API in both

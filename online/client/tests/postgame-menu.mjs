@@ -2,7 +2,7 @@
 // identities/rooms are changed. The sole intercepted response is an explicitly
 // failed leave request; physics, match completion, and all successful exits are real.
 import assert from 'node:assert/strict'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -44,6 +44,46 @@ async function mainMenu(page) {
   }
 }
 async function current(actor) { return api(actor, '/api/me/current', undefined, 'GET') }
+const checkedButtonGroups = new WeakMap()
+async function equalAppActions(page, name, selector, expectedCount) {
+  const checked = checkedButtonGroups.get(page) || new Set()
+  checkedButtonGroups.set(page, checked)
+  const key = `${name}-${expectedCount}`
+  if (checked.has(key)) return
+  const original = page.viewportSize(), measurements = []
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport)
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const metrics = await page.locator(selector).evaluate(group => {
+      const rect = group.getBoundingClientRect(), panel = group.closest('.club-match-dialog, .result-panel'), bounds = panel.getBoundingClientRect()
+      return { viewport: { width: innerWidth, height: innerHeight }, pageWidth: document.documentElement.scrollWidth,
+        panel: { top: bounds.top, bottom: bounds.bottom, left: bounds.left, right: bounds.right },
+        group: { width: rect.width }, buttons: [...group.querySelectorAll('button')].map(button => {
+          const r = button.getBoundingClientRect(), range = document.createRange(); range.selectNodeContents(button)
+          return { text: button.textContent.trim(), width: r.width, height: r.height, left: r.left, right: r.right,
+            contentFits: button.scrollWidth <= button.clientWidth + 1 && button.scrollHeight <= button.clientHeight + 1,
+            textFits: [...range.getClientRects()].every(text => text.left >= r.left - 1 && text.right <= r.right + 1 && text.top >= r.top - 1 && text.bottom <= r.bottom + 1) }
+        }) }
+    })
+    assert.equal(metrics.buttons.length, expectedCount, `${name}: actual App actions required`)
+    assert.ok(metrics.pageWidth <= viewport.width + 1, `${name}: horizontal page overflow ${JSON.stringify(metrics)}`)
+    assert.ok(metrics.panel.left >= -1 && metrics.panel.right <= viewport.width + 1 && metrics.panel.top >= -1 && metrics.panel.bottom <= viewport.height + 1, `${name}: dialog clipped by viewport ${JSON.stringify(metrics)}`)
+    const first = metrics.buttons[0]
+    for (const button of metrics.buttons) {
+      assert.ok(button.height >= 48 && Math.abs(button.height - first.height) <= 1, `${name}: unequal action heights ${JSON.stringify(metrics)}`)
+      assert.ok(Math.abs(button.width - first.width) <= 1 && Math.abs(button.width - metrics.group.width) <= 1, `${name}: unequal action widths ${JSON.stringify(metrics)}`)
+      assert.ok(button.contentFits && button.textFits, `${name}: clipped action text ${JSON.stringify(metrics)}`)
+    }
+    const last = page.locator(selector).getByRole('button').last()
+    await last.scrollIntoViewIfNeeded()
+    const reachable = await last.boundingBox()
+    assert.ok(reachable && reachable.y >= -1 && reachable.y + reachable.height <= viewport.height + 1, `${name}: final action cannot be reached`)
+    measurements.push(metrics)
+  }
+  await page.setViewportSize(original)
+  await writeFile(path.join(artifacts, `${page.context().browser().browserType().name()}-${key}-button-layout.json`), JSON.stringify(measurements, null, 2))
+  checked.add(key)
+}
 async function activeMatch(page, actor, previousId) {
   await page.getByTestId('match-hud').waitFor()
   await page.locator('.game-stage canvas').waitFor()
@@ -75,9 +115,12 @@ async function surrender(page, actor, matchId) {
   await page.waitForFunction(() => !document.pointerLockElement)
   try { await page.getByRole('button', { name: 'Меню матча', exact: true }).click() }
   finally { await page.keyboard.up('ControlLeft') }
+  await equalAppActions(page, 'match-menu', '.club-dialog-actions', 5)
   await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
+  await equalAppActions(page, 'surrender', '.club-dialog-actions', 2)
   await page.getByRole('button', { name: 'Да, сдаться', exact: true }).click()
   await page.locator('.result-panel').waitFor()
+  await equalAppActions(page, 'result', '.result-actions', await page.locator('.result-actions button').count())
   const finished = await until(async () => {
     const state = await current(actor)
     return state.match?.id === matchId && state.match.status === 'finished' ? state.match : null

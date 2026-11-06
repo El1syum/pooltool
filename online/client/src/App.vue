@@ -937,18 +937,18 @@ onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(c
         @toggle-assist="assistPinned = !assistPinned"
       />
       <div v-for="player in offlinePlayers" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
-      <div v-if="match.status === 'finished'" class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div>
+      <div v-if="match.status === 'finished'" class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><div class="result-actions"><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div></div>
     </main>
     <div v-if="gameMenuOpen" class="modal-backdrop club-match-backdrop" @click.self="gameMenuOpen = false; surrenderConfirmation = false">
       <section class="club-match-dialog" role="dialog" aria-modal="true" aria-labelledby="game-menu-title">
         <span class="club-dialog-eyebrow">POOLTOOL · 8-BALL</span>
         <h1 id="game-menu-title">{{ surrenderConfirmation ? 'Сдаться?' : 'Меню матча' }}</h1>
-        <template v-if="surrenderConfirmation"><p>Вам будет засчитано поражение. Результат рейтинговой партии повлияет на Эло.</p><button class="club-dialog-primary" :disabled="busy" @click="surrender">Да, сдаться</button><button @click="surrenderConfirmation = false">Продолжить игру</button></template>
+        <template v-if="surrenderConfirmation"><p>Вам будет засчитано поражение. Результат рейтинговой партии повлияет на Эло.</p><div class="club-dialog-actions"><button class="club-dialog-primary" :disabled="busy" @click="surrender">Да, сдаться</button><button @click="surrenderConfirmation = false">Продолжить игру</button></div></template>
         <template v-else>
           <p>{{ isPlayer && match?.status !== 'finished' ? 'Таймер сетевой партии продолжает идти.' : 'Вы можете вернуться к столу или покинуть комнату.' }}</p>
-          <button class="club-dialog-primary" @click="gameMenuOpen = false">Вернуться в игру</button><button @click="gameMenuOpen = false; settingsOpen = true">Настройки</button>
+          <div class="club-dialog-actions"><button class="club-dialog-primary" @click="gameMenuOpen = false">Вернуться в игру</button><button @click="gameMenuOpen = false; settingsOpen = true">Настройки</button>
           <button @click="gameMenuOpen = false; rulesOpen = true">Правила игры</button><button @click="toggleSound">{{ settings.volume > 0 ? 'Выключить звук' : 'Включить звук' }}</button>
-          <button v-if="isPlayer && match?.status !== 'finished'" :disabled="busy" @click="surrenderConfirmation = true">Сдаться</button><button v-else :disabled="busy" @click="leave">В главное меню</button>
+          <button v-if="isPlayer && match?.status !== 'finished'" :disabled="busy" @click="surrenderConfirmation = true">Сдаться</button><button v-else :disabled="busy" @click="leave">В главное меню</button></div>
         </template>
       </section>
     </div>

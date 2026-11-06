@@ -493,6 +493,30 @@ no tests weakened. All disposable browser/test processes stopped and own rooms
 cleaned up normally. Cosmetic rollback must use catalogue API + old HTML, not
 restore the whole live database over matches created after backup.
 
+## Consistent action button dimensions (2026-11-06)
+
+Read `online/docs/BUTTON_LAYOUT_20261106.md` and refreshed `DESIGN.md`.
+Shared club Back variant had explicit 48px vs 62px (mobile 46 vs 56), affecting
+profile/rules/settings/play/friend/join/watch/lobby/bot/exit. All full actions now
+share scoped min-height 62/56, typography and content-safe auto height. Equal grid
+tracks keep paired/stacked peers aligned; join/watch/lobby/bot groups have explicit
+wrappers preserving DOM order and handlers. Two-line labels fit normal size;
+longer/unbroken text grows without clipping. Inline groups stack at ≤480px.
+Match menu/surrender/results use full-width equal 48px-min groups, with viewport
+scrolling. Workshop button/file-label share 36px font metrics; HUD action rows
+have stable line-height/centering. Intentional close/text-link/switch/value/ball/
+pocket/reticle/icon-width distinctions remain; no new UI framework or gameplay
+change. Colors/original Figma icons preserved.
+
+Validation: 396/396 actual-component geometry checks Chromium/WebKit at
+1920/1440/760/481/390/320px, including old 48px negative control and long labels.
+Profile 421×48/421×62 before → both 421×62 at 1440, both 324×56 at 390. 92 unit/SSR
+checks and build/typecheck pass. Compiled actual-App+real Pooltool API postgame
+regression passed four completed matches/browser (eight total); new actual menu/
+surrender/result geometry gates passed 1440×900/390×844/320×568/844×390, last button
+reachable, failed-leave recovery and finish→menu→play retained, JS/static0.
+Independent code/spec APPROVE; architecture CLEAR. Local QA service stopped.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

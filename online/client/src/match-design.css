@@ -165,11 +165,12 @@
 .club-app:not(.in-match):not(.in-workshop) { max-width: none; padding: 0; min-height: 100dvh; }
 .club-app > .error-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 100; max-width: min(90vw, 800px); }
 .club-match-backdrop { background: #07100ddd; backdrop-filter: blur(10px); }
-.club-match-dialog { width: min(480px, calc(100vw - 32px)); padding: 40px; border: 1px solid #465048; border-radius: 12px; background: #1b231ff5; display: grid; gap: 12px; box-shadow: 0 30px 80px #0008; text-align: center; }
+.club-match-dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 40px; border: 1px solid #465048; border-radius: 12px; background: #1b231ff5; display: grid; gap: 12px; box-shadow: 0 30px 80px #0008; text-align: center; }
 .club-match-dialog h1 { margin: 6px 0 4px; color: #f4f0e8; font: 38px/1.2 'Pooltool Lora', Georgia, serif; }
 .club-match-dialog p { margin: 0 0 16px; color: #a5ada3; font-size: 14px; line-height: 1.65; }
 .club-dialog-eyebrow { color: #b6a476; font-size: 10px; letter-spacing: 3px; }
-.club-match-dialog button { min-height: 48px; border: 1px solid #465048; border-radius: 5px; background: #252f29; color: #e2e7da; }
+.club-dialog-actions { display: grid; grid-auto-rows: 1fr; gap: 12px; }
+.club-match-dialog button { width: 100%; min-width: 0; min-height: 48px; padding: 12px 16px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; border: 1px solid #465048; border-radius: 5px; background: #252f29; color: #e2e7da; }
 .club-match-dialog .club-dialog-primary { background: #84764f; border-color: #aa9864; color: #fff8df; }
 .model-library-page { min-height: 100dvh; }
 .model-session-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: flex-end; padding: 12px 24px; background: #1b231f; color: #c5cdbf; font-size: 13px; }
