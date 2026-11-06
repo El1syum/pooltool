@@ -638,6 +638,36 @@ catalogue v5, model bytes and private configuration unchanged; old chunks kept.
 The separately held physics implementation was NOT deployed. All own browser/
 Vite processes stopped; the public layout check created no rooms or matches.
 
+## New EPYC physics test server (2026-11-06)
+
+Read `online/docs/PHYSICS_EPYC_SERVER_20261106.md` and retained raw evidence in
+`online/docs/physics_benchmark_epyc_20261106/`. User supplied 82.47.145.40 for
+physics testing ONLY; no game migration/backend deployment was performed.
+Never record its password in repository, commands, logs or documentation.
+
+VM reports 4 KVM vCPU AMD EPYC-Genoa and ~8GiB; physical dedicated cores/SKU
+not verified. Same Python3.12.3 pinned venv for independent fc9e96e baseline
+and candidate3995270, separate source paths/import assertions/homes/JIT caches.
+New-host legacy reference goldens are exact; weak dense2453events differs
+from oldLinux2439/Windows2373 without tolerance relaxation.
+
+Candidate14x3:42/42exact, deadline FAIL first dense2.529168s after BASIC warmup
+(extra JIT included; do not hide29ms excess). Actual full-init two-worker pool:
+12/12exactPASS,max.873505s including queue/IPC+fullJSON, bothREADY8.302s.
+Additional empty-JIT-cache/default-thread-env pool:20/20exactPASS,max1.032026s,
+bothREADY37.529s. No per-case priming, all children stopped; SSH closed.
+Canonical pipeline threads1; extra cold probe thread varsunset/HOMEroot, so
+separate qualification, not a paired speedup comparison. Baseline14x1 after
+oracle capture already max.945782s on this CPU. GPU unused/unnecessary for probe.
+
+Finite two-heavy-shot/two-concurrent serving gate passed, NOT universal/input/
+unbounded-load/network/DB SLA; full readiness must gate service admission.
+Isolated /opt/pooltool-physics-bench-20261106 retained with sources, venv,
+helpers, caches/logs/reports. Only missing venv/headless import system libs
+installed, no upgrades/services/ports/API/firewall/accounts/keys changed.
+Old82.47.143.103:8790 game/release/backend/DB/models/config untouched.
+Migration and live end-to-end/capacity qualification require a separate step.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

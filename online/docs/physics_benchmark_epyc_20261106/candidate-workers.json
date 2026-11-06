@@ -1,0 +1,334 @@
+{
+  "schema": 1,
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "workerCount": 2,
+  "repeats": 3,
+  "requestedSamples": 12,
+  "perCasePriming": false,
+  "workerTimeoutSeconds": 60.0,
+  "startupTimeoutSeconds": 240.0,
+  "maximumSeconds": 2.5,
+  "scope": "Isolated real PhysicsWorkers, calculation including queue/IPC plus complete full-result JSON; excludes network, DB, playback lead and oracle validation",
+  "note": "A finite warm probe, not an exhaustive/load SLA. Rejected/invalid/incomplete results never count as fast completions.",
+  "samples": [
+    {
+      "case": "recorded_dense_1675",
+      "phase": "individual",
+      "repetition": 1,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6551081989996419,
+      "jsonSeconds": 0.03387445000043954,
+      "completePlusJsonSeconds": 0.6889826490000814,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "individual",
+      "repetition": 1,
+      "status": "complete",
+      "calculateIpcSeconds": 0.796531490000234,
+      "jsonSeconds": 0.028232369999841467,
+      "completePlusJsonSeconds": 0.8247638600000755,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "individual",
+      "repetition": 2,
+      "status": "complete",
+      "calculateIpcSeconds": 0.5849141399999098,
+      "jsonSeconds": 0.027051200000187237,
+      "completePlusJsonSeconds": 0.6119653400000971,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "individual",
+      "repetition": 2,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8245401199997104,
+      "jsonSeconds": 0.02756814000031227,
+      "completePlusJsonSeconds": 0.8521082600000227,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "individual",
+      "repetition": 3,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6154287399999703,
+      "jsonSeconds": 0.02772536000020409,
+      "completePlusJsonSeconds": 0.6431541000001744,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "individual",
+      "repetition": 3,
+      "status": "complete",
+      "calculateIpcSeconds": 0.7420849100003579,
+      "jsonSeconds": 0.027925559999857796,
+      "completePlusJsonSeconds": 0.7700104700002157,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "simultaneous",
+      "repetition": 1,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6148564099999021,
+      "jsonSeconds": 0.030701679999765474,
+      "completePlusJsonSeconds": 0.6455580899996676,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "simultaneous",
+      "repetition": 1,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8319368000002214,
+      "jsonSeconds": 0.03138147999970897,
+      "completePlusJsonSeconds": 0.8633182799999304,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "simultaneous",
+      "repetition": 2,
+      "status": "complete",
+      "calculateIpcSeconds": 0.5929756700002144,
+      "jsonSeconds": 0.030074799999965762,
+      "completePlusJsonSeconds": 0.6230504700001802,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "simultaneous",
+      "repetition": 2,
+      "status": "complete",
+      "calculateIpcSeconds": 0.7543461700001899,
+      "jsonSeconds": 0.03081978000000163,
+      "completePlusJsonSeconds": 0.7851659500001915,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "simultaneous",
+      "repetition": 3,
+      "status": "complete",
+      "calculateIpcSeconds": 0.5853709299999537,
+      "jsonSeconds": 0.030411939999794413,
+      "completePlusJsonSeconds": 0.6157828699997481,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "simultaneous",
+      "repetition": 3,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8427481600001556,
+      "jsonSeconds": 0.030757279999761522,
+      "completePlusJsonSeconds": 0.8735054399999171,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    }
+  ],
+  "pairs": [
+    {
+      "repetition": 1,
+      "cases": [
+        "recorded_dense_1675",
+        "weak_dense_break"
+      ],
+      "calculateAndJsonMakespanSeconds": 0.8636008400003448,
+      "completeExact": true
+    },
+    {
+      "repetition": 2,
+      "cases": [
+        "recorded_dense_1675",
+        "weak_dense_break"
+      ],
+      "calculateAndJsonMakespanSeconds": 0.7883950400000685,
+      "completeExact": true
+    },
+    {
+      "repetition": 3,
+      "cases": [
+        "recorded_dense_1675",
+        "weak_dense_break"
+      ],
+      "calculateAndJsonMakespanSeconds": 0.8774787100001049,
+      "completeExact": true
+    }
+  ],
+  "failures": [],
+  "startupSeconds": 8.301736509999955,
+  "readyWorkerCount": 2,
+  "workerPids": [
+    3361,
+    3362
+  ],
+  "abortedAfterNonDeadlineFailure": false,
+  "cleanup": {
+    "seconds": 0.04443873000036547,
+    "allChildrenStopped": true,
+    "survivingPids": []
+  },
+  "completeExactSamples": 12,
+  "maxSeconds": 0.8735054399999171,
+  "summaries": {
+    "individual": {
+      "recorded_dense_1675": {
+        "completeExactSamples": 3,
+        "calculateIpcSeconds": {
+          "median": 0.6154287399999703,
+          "maximum": 0.6551081989996419
+        },
+        "jsonSeconds": {
+          "median": 0.02772536000020409,
+          "maximum": 0.03387445000043954
+        },
+        "completePlusJsonSeconds": {
+          "median": 0.6431541000001744,
+          "maximum": 0.6889826490000814
+        }
+      },
+      "weak_dense_break": {
+        "completeExactSamples": 3,
+        "calculateIpcSeconds": {
+          "median": 0.796531490000234,
+          "maximum": 0.8245401199997104
+        },
+        "jsonSeconds": {
+          "median": 0.027925559999857796,
+          "maximum": 0.028232369999841467
+        },
+        "completePlusJsonSeconds": {
+          "median": 0.8247638600000755,
+          "maximum": 0.8521082600000227
+        }
+      }
+    },
+    "simultaneous": {
+      "recorded_dense_1675": {
+        "completeExactSamples": 3,
+        "calculateIpcSeconds": {
+          "median": 0.5929756700002144,
+          "maximum": 0.6148564099999021
+        },
+        "jsonSeconds": {
+          "median": 0.030411939999794413,
+          "maximum": 0.030701679999765474
+        },
+        "completePlusJsonSeconds": {
+          "median": 0.6230504700001802,
+          "maximum": 0.6455580899996676
+        }
+      },
+      "weak_dense_break": {
+        "completeExactSamples": 3,
+        "calculateIpcSeconds": {
+          "median": 0.8319368000002214,
+          "maximum": 0.8427481600001556
+        },
+        "jsonSeconds": {
+          "median": 0.03081978000000163,
+          "maximum": 0.03138147999970897
+        },
+        "completePlusJsonSeconds": {
+          "median": 0.8633182799999304,
+          "maximum": 0.8735054399999171
+        }
+      }
+    }
+  },
+  "status": "PASS",
+  "goldenPlatform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "goldenSourceCommit": "fc9e96eea2076d01d11ba8b95287023079ac9f5e",
+  "goldenFileSha256": "cde9dc5a209c03d9431ab7d18bad87c9e74f5bc1fe7672274f984ee3d5d0e95a"
+}

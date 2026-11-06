@@ -1,0 +1,428 @@
+{
+  "schema": 1,
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "goldenPlatform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "goldenSourceCommit": "fc9e96eea2076d01d11ba8b95287023079ac9f5e",
+  "cacheNote": "Existing caches preserved; single-process warm finite corpus, no universal/load SLA",
+  "firstCaseInvocationIncluded": true,
+  "warmupSeconds": 27.787003856999945,
+  "repeats": 3,
+  "requestedCases": 14,
+  "successfulCases": 14,
+  "maxSeconds": 2.529167540000344,
+  "samples": [
+    {
+      "case": "recorded_dense_1675",
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "tags": [
+        "recorded",
+        "dense",
+        "follow"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        2.4951440700001513,
+        0.6333264200002304,
+        0.6518518799998674
+      ],
+      "simulateMaxSeconds": 2.4951440700001513,
+      "simulateMedianSeconds": 0.6518518799998674,
+      "jsonSeconds": [
+        0.0340234700001929,
+        0.03316231999997399,
+        0.0326375999998163
+      ],
+      "simulatePlusJsonMaxSeconds": 2.529167540000344,
+      "jsonBytes": 1513737,
+      "exactEquality": true
+    },
+    {
+      "case": "weak_dense_break",
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "tags": [
+        "dense",
+        "slow-break",
+        "near-rest-contacts"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.8204901499998414,
+        0.8361173700000109,
+        0.8495714999999109
+      ],
+      "simulateMaxSeconds": 0.8495714999999109,
+      "simulateMedianSeconds": 0.8361173700000109,
+      "jsonSeconds": [
+        0.03707372000008036,
+        0.03678429000001415,
+        0.03537045999973998
+      ],
+      "simulatePlusJsonMaxSeconds": 0.8849419599996509,
+      "jsonBytes": 1727917,
+      "exactEquality": true
+    },
+    {
+      "case": "minimum_speed_miss",
+      "inputSha256": "6d74257f76cb9f29586ead12928a4f38922e50f3a87185644cc47d887b7c4dcc",
+      "resultSha256": "74c4e73c139b7434ddeccf79f557f4d4ec6514b04002d5f505988a6501adae07",
+      "events": 5,
+      "duration": 0.571296474,
+      "frames": 36,
+      "tags": [
+        "minimum-speed",
+        "foul"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.009542710000005172,
+        0.008317250000345666,
+        0.005509069999789062
+      ],
+      "simulateMaxSeconds": 0.009542710000005172,
+      "simulateMedianSeconds": 0.008317250000345666,
+      "jsonSeconds": [
+        0.0006706399999529822,
+        0.0006357899997055938,
+        0.0006349099999169994
+      ],
+      "simulatePlusJsonMaxSeconds": 0.010213349999958155,
+      "jsonBytes": 27385,
+      "exactEquality": true
+    },
+    {
+      "case": "slow_break",
+      "inputSha256": "2b91d0a707d6f525b79aa83e411ba15a0f967461b86404af4ee8bb59a7169569",
+      "resultSha256": "720d9ccb79e5919501c7027ce47f2656d44dd5197832dda8a8bb29a950f874df",
+      "events": 5,
+      "duration": 2.285185898,
+      "frames": 139,
+      "tags": [
+        "slow-break",
+        "dense"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.010800089999975171,
+        0.010390540000116744,
+        0.010530150000249705
+      ],
+      "simulateMaxSeconds": 0.010800089999975171,
+      "simulateMedianSeconds": 0.010530150000249705,
+      "jsonSeconds": [
+        0.001139499999680993,
+        0.0011161900001752656,
+        0.0011341800000082003
+      ],
+      "simulatePlusJsonMaxSeconds": 0.011939589999656164,
+      "jsonBytes": 44797,
+      "exactEquality": true
+    },
+    {
+      "case": "maximum_speed_break",
+      "inputSha256": "ef125510e18b44ead71c34daed037c4ee7214e721c9ddc3168207807a4f5c0b2",
+      "resultSha256": "067c4d630fe923fd0c4f67419da03906ff625b1e320e502fbc72527b3437b3b6",
+      "events": 140,
+      "duration": 9.366774963,
+      "frames": 564,
+      "tags": [
+        "maximum-speed",
+        "dense"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.27884030999985043,
+        0.09659610000016983,
+        0.09960123000018939
+      ],
+      "simulateMaxSeconds": 0.27884030999985043,
+      "simulateMedianSeconds": 0.09960123000018939,
+      "jsonSeconds": [
+        0.014558129999841185,
+        0.014958960000058141,
+        0.015257919999839942
+      ],
+      "simulatePlusJsonMaxSeconds": 0.2933984399996916,
+      "jsonBytes": 608253,
+      "exactEquality": true
+    },
+    {
+      "case": "maximum_follow_break",
+      "inputSha256": "876f015dc776cedc5155e771ebd07471f687b881afb1f0cb1076b80e796cfd8e",
+      "resultSha256": "6079e10be433a4d8360adafa4f61d889ac745ed5df55883421e9e20794dfc110",
+      "events": 1258,
+      "duration": 6.685909692,
+      "frames": 403,
+      "tags": [
+        "maximum-speed",
+        "maximum-spin",
+        "dense"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.5111563699997532,
+        0.5089627199999995,
+        0.37350048999996943
+      ],
+      "simulateMaxSeconds": 0.5111563699997532,
+      "simulateMedianSeconds": 0.5089627199999995,
+      "jsonSeconds": [
+        0.026265850000072533,
+        0.02782045999992988,
+        0.026104970000233152
+      ],
+      "simulatePlusJsonMaxSeconds": 0.5374222199998258,
+      "jsonBytes": 1186087,
+      "exactEquality": true
+    },
+    {
+      "case": "maximum_draw_break",
+      "inputSha256": "54699d20268c4091b375fd675e57be793b1fc61a6844fd34b10e6ca431bd0f58",
+      "resultSha256": "b665177de92bead9ce7243531a8f4046dfa47b7baaeab8624ae3c7d4c86d691d",
+      "events": 90,
+      "duration": 7.067966046,
+      "frames": 426,
+      "tags": [
+        "maximum-speed",
+        "maximum-spin",
+        "draw",
+        "dense"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.06532136000032551,
+        0.18893208999998024,
+        0.06027972999982012
+      ],
+      "simulateMaxSeconds": 0.18893208999998024,
+      "simulateMedianSeconds": 0.06532136000032551,
+      "jsonSeconds": [
+        0.007897560000401427,
+        0.007883839999976772,
+        0.0076952800000071875
+      ],
+      "simulatePlusJsonMaxSeconds": 0.196815929999957,
+      "jsonBytes": 317989,
+      "exactEquality": true
+    },
+    {
+      "case": "maximum_side_spin",
+      "inputSha256": "ca781014c576da2486a8eb80c1b0c117acbabbca917561b25783096ac0111742",
+      "resultSha256": "00069d5f155be242132047381c06fa41500ccd846eeec96e306014ddd695b543",
+      "events": 166,
+      "duration": 24.828335275,
+      "frames": 1491,
+      "tags": [
+        "maximum-speed",
+        "maximum-spin",
+        "side",
+        "dense"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.1288610599999629,
+        0.12782892999985052,
+        0.24764241000002585
+      ],
+      "simulateMaxSeconds": 0.24764241000002585,
+      "simulateMedianSeconds": 0.1288610599999629,
+      "jsonSeconds": [
+        0.014205779999883816,
+        0.014567979999810632,
+        0.013844110000263754
+      ],
+      "simulatePlusJsonMaxSeconds": 0.2614865200002896,
+      "jsonBytes": 546739,
+      "exactEquality": true
+    },
+    {
+      "case": "maximum_elevation",
+      "inputSha256": "60c58cacdf2a31c2b134289cd5b654c2ad7a66e806f02255d304d503705c4944",
+      "resultSha256": "71723d9c620c47e609242ce54480607f09428927213f951b609a6c8b2b07c1ba",
+      "events": 841,
+      "duration": 7.479170771,
+      "frames": 450,
+      "tags": [
+        "maximum-speed",
+        "maximum-elevation",
+        "maximum-spin"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.25634395999986737,
+        0.3724235990002853,
+        0.39651753999987704
+      ],
+      "simulateMaxSeconds": 0.39651753999987704,
+      "simulateMedianSeconds": 0.3724235990002853,
+      "jsonSeconds": [
+        0.01836511999999857,
+        0.018124230000012176,
+        0.019487580000259186
+      ],
+      "simulatePlusJsonMaxSeconds": 0.41600512000013623,
+      "jsonBytes": 818791,
+      "exactEquality": true
+    },
+    {
+      "case": "grazing_ball",
+      "inputSha256": "5a437a12499c646c223f3a43782fc940030f4a3f4924da9b987dbd2304de9435",
+      "resultSha256": "1bdaa4ad673ba99b4bf7b3f769c723d4a1748f561d16407903b531a18faa287b",
+      "events": 51,
+      "duration": 4.533029626,
+      "frames": 273,
+      "tags": [
+        "grazing",
+        "near-degenerate"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.04019726000024093,
+        0.038542249999864,
+        0.03740799000024708
+      ],
+      "simulateMaxSeconds": 0.04019726000024093,
+      "simulateMedianSeconds": 0.038542249999864,
+      "jsonSeconds": [
+        0.004920079999919835,
+        0.004744209999898885,
+        0.004900160000033793
+      ],
+      "simulatePlusJsonMaxSeconds": 0.045117340000160766,
+      "jsonBytes": 197554,
+      "exactEquality": true
+    },
+    {
+      "case": "near_parallel_rail",
+      "inputSha256": "59f8829a2cfa05f43a41ddfc74e9236169c72ce51d87853eca568014776a106c",
+      "resultSha256": "4fccd1be197d9d8a163903e83c9cd02f8ea1039ffad23613f22b02243c13b611",
+      "events": 5,
+      "duration": 0.239635833,
+      "frames": 16,
+      "tags": [
+        "near-parallel",
+        "rail",
+        "near-degenerate"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.0051284700002725,
+        0.00493030000006911,
+        0.004670500000429456
+      ],
+      "simulateMaxSeconds": 0.0051284700002725,
+      "simulateMedianSeconds": 0.00493030000006911,
+      "jsonSeconds": [
+        0.0005268600002636958,
+        0.000531290000253648,
+        0.0004974999997102714
+      ],
+      "simulatePlusJsonMaxSeconds": 0.005655330000536196,
+      "jsonBytes": 22319,
+      "exactEquality": true
+    },
+    {
+      "case": "head_on_draw",
+      "inputSha256": "3b3213c345cb48f5927ac9bd97247544838d1806a4e9f6f22b8786c92bc46cba",
+      "resultSha256": "8020fe83d61c44be6744ba97626070c93b1b2ec9442b7e1e8afc76136ab0c4d9",
+      "events": 9,
+      "duration": 2.096451031,
+      "frames": 127,
+      "tags": [
+        "draw",
+        "degenerate-polynomial",
+        "corner-pot"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.011196290000043518,
+        0.011383130000012898,
+        0.011017830000128015
+      ],
+      "simulateMaxSeconds": 0.011383130000012898,
+      "simulateMedianSeconds": 0.011196290000043518,
+      "jsonSeconds": [
+        0.0011881599998559977,
+        0.0012066300000697083,
+        0.0011739699998543074
+      ],
+      "simulatePlusJsonMaxSeconds": 0.012589760000082606,
+      "jsonBytes": 47149,
+      "exactEquality": true
+    },
+    {
+      "case": "scratch_blocked_respot",
+      "inputSha256": "18425c4b7d10dfea28a810bef8e0c04facc228da49e07a5ffe79bbb37f42f558",
+      "resultSha256": "f3568a6d55332c3be6df1165f4b789ff6a129070b77543d921b4b54cc358162d",
+      "events": 4,
+      "duration": 0.154971614,
+      "frames": 11,
+      "tags": [
+        "scratch",
+        "foul",
+        "blocked-respot"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.004253650000009657,
+        0.0041402100000595965,
+        0.004103010000108043
+      ],
+      "simulateMaxSeconds": 0.004253650000009657,
+      "simulateMedianSeconds": 0.0041402100000595965,
+      "jsonSeconds": [
+        0.0004828299997825525,
+        0.0004467899998417124,
+        0.00044835000016973936
+      ],
+      "simulatePlusJsonMaxSeconds": 0.004736479999792209,
+      "jsonBytes": 20800,
+      "exactEquality": true
+    },
+    {
+      "case": "after_foul_placement",
+      "inputSha256": "eddddc46ab08b373958ca11de8c7b9b3faa5852e8f1758202e1a88486f1faade",
+      "resultSha256": "24b8bb12f518afa82a1c999ea4162679124773d5f9d4035c872faa8f79c2caef",
+      "events": 5,
+      "duration": 0.676556949,
+      "frames": 42,
+      "tags": [
+        "respot",
+        "placement",
+        "turn-one"
+      ],
+      "status": "complete",
+      "simulateSeconds": [
+        0.005875259999811533,
+        0.005770630000370147,
+        0.0057496399999763526
+      ],
+      "simulateMaxSeconds": 0.005875259999811533,
+      "simulateMedianSeconds": 0.005770630000370147,
+      "jsonSeconds": [
+        0.0006843299997854047,
+        0.0006788499999856867,
+        0.0006853499999124324
+      ],
+      "simulatePlusJsonMaxSeconds": 0.0065595899995969376,
+      "jsonBytes": 28953,
+      "exactEquality": true
+    }
+  ],
+  "failures": [
+    {
+      "case": "recorded_dense_1675",
+      "kind": "deadline",
+      "maximumSeconds": 2.529167540000344,
+      "limitSeconds": 2.5
+    }
+  ]
+}

@@ -1,0 +1,237 @@
+{
+  "capturedUtc": "2026-11-06T11:13:49.039301+00:00",
+  "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "cpuCount": 4,
+  "lscpu": {
+    "lscpu": [
+      {
+        "field": "Architecture:",
+        "data": "x86_64"
+      },
+      {
+        "field": "CPU op-mode(s):",
+        "data": "32-bit, 64-bit"
+      },
+      {
+        "field": "Address sizes:",
+        "data": "48 bits physical, 57 bits virtual"
+      },
+      {
+        "field": "Byte Order:",
+        "data": "Little Endian"
+      },
+      {
+        "field": "CPU(s):",
+        "data": "4"
+      },
+      {
+        "field": "On-line CPU(s) list:",
+        "data": "0-3"
+      },
+      {
+        "field": "Vendor ID:",
+        "data": "AuthenticAMD"
+      },
+      {
+        "field": "BIOS Vendor ID:",
+        "data": "Red Hat"
+      },
+      {
+        "field": "Model name:",
+        "data": "AMD EPYC-Genoa Processor"
+      },
+      {
+        "field": "BIOS Model name:",
+        "data": "RHEL-9.8.0 PC (Q35 + ICH9, 2009)  CPU @ 2.0GHz"
+      },
+      {
+        "field": "BIOS CPU family:",
+        "data": "1"
+      },
+      {
+        "field": "CPU family:",
+        "data": "25"
+      },
+      {
+        "field": "Model:",
+        "data": "17"
+      },
+      {
+        "field": "Thread(s) per core:",
+        "data": "1"
+      },
+      {
+        "field": "Core(s) per socket:",
+        "data": "1"
+      },
+      {
+        "field": "Socket(s):",
+        "data": "4"
+      },
+      {
+        "field": "Stepping:",
+        "data": "0"
+      },
+      {
+        "field": "BogoMIPS:",
+        "data": "4800.00"
+      },
+      {
+        "field": "Flags:",
+        "data": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext perfctr_core ssbd ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr wbnoinvd arat avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid overflow_recov succor fsrm flush_l1d"
+      },
+      {
+        "field": "Hypervisor vendor:",
+        "data": "KVM"
+      },
+      {
+        "field": "Virtualization type:",
+        "data": "full"
+      },
+      {
+        "field": "L1d cache:",
+        "data": "128 KiB (4 instances)"
+      },
+      {
+        "field": "L1i cache:",
+        "data": "128 KiB (4 instances)"
+      },
+      {
+        "field": "L2 cache:",
+        "data": "4 MiB (4 instances)"
+      },
+      {
+        "field": "L3 cache:",
+        "data": "128 MiB (4 instances)"
+      },
+      {
+        "field": "NUMA node(s):",
+        "data": "1"
+      },
+      {
+        "field": "NUMA node0 CPU(s):",
+        "data": "0-3"
+      },
+      {
+        "field": "Vulnerability Gather data sampling:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Indirect target selection:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Itlb multihit:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability L1tf:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Mds:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Meltdown:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Mmio stale data:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Reg file data sampling:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Retbleed:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Spec rstack overflow:",
+        "data": "Mitigation; Safe RET"
+      },
+      {
+        "field": "Vulnerability Spec store bypass:",
+        "data": "Mitigation; Speculative Store Bypass disabled via prctl"
+      },
+      {
+        "field": "Vulnerability Spectre v1:",
+        "data": "Mitigation; usercopy/swapgs barriers and __user pointer sanitization"
+      },
+      {
+        "field": "Vulnerability Spectre v2:",
+        "data": "Mitigation; Enhanced / Automatic IBRS; IBPB conditional; STIBP disabled; PBRSB-eIBRS Not affected; BHI Not affected"
+      },
+      {
+        "field": "Vulnerability Srbds:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Tsa:",
+        "data": "Vulnerable: Clear CPU buffers attempted, no microcode"
+      },
+      {
+        "field": "Vulnerability Tsx async abort:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Vmscape:",
+        "data": "Not affected"
+      }
+    ]
+  },
+  "memoryInfo": "MemTotal:        8130756 kB\nMemFree:         5295808 kB\nMemAvailable:    7499580 kB\nBuffers:           52012 kB\nCached:          2330768 kB\nSwapCached:            0 kB\nActive:           215884 kB\nInactive:        2207124 kB\nActive(anon):      54156 kB\nInactive(anon):        0 kB\nActive(file):     161728 kB\nInactive(file):  2207124 kB\nUnevictable:       31292 kB\nMlocked:           27292 kB\nSwapTotal:             0 kB\nSwapFree:              0 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:            588624 kB\nWriteback:             0 kB\nAnonPages:         71584 kB\nMapped:            58760 kB\nShmem:              5168 kB\nKReclaimable:     120104 kB\nSlab:             183264 kB\nSReclaimable:     120104 kB\nSUnreclaim:        63160 kB\nKernelStack:        3136 kB\nPageTables:         2188 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:     4065376 kB\nCommitted_AS:     294156 kB\nVmallocTotal:   13743895347199 kB\nVmallocUsed:       15892 kB\nVmallocChunk:          0 kB\nPercpu:             2144 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:       87916 kB\nDirectMap2M:     3057664 kB\nDirectMap1G:     7340032 kB",
+  "cgroupMembership": "0::/user.slice/user-0.slice/session-7.scope",
+  "cgroups": {
+    "/sys/fs/cgroup": {
+      "cpu.max": null,
+      "cpu.weight": null,
+      "cpu.stat": "usage_usec 69714862\nuser_usec 45628365\nsystem_usec 24086496\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+      "cpuset.cpus.effective": "0-3",
+      "memory.max": null
+    },
+    "/sys/fs/cgroup/user.slice": {
+      "cpu.max": "max 100000",
+      "cpu.weight": "100",
+      "cpu.stat": "usage_usec 40519130\nuser_usec 32497567\nsystem_usec 8021563\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+      "cpuset.cpus.effective": null,
+      "memory.max": "max"
+    },
+    "/sys/fs/cgroup/user.slice/user-0.slice": {
+      "cpu.max": "max 100000",
+      "cpu.weight": "100",
+      "cpu.stat": "usage_usec 38597232\nuser_usec 31175255\nsystem_usec 7421976\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+      "cpuset.cpus.effective": null,
+      "memory.max": "max"
+    },
+    "/sys/fs/cgroup/user.slice/user-0.slice/session-7.scope": {
+      "cpu.max": "max 100000",
+      "cpu.weight": "100",
+      "cpu.stat": "usage_usec 36734654\nuser_usec 30221576\nsystem_usec 6513078\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+      "cpuset.cpus.effective": null,
+      "memory.max": "max"
+    }
+  },
+  "threadEnvironment": {
+    "HOME": "/opt/pooltool-physics-bench-20261106/home-baseline",
+    "NUMBA_CACHE_DIR": "/opt/pooltool-physics-bench-20261106/cache-baseline",
+    "NUMBA_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "packages": {
+    "pooltool-billiards": "0.6.0",
+    "numpy": "2.3.5",
+    "numba": "0.62.1",
+    "llvmlite": "0.45.1",
+    "scipy": "1.18.1",
+    "attrs": "26.1.0",
+    "cattrs": "26.2.1",
+    "panda3d": "1.11.0.dev3702"
+  },
+  "note": "Virtual topology/model is reported by the VM, not proof of physical dedicated cores. No production service is started."
+}

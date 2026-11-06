@@ -1,1 +1,2 @@
 online/ops/*.sh text eol=lf
+online/docs/physics_benchmark_epyc_20261106/*.json text eol=lf
