@@ -538,6 +538,40 @@ returned200; third unchanged strict pass, no test/browser-parameter weakening.
 Failed evidence retained in button-live-match{,-chromium-retry,-chromium-final}.
 Own rooms and all test processes closed normally. No backend/auth/model changes.
 
+## 2.5-second physics target investigation (2026-11-06)
+
+Read `online/docs/PHYSICS_25S_20261106.md`. Target NOT achieved on the preview VPS;
+do not describe this work as a completed SLA. Private stock-2D online simulation
+now has exact batched evolution/history, fixed-layout workspace reuse, ordered
+numeric cache minima, conservative transition-window table/pair broadphases and
+disabled-debug formatting guards. Public/3D/custom paths retain fallbacks; no
+physics tolerance/friction/event limit/60Hz sampling was weakened. Full-warmup
+failure now prevents a worker from announcing READY.
+
+Frozen 14-case corpus includes explicit ball order, original recorded 1675 and
+weak dense input. Separate Windows/Linux pre-change full-result goldens are
+checked in; cross-platform differences are not hidden by tolerance changes.
+Final reviewed Linux 14x3 results all exact, max10.239s including JSON (deadline
+FAIL; earlier candidate10.711s, no best-run SLA substitution).
+Actual two-worker 12-result probe all exact, max9.401s including queue/IPC+JSON
+(deadline FAIL). Development Ryzen AI 9 H 465: same finite gates max0.699/0.645s,
+both PASS, not a universal/load SLA. Worker processes from both probes stopped.
+Earlier paired Linux weak-break stock-loop median10.078s vs optimized8.467s;
+do not substitute unpaired best timings or this intermediate comparison for a
+final strict maximum guarantee.
+
+Final regression:486tests+5373subtestsPASS in73.29s; focused45+33PASS and final
+mapping-fallback19+4PASS. Code/spec/security review APPROVE incremental patch;
+architecture WATCH for explicitly bounded numerical guard, not SLA approval.
+
+Deployment intentionally HELD pending infrastructure/scope decision. Isolated
+candidate `/opt/pooltool-online/releases/20261106-physics-25s` is NOT active;
+normal URL/current still `20261106-physics-latency`, backend PID1024133. No live
+DB, model catalogue/files, client build, credentials/platform environment or
+service unit was changed this investigation. GPU is not a drop-in accelerator
+for this CPU/Numba sequential solver. Use the committed same-platform corpus and
+real worker probe to qualify a candidate CPU under intended concurrency.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

@@ -26,6 +26,7 @@ from pooltool.ruleset.eight_ball import BallGroup
 
 from .eight_ball import OnlineEightBall
 from .detection import OnlineEventDetector
+from .evolution import simulate_online
 
 STATE_VERSION = 1
 MAX_EVENTS = 10000
@@ -219,7 +220,7 @@ class PhysicsEngine:
         """Compile the collision path once in each simulation worker."""
         system = pt.System.example()
         system.strike(V0=2.0, phi=95.0, theta=0.0, a=0.0, b=0.0)
-        pt.simulate(system, engine=ENGINE, inplace=True, max_events=MAX_EVENTS)
+        simulate_online(system, engine=ENGINE, inplace=True, max_events=MAX_EVENTS)
         pt.continuize(system, dt=PLAYBACK_DT, inplace=True)
 
     @staticmethod
@@ -329,7 +330,7 @@ class PhysicsEngine:
         system = _restore_system(state)
         game = _restore_game(state)
         system.strike(**values)
-        pt.simulate(system, engine=ENGINE, inplace=True, max_events=MAX_EVENTS, t_final=MAX_DURATION)
+        simulate_online(system, engine=ENGINE, inplace=True, max_events=MAX_EVENTS, t_final=MAX_DURATION)
         if len(system.events) >= MAX_EVENTS or system.t >= MAX_DURATION:
             raise PhysicsError("Симуляция превысила лимит событий или длительности")
         if any(ball.state.s not in (pt.constants.stationary, pt.constants.pocketed) for ball in system.balls.values()):

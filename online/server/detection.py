@@ -22,14 +22,20 @@ from pooltool.events import (
     EventType, ball_ball_collision, ball_circular_cushion_collision,
     ball_linear_cushion_collision, ball_pocket_collision, null_event,
 )
-from pooltool.evolution.event_based._pair_cache import pair_cache
 from pooltool.evolution.event_based.detect import EventDetector
+from pooltool.evolution.event_based.cache import TransitionCache
 from pooltool.evolution.event_based.detect.ball_ball import ball_ball_collision_time_2d
 from pooltool.evolution.event_based.detect.ball_pocket import ball_pocket_collision_time
 from pooltool.physics.evolve import evolve_ball_motion
 from pooltool.physics.utils import get_u_vec
 from pooltool.ptmath.roots import quadratic, quartic
 from pooltool.ptmath.roots.core import get_real_positive_smallest_root
+
+from .ordered_cache import OnlineCollisionCache, OnlinePairTimes, online_pair_cache
+
+_TIME_ROUNDOFF = 8 * np.finfo(np.float64).eps
+_PRUNED_TABLE_ROWS = None
+_PRUNED_BALL_PAIRS = None
 
 
 _overlapping = jit(nopython=True, cache=const.use_numba_cache)(ptmath.is_overlapping)
@@ -193,13 +199,84 @@ def _pocket_batch(rvw, state, mu, mass, gravity, radius, geometry):
     return result
 
 
+@jit(nopython=True, cache=const.use_numba_cache)
+def _table_rows(rvws, states, params, indices, geometry, kind):
+    """Call the unchanged scalar batches without a Python dispatch per ball."""
+    result = np.empty((len(indices), len(geometry)))
+    for row in range(len(indices)):
+        index = indices[row]
+        state = states[index]
+        radius, mass, sliding, rolling, gravity = params[index]
+        mu = sliding if state == const.sliding else rolling
+        if kind == 0:
+            result[row] = _linear_batch(rvws[index], state, mu, mass, gravity, radius, geometry)
+        elif kind == 1:
+            result[row] = _circular_batch(rvws[index], state, mu, mass, gravity, radius, geometry)
+        else:
+            result[row] = _pocket_batch(rvws[index], state, mu, mass, gravity, radius, geometry)
+    return result
+
+
+def _prepare_workspace(shot, cache, transition_cache=None):
+    """A frame-local snapshot; never reused after a detector call/zero-dt event."""
+    fixed = getattr(cache, '_online_fixed_layout', None)
+    ids, balls = fixed if fixed is not None else (tuple(shot.balls), tuple(shot.balls.values()))
+    identity = fixed if fixed is not None else (ids, tuple(id(ball.params) for ball in balls))
+    if getattr(cache, '_online_ball_identity', None) != identity:
+        cache._online_ball_identity = identity
+        cache._online_param_refs = tuple(ball.params for ball in balls)
+        cache._online_params = np.asarray([
+            [ball.params.R, ball.params.m, ball.params.u_s, ball.params.u_r, ball.params.g]
+            for ball in balls
+        ])
+        cache._online_indices = {ball_id: index for index, ball_id in enumerate(ids)}
+    if fixed is not None:
+        arrays = getattr(cache, '_online_fixed_arrays', None)
+        if arrays is None:
+            arrays = (np.empty((len(ids), 3, 3)), np.empty(len(ids), dtype=np.int64))
+            cache._online_fixed_arrays = arrays
+        rvws, states = arrays
+        for index, ball in enumerate(balls):
+            rvws[index] = ball.state.rvw
+            states[index] = ball.state.s
+    else:
+        rvws = np.asarray([ball.state.rvw for ball in balls])
+        states = np.asarray([ball.state.s for ball in balls])
+    horizons = None
+    if (getattr(cache, '_online_prune_transitions', False)
+            and type(transition_cache) is TransitionCache
+            and all(ball_id in transition_cache.transitions for ball_id in ids)):
+        absolute = np.asarray([transition_cache.transitions[ball_id].time for ball_id in ids])
+        horizons = np.full(len(ids), np.inf)
+        finite = np.isfinite(absolute) & (absolute >= shot.t)
+        # Widen, never shorten, the inclusive cached transition boundary. This
+        # covers rounding of absolute-time addition/subtraction without changing
+        # any collision tolerance or selecting a different root.
+        padding = (np.abs(absolute[finite]) + abs(shot.t) + 1) * _TIME_ROUNDOFF
+        horizons[finite] = np.nextafter(absolute[finite] - shot.t + padding, np.inf)
+    return rvws, states, cache._online_params, cache._online_indices, horizons
+
+
+def _record_pairs(cache, pairs, values):
+    if isinstance(cache, OnlinePairTimes):
+        cache.record_values(pairs, np.asarray(values, dtype=np.float64))
+    else:
+        dict.update(cache, zip(pairs, values.tolist() if isinstance(values, np.ndarray) else values))
+
+
+def _minimum_key(cache):
+    return cache.minimum_key() if isinstance(cache, OnlinePairTimes) else min(cache, key=cache.__getitem__)
+
+
 def _next_ball_event(shot, collision_cache):
     ids = tuple(shot.balls)
-    cache = pair_cache(collision_cache, EventType.BALL_BALL, ids)
+    cache = online_pair_cache(collision_cache, EventType.BALL_BALL, ids)
     pairs = cache.missing_pairs()
     if pairs:
-        balls = list(shot.balls.values())
-        identity = tuple(id(ball.params) for ball in balls)
+        workspace = getattr(collision_cache, '_online_workspace', None)
+        fixed = getattr(collision_cache, '_online_fixed_layout', None)
+        balls = fixed[1] if fixed is not None else list(shot.balls.values())
+        identity = fixed if fixed is not None else tuple(id(ball.params) for ball in balls)
         if getattr(cache, "_ball_identity", None) != identity:
             cache._ball_identity = identity
             cache._ball_params_refs = tuple(ball.params for ball in balls)
@@ -208,16 +285,26 @@ def _next_ball_event(shot, collision_cache):
                 for b in balls
             ])
             cache._ball_indices = {ball_id: i for i, ball_id in enumerate(ids)}
-        values = _ball_batch(
-            np.asarray([ball.state.rvw for ball in balls]),
-            np.asarray([ball.state.s for ball in balls]), cache._ball_params,
+        pair_batch = _ball_batch
+        if workspace is not None and workspace[4] is not None:
+            global _PRUNED_BALL_PAIRS
+            if _PRUNED_BALL_PAIRS is None:
+                from .pair_broadphase import _ball_pairs_pruned
+                _PRUNED_BALL_PAIRS = _ball_pairs_pruned
+            pair_batch = _PRUNED_BALL_PAIRS
+        inputs = (
+            workspace[0] if workspace is not None else np.asarray([ball.state.rvw for ball in balls]),
+            workspace[1] if workspace is not None else np.asarray([ball.state.s for ball in balls]),
+            workspace[2] if workspace is not None else cache._ball_params,
             np.asarray([[cache._ball_indices[a], cache._ball_indices[b]] for a, b in pairs]),
         )
-        dict.update(cache, zip(pairs, (values + shot.t).tolist()))
+        values = (pair_batch(*inputs, workspace[4]) if pair_batch is not _ball_batch
+                  else pair_batch(*inputs))
+        _record_pairs(cache, pairs, values + shot.t)
     cache.complete_pairs()
     if not cache:
         return null_event(np.inf)
-    key = min(cache, key=cache.__getitem__)
+    key = _minimum_key(cache)
     return ball_ball_collision(ball1=shot.balls[key[0]], ball2=shot.balls[key[1]], time=cache[key])
 
 
@@ -233,8 +320,9 @@ def _next_table_event(shot, collision_cache, kind):
         event_type, factory, batch = EventType.BALL_POCKET, ball_pocket_collision, _pocket_batch
     if not objects:
         return null_event(np.inf)
-    cache = pair_cache(collision_cache, event_type, tuple(shot.balls), tuple(objects))
-    identity = tuple(id(obj) for obj in objects.values())
+    cache = online_pair_cache(collision_cache, event_type, tuple(shot.balls), tuple(objects))
+    fixed = getattr(collision_cache, '_online_fixed_layout', None)
+    identity = id(objects) if fixed is not None else tuple(id(obj) for obj in objects.values())
     if getattr(cache, "_shape_identity", None) != identity:
         if kind == "linear":
             rows = [[obj.lx, obj.ly, obj.l0, *obj.p1, *obj.p2, obj.direction] for obj in objects.values()]
@@ -244,7 +332,32 @@ def _next_table_event(shot, collision_cache, kind):
         cache._shape_refs = tuple(objects.values())
         cache._shape_geometry = np.asarray(rows, dtype=np.float64)
         cache._shape_indices = {key: i for i, key in enumerate(objects)}
-    for ball_id, values in groupby(cache.missing_pairs(), itemgetter(0)):
+    missing = cache.missing_pairs()
+    workspace = getattr(collision_cache, '_online_workspace', None)
+    if missing and workspace is not None:
+        groups = [(ball_id, list(values)) for ball_id, values in groupby(missing, itemgetter(0))]
+        ball_indices = np.asarray([workspace[3][ball_id] for ball_id, _ in groups])
+        shape_kind = 0 if kind == 'linear' else 1 if kind == 'circular' else 2
+        if workspace[4] is None:
+            times = _table_rows(*workspace[:3], ball_indices, cache._shape_geometry, shape_kind)
+        else:
+            # Lazy import avoids a module cycle: the pruning kernel deliberately
+            # calls the very same batches defined above, not copied formulas.
+            global _PRUNED_TABLE_ROWS
+            if _PRUNED_TABLE_ROWS is None:
+                from .broadphase import _table_rows_pruned
+                _PRUNED_TABLE_ROWS = _table_rows_pruned
+            times = _PRUNED_TABLE_ROWS(*workspace[:3], ball_indices, cache._shape_geometry,
+                                       shape_kind, workspace[4])
+        times += shot.t
+        if all(len(pairs) == len(objects) for _, pairs in groups):
+            values = times.ravel()
+        else:
+            values = [float(times[row, cache._shape_indices[pair[1]]])
+                      for row, (_, pairs) in enumerate(groups) for pair in pairs]
+        _record_pairs(cache, missing, values)
+        missing = ()
+    for ball_id, values in groupby(missing, itemgetter(0)):
         pairs = list(values)
         ball = shot.balls[ball_id]
         state, params = ball.state, ball.params
@@ -254,9 +367,9 @@ def _next_table_event(shot, collision_cache, kind):
         )
         if len(pairs) != len(objects):
             times = times[[cache._shape_indices[key[1]] for key in pairs]]
-        dict.update(cache, zip(pairs, (times + shot.t).tolist()))
+        _record_pairs(cache, pairs, times + shot.t)
     cache.complete_pairs()
-    key = min(cache, key=cache.__getitem__)
+    key = _minimum_key(cache)
     if kind == "pocket":
         return factory(ball=shot.balls[key[0]], pocket=objects[key[1]], time=cache[key])
     return factory(ball=shot.balls[key[0]], cushion=objects[key[1]], time=cache[key])
@@ -264,6 +377,20 @@ def _next_table_event(shot, collision_cache, kind):
 
 class OnlineEventDetector(EventDetector):
     """Per-engine override; does not monkeypatch the desktop/global detector."""
+
+    def get_next_event(self, shot, *, transition_cache=None, collision_cache=None):
+        if not self.is_3d and isinstance(collision_cache, OnlineCollisionCache):
+            if transition_cache is None:
+                transition_cache = TransitionCache.create(shot)
+            previous = getattr(collision_cache, '_online_workspace', None)
+            collision_cache._online_workspace = _prepare_workspace(shot, collision_cache, transition_cache)
+            try:
+                return super().get_next_event(shot, transition_cache=transition_cache,
+                                              collision_cache=collision_cache)
+            finally:
+                collision_cache._online_workspace = previous
+        return super().get_next_event(shot, transition_cache=transition_cache,
+                                      collision_cache=collision_cache)
 
     def _ball_ball_event(self, shot, cache):
         return super()._ball_ball_event(shot, cache) if self.is_3d else _next_ball_event(shot, cache)

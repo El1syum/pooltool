@@ -66,8 +66,10 @@ def _warm_full_path(engine):
             engine.simulate(sample, {"V0": speed, "phi": phi, "theta": elevation,
                                      "a": side, "b": follow}, shooter=0)
     except Exception:
-        # Warming is an optimization; a real shot still compiles what it needs.
+        # Do not advertise READY with an incompletely compiled path: startup
+        # failure is retried by the pool instead of reaching a player's shot.
         log.exception("Extended physics warmup failed")
+        raise
 
 
 def handle(engine, op, state, payload, shooter):

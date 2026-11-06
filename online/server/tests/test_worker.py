@@ -1,6 +1,8 @@
 import asyncio
 import time
 
+import pytest
+
 from online.server.tests.worker_fixtures import echo_handler, no_init
 from online.server.worker import PhysicsWorkers
 
@@ -26,6 +28,21 @@ def test_extended_warmup_covers_follow_and_elevated_english():
     assert len(engine.shots) == 3
     assert any(shot.get("b", 0) == 0.8 and shot["V0"] == 8 for shot in engine.shots)
     assert any(shot.get("a", 0) == -0.3 and shot.get("theta") == 5 for shot in engine.shots)
+
+
+def test_extended_warmup_failure_is_not_advertised_as_ready():
+    from online.server.worker import _warm_full_path
+
+    class Engine:
+        def new_match(self, seed):
+            return {"system": {"balls": {"cue": {"rvw": [[0.5, 0.5, 0.03]]}}},
+                    "snapshot": {"table": {"width": 1.0, "length": 2.0}}}
+
+        def simulate(self, state, shot, shooter):
+            raise RuntimeError("incomplete physics warmup")
+
+    with pytest.raises(RuntimeError, match="incomplete physics warmup"):
+        _warm_full_path(Engine())
 
 
 def test_warm_worker_is_reused_and_a_stalled_one_is_killed_and_replaced():
