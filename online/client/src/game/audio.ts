@@ -1,9 +1,32 @@
-/** Short procedural impact sounds: no downloaded or unlicensed media is required. */
+type ImpactKind = 'cue' | 'ball' | 'cushion' | 'pocket'
+const IMPACT_KINDS: ImpactKind[] = ['cue', 'ball', 'cushion', 'pocket']
+const MAX_VOICES = 24
+const MIN_KIND_INTERVAL = 0.008
+
+/** Short cached procedural impacts; collision bursts cannot flood the audio graph. */
 export class GameAudio {
   private context: AudioContext | null = null
   private gain: GainNode | null = null
   private volume = 0.7
   private destroyed = false
+  private buffers = new Map<ImpactKind, AudioBuffer>()
+  private lastImpact = new Map<ImpactKind, number>()
+  private voices = new Set<{ source: AudioBufferSourceNode; gain: GainNode }>()
+
+  private prepareBuffers(context: AudioContext): void {
+    for (const kind of IMPACT_KINDS) {
+      if (this.buffers.has(kind)) continue
+      const duration = kind === 'pocket' ? 0.16 : kind === 'cushion' ? 0.07 : 0.035
+      const buffer = context.createBuffer(1, Math.floor(context.sampleRate * duration), context.sampleRate)
+      const data = buffer.getChannelData(0)
+      const frequency = kind === 'ball' ? 2100 : kind === 'cue' ? 1700 : kind === 'pocket' ? 150 : 420
+      for (let i = 0; i < data.length; i++) {
+        const time = i / context.sampleRate
+        data[i] = (Math.sin(time * Math.PI * 2 * frequency) * 0.65 + (Math.random() * 2 - 1) * 0.35) * Math.exp(-time / (duration * 0.16))
+      }
+      this.buffers.set(kind, buffer)
+    }
+  }
 
   unlock(): void {
     if (this.destroyed) return
@@ -15,6 +38,8 @@ export class GameAudio {
         this.gain = this.context.createGain()
         this.gain.gain.value = this.volume
         this.gain.connect(this.context.destination)
+        // Prepare outside the collision/render loop, once per audio context.
+        this.prepareBuffers(this.context)
       }
       if (this.context.state === 'suspended') void this.context.resume().catch(() => undefined)
     } catch { /* Audio is optional; unsupported devices can still play. */ }
@@ -25,27 +50,36 @@ export class GameAudio {
     if (this.gain && this.context) this.gain.gain.setTargetAtTime(this.volume, this.context.currentTime, 0.02)
   }
 
-  impact(kind: 'cue' | 'ball' | 'cushion' | 'pocket' = 'ball', strength = 1): void {
+  impact(kind: ImpactKind = 'ball', strength = 1): void {
     const context = this.context
     if (!context || !this.gain || context.state !== 'running' || this.volume <= 0) return
-    const duration = kind === 'pocket' ? 0.16 : kind === 'cushion' ? 0.07 : 0.035
-    const count = Math.floor(context.sampleRate * duration)
-    const buffer = context.createBuffer(1, count, context.sampleRate)
-    const data = buffer.getChannelData(0)
-    const frequency = kind === 'ball' ? 2100 : kind === 'cue' ? 1700 : kind === 'pocket' ? 150 : 420
-    for (let i = 0; i < count; i++) {
-      const time = i / context.sampleRate
-      data[i] = (Math.sin(time * Math.PI * 2 * frequency) * 0.65 + (Math.random() * 2 - 1) * 0.35) *
-        Math.exp(-time / (duration * 0.16)) * Math.min(1, Math.max(0.05, strength))
-    }
+    // Simultaneous contacts remain in the physical trajectory. Their identical
+    // overlapping sound voices are inaudible separately and need not be spawned.
+    const now = context.currentTime
+    if (this.voices.size >= MAX_VOICES || now - (this.lastImpact.get(kind) ?? -Infinity) < MIN_KIND_INTERVAL) return
+    const buffer = this.buffers.get(kind)
+    if (!buffer) return
+    this.lastImpact.set(kind, now)
     const source = context.createBufferSource()
+    const gain = context.createGain()
+    gain.gain.value = Math.min(1, Math.max(0.05, Number.isFinite(strength) ? strength : 1))
     source.buffer = buffer
-    source.connect(this.gain)
+    source.connect(gain)
+    gain.connect(this.gain)
+    const voice = { source, gain }
+    this.voices.add(voice)
+    source.onended = () => { source.disconnect(); gain.disconnect(); this.voices.delete(voice) }
     source.start()
   }
 
   destroy(): void {
     this.destroyed = true
+    for (const { source, gain } of this.voices) {
+      source.onended = null
+      try { source.stop() } catch { /* A completed voice is already stopped. */ }
+      source.disconnect(); gain.disconnect()
+    }
+    this.voices.clear(); this.buffers.clear(); this.lastImpact.clear()
     if (this.context) void this.context.close().catch(() => undefined)
     this.context = null
     this.gain = null

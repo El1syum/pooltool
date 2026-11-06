@@ -193,12 +193,15 @@ claim that a modified renderer is a tamper-proof anti-cheat boundary.
 is never sent to the client. `result` includes trajectory, events, potted,
 initialState, finalState, duration (simulated seconds), wallDuration (real compute
 seconds), rules, shotId, commandId, playerId and playbackStartAt (epoch ms).
+Playback `result.events` contains `{id,type,time,ids}` only; full diagnostic
+before/after position, velocity and angular-velocity vectors remain unchanged in
+the participant-only match telemetry export, not in every playback broadcast.
 `lastShot = {shotId,commandId,playerId,startAt,startedAt,result}` preserves playback
 for reconnect; after `playbackUntil` the trajectory/initialState/finalState are
 omitted from later broadcasts and reads (the snapshot is then authoritative).
 `trajectory = {duration,dt,encoding:"delta",frames:[{t,balls}],events}`: the first
 frame lists every ball, later frames only changed balls, each as
-`[id,x,y,z,state,qx,qy,qz,qw]` (positions 0.01 mm, quaternion 1e-4). Both clients play from the same timestamp (`PLAYBACK_BUFFER_SECONDS`, default 120 ms;
+`[id,x,y,z,state,qx,qy,qz,qw]` (positions 0.01 mm, quaternion 1e-4). Both clients play from the same timestamp (`PLAYBACK_BUFFER_SECONDS`, default 500 ms;
 a late receiver skips the frames it missed).
 The next shot cannot begin before `playbackUntil`; its timer begins after playback.
 History items (`GET /api/me/history`) also carry `opponentName` and the caller's

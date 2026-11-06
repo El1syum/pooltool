@@ -395,6 +395,38 @@ Final legacy postgame regression also passed four completed matches per browser
 on this build. Disposable local QA service stopped after verification. No backend,
 credentials, VK Play configuration or user library data changed.
 
+## Shot calculation and smooth playback (2026-11-06)
+
+Read `online/docs/SHOT_PERFORMANCE_20261106.md`. The actual reported slow break
+was recovered from telemetry (12.699 s, 1,675 events); the checked-in anonymized
+fixture includes initial ball order as well as positions/shot parameters.
+`OnlineEventDetector` is selected only by the online engine: exact polynomial
+reuse and Numba batches plus indexed missing-pair/invalidation caches. Scalar
+JIT kernels remain unchanged, desktop/3D use the original paths, and no solver,
+epsilon, friction, physics precision, 60 Hz sampling or limits were lowered.
+Final same-input/same-process warm remote median: 9.710 s original → 7.557 s
+batched (three alternating runs/version, complete results exactly equal).
+Extreme dense racks remain CPU-bound; sub-second timing for every shot is not
+claimed. The complete diagnostic vectors remain in participant telemetry.
+
+Gameplay packets carry compact event summaries, omit heavy fields before copying
+and serialize one broadcast once. Full diagnostics are encoded before the common
+playback start is assigned. The lead defaults to 500 ms (existing explicit env
+overrides must be updated); staged Chromium/WebKit's six clients received data
+175–300 ms before start, versus 111–243 ms late with 120 ms. No client-local
+receipt-start or made-up trajectory is used. The client marks recordings raw,
+reuses sampler buffers and anchors playback to monotonic rAF time. Audio uses
+four cached waveforms, coalesced bursts and a 24-voice cap; future starts are silent.
+
+Validation: 223 Python tests +536 subtests, 92 client pure/SSR checks, 60,000 exact
+kernel comparisons, 16 complete variants, the recorded 1,675-event and weak
+2,373-event cases, cache mutation/retry/copy/layout/replacement and 3D fallback.
+Actual renderer playback/clock/future/catch-up/audio, cursor resume and actual-App
+regressions passed Chromium/WebKit. Final compiled three-client real-physics/HUD/
+finish→menu→play passed both browsers with equal final states and JS0. Isolated
+two-game/four-shot probe passed (development-host p50 173 ms/max 261 ms, not SLA).
+Independent code review APPROVE and architecture review CLEAR.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

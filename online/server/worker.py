@@ -52,6 +52,19 @@ def _warm_full_path(engine):
             if decision["placement"]:
                 state = engine.place_cue_ball(state, *decision["placement"], shooter=shooter)
             state = engine.simulate(state, decision["shot"], shooter=shooter)["state"]
+        # Follow/side spin and an elevated cue reach collision/resolver branches
+        # absent from a straight break and the bot's mostly central contacts.
+        # Load these dispatchers before READY, not during a player's first shot.
+        for seed, speed, elevation, side, follow in (
+            (203464297, 8.0, 0.0, 0.01, 0.8),
+            (1001, 3.0, 5.0, -0.3, 0.2),
+        ):
+            sample = engine.new_match(seed=seed)
+            cue = sample["system"]["balls"]["cue"]["rvw"][0]
+            table = sample["snapshot"]["table"]
+            phi = math.degrees(math.atan2(table["length"] * 0.75 - cue[1], table["width"] * 0.5 - cue[0]))
+            engine.simulate(sample, {"V0": speed, "phi": phi, "theta": elevation,
+                                     "a": side, "b": follow}, shooter=0)
     except Exception:
         # Warming is an optimization; a real shot still compiles what it needs.
         log.exception("Extended physics warmup failed")

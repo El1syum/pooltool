@@ -1,5 +1,19 @@
 # Browser smoke checks
 
+## Shot playback performance (2026-11-06)
+
+`playback-smooth.mjs` requires `SHOT_RESULT_PATH` pointing to an actual result
+produced by `PhysicsEngine.simulate`, never substitute physics. It compares
+every real frame/intermediate sample with the reference interpolator, checks
+buffer reuse, monotonic playback despite ±20-second wall-clock changes, future
+shared starts (including silent audio until start), late catch-up and bounded
+native audio voices in Chromium/WebKit. Software-GPU frame timings are reported
+as diagnostics, not a device FPS SLA.
+
+`match-hud.mjs` also reports packet bytes, server-prepared start lead and each
+client's clock-calibrated delivery lead. These measurements distinguish server
+calculation, payload preparation and network delay from physical motion duration.
+
 ## Foreground cursor ownership (2026-11-06)
 
 `cursor-resume.mjs` tests explicit resume without altering the prepared shot,

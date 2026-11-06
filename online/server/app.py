@@ -160,10 +160,10 @@ class Hub:
         self.sockets: dict[str, set[WebSocket]] = defaultdict(set)
         self.locks: dict[WebSocket, asyncio.Lock] = {}
 
-    async def send(self, socket, data):
+    async def send(self, socket, data, *, encoded=None):
         try:
             async with self.locks[socket]:
-                await asyncio.wait_for(socket.send_json(data), timeout=5)
+                await asyncio.wait_for(socket.send_text(encoded if encoded is not None else encode(data)), timeout=5)
         except (RuntimeError, WebSocketDisconnect, asyncio.TimeoutError):
             # Reconnect must restore a client that missed a state transition.
             try:
@@ -176,7 +176,10 @@ class Hub:
     async def emit(self, recipients, data):
         sockets = {socket for user_id in recipients for socket in self.sockets.get(user_id, ())}
         if sockets:
-            await asyncio.gather(*(self.send(socket, data) for socket in sockets), return_exceptions=True)
+            # A shot is identical for all players/spectators. Serialize once,
+            # retaining each socket's ordering lock and bounded slow-reader path.
+            encoded = encode(data)
+            await asyncio.gather(*(self.send(socket, data, encoded=encoded) for socket in sockets), return_exceptions=True)
 
 
 class RateLimiter:

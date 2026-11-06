@@ -17,6 +17,7 @@ from pooltool.events import (
     spinning_stationary_transition,
 )
 from pooltool.events.utils import event_type_to_ball_indices
+from pooltool.evolution.event_based._pair_cache import PairTimes
 from pooltool.objects.ball.datatypes import Ball
 from pooltool.physics.utils import get_roll_time, get_slide_time, get_spin_time
 from pooltool.serialize import SerializeFormat, conversion
@@ -153,6 +154,9 @@ class CollisionCache:
 
         for event_type, event_times in self.times.items():
             if not event_times:
+                continue
+            if isinstance(event_times, PairTimes):
+                event_times.invalidate_balls(invalid_ball_ids)
                 continue
 
             # Which positions in a key hold ball IDs depends on the event type. This runs

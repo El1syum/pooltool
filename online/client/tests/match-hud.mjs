@@ -145,6 +145,7 @@ for (const engineName of engines) {
   const pages = []
   const received = new Map()
   const sent = new Map()
+  const delivery = new Map()
   const errors = []
   const badAssets = []
   const textures = new Set()
@@ -197,8 +198,23 @@ for (const engineName of engines) {
       pages.push(page)
       received.set(page, [])
       sent.set(page, [])
+      const timing = { offset: 0, calibrated: false, shots: [] }
+      delivery.set(page, timing)
       page.on('websocket', socket => {
-        socket.on('framereceived', frame => { try { received.get(page).push(JSON.parse(frame.payload)) } catch { /* ping/binary */ } })
+        socket.on('framereceived', frame => { try {
+          const message = JSON.parse(frame.payload)
+          received.get(page).push(message)
+          const receivedAt = Date.now()
+          if (message.type === 'pong' && message.clientTime && message.serverTime) {
+            timing.offset = Number(message.serverTime) - (message.clientTime + receivedAt) / 2
+            timing.calibrated = true
+          }
+          if (message.result?.trajectory) timing.shots.push({ shotId: message.result.shotId,
+            bytes: Buffer.byteLength(frame.payload), calibrated: timing.calibrated,
+            leadMs: Math.round(message.result.playbackStartAt - receivedAt - timing.offset),
+            preparedLeadMs: Math.round(message.result.playbackStartAt - Date.parse(message.match.serverTime)),
+          })
+        } catch { /* ping/binary */ } })
         socket.on('framesent', frame => { try { sent.get(page).push(JSON.parse(frame.payload)) } catch { /* ping/binary */ } })
       })
       page.on('pageerror', error => errors.push(`client ${index}: ${error.message}`))
@@ -506,6 +522,7 @@ for (const engineName of engines) {
     console.log(JSON.stringify({ engine: engineName, room: room.code, build, jsErrors: errors.length, injectedFailures, assetGeometry, reticleGeometry, wedgeGeometry, badgeGeometry, fontMetrics, visualFixture: process.env.VISUAL_FIXTURE === '1',
       textures: textures.size, customTable: requiredTable ? { id: requiredTable.id, clients: customModelsLoaded.size } : null, geometrySamples: workload.length, trajectoryFrames: result.result.trajectory.frames.length,
       duration: result.result.duration, serverWallSeconds: result.result.wallDuration, clickToResultMs,
+      delivery: pages.map(page => delivery.get(page).shots.find(shot => shot.shotId === result.result.shotId)),
       tests: 'uncached default URL, default cue heading, persistent manual camera, responsive HUD, stable canvas, modal gating, mute, spectator authority, real shot and shared final state, postgame menu without reload' }))
   } catch (error) {
     for (let index = 0; index < pages.length; index++) await pages[index].screenshot({ path: path.join(artifacts, `${engineName}-failure-${index}.png`), fullPage: true }).catch(() => {})

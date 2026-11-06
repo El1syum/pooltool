@@ -119,6 +119,18 @@ class EventDetector:
     def default(cls) -> EventDetector:
         return cls()
 
+    def _ball_ball_event(self, shot: System, cache: CollisionCache) -> Event:
+        return get_next_ball_ball_event(shot, cache, is_3d=self.is_3d)
+
+    def _linear_cushion_event(self, shot: System, cache: CollisionCache) -> Event:
+        return get_next_ball_linear_cushion_event(shot, cache)
+
+    def _circular_cushion_event(self, shot: System, cache: CollisionCache) -> Event:
+        return get_next_ball_circular_cushion_event(shot, cache)
+
+    def _pocket_event(self, shot: System, cache: CollisionCache) -> Event:
+        return get_next_ball_pocket_event(shot, cache)
+
     def get_next_event(
         self,
         shot: System,
@@ -148,12 +160,10 @@ class EventDetector:
             candidates.append(get_next_stick_ball_event(shot, collision_cache))
 
         candidates.append(transition_cache.get_next())
-        candidates.append(get_next_ball_linear_cushion_event(shot, collision_cache))
-        candidates.append(get_next_ball_circular_cushion_event(shot, collision_cache))
-        candidates.append(get_next_ball_pocket_event(shot, collision_cache))
-        candidates.append(
-            get_next_ball_ball_event(shot, collision_cache, is_3d=self.is_3d)
-        )
+        candidates.append(self._linear_cushion_event(shot, collision_cache))
+        candidates.append(self._circular_cushion_event(shot, collision_cache))
+        candidates.append(self._pocket_event(shot, collision_cache))
+        candidates.append(self._ball_ball_event(shot, collision_cache))
         if self.is_3d:
             candidates.append(get_next_ball_table_event(shot, collision_cache))
 

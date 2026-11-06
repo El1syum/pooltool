@@ -34,6 +34,16 @@ def uid() -> str:
     return str(uuid.uuid4())
 
 
+def playback_events(events):
+    """Playback needs event identities/times, not the diagnostic state vectors.
+
+    Complete before/after vectors remain in authoritative results and telemetry.
+    Project before copying/encoding so old persisted shots benefit as well.
+    """
+    return [{key: event[key] for key in ("id", "type", "time", "ids") if key in event}
+            for event in events]
+
+
 class GameService:
     def __init__(self, store: Store, engine, *, process_pool=True, now=time.time):
         self.store = store
@@ -53,7 +63,7 @@ class GameService:
         self.bot_delay = float(os.getenv("BOT_THINK_SECONDS", "0.6"))
         # Both clients start the shared animation at the same server time; this only
         # needs to cover broadcast delivery, late receivers skip the first frames.
-        self.playback_buffer = float(os.getenv("PLAYBACK_BUFFER_SECONDS", "0.12"))
+        self.playback_buffer = float(os.getenv("PLAYBACK_BUFFER_SECONDS", "0.5"))
         self.bot_turns: set[tuple[str, int]] = set()
         self.closed = False
 
@@ -116,22 +126,30 @@ class GameService:
                    (match["id"], match["roomId"], encode(match), encode(physics),
                     encode(pending) if pending else None, self.now()))
 
-    def _event(self, db, kind, *, player=None, session=None, match=None, payload=None, event_id=None, client_version=None, turn_id=None):
+    def _event(self, db, kind, *, player=None, session=None, match=None, payload=None, event_id=None, client_version=None, turn_id=None, payload_json=None):
         db.execute("INSERT OR IGNORE INTO telemetry VALUES(?,?,?,?,?,?,?,?,?)",
                    (event_id or uid(), kind, player, session, match["id"] if match else None,
                     turn_id if turn_id is not None else (match.get("turn", 0) if match else None), client_version or "server",
-                    utc(self.now()), encode(payload or {})))
+                    utc(self.now()), payload_json if payload_json is not None else encode(payload or {})))
 
-    def public_match(self, match):
-        result = copy.deepcopy(match)
+    def public_match(self, match, *, include_last_result=True):
+        # Project the heavy result before deepcopy. Most broadcasts either send
+        # it separately or only need the confirmed snapshot after playback.
+        source = dict(match)
+        last = source.get("lastShot")
+        if last and last.get("result"):
+            last = {key: value for key, value in last.items() if key != "result"}
+            if include_last_result:
+                raw = source["lastShot"]["result"]
+                omitted = {"trajectory", "trajectories", "initialState", "finalState"} if epoch(match.get("playbackUntil")) <= self.now() else set()
+                last["result"] = {key: value for key, value in raw.items() if key not in omitted and key != "events"}
+                if "events" in raw:
+                    last["result"]["events"] = playback_events(raw["events"])
+            source["lastShot"] = last
+        result = copy.deepcopy(source)
         # Players see who is offline and when the forfeit takes effect.
         result["disconnectedPlayers"] = {player_id: utc(since + self.grace)
                                          for player_id, since in result.pop("disconnected", {}).items()}
-        last = result.get("lastShot")
-        if last and last.get("result") and epoch(match.get("playbackUntil")) <= self.now():
-            # Playback is over; clients only need the confirmed snapshot, not ~50-200 KB of frames.
-            for key in ("trajectory", "trajectories", "initialState", "finalState"):
-                last["result"].pop(key, None)
         result["serverTime"] = utc(self.now())
         result["turnRemainingSeconds"] = max(0, math.ceil(epoch(match.get("deadline")) - self.now()))
         return result
@@ -145,10 +163,8 @@ class GameService:
     async def announce_match(self, match, result=None):
         room = self._room_id(match["roomId"])
         if room:
-            event = {"type": "match", "match": self.public_match(match)}
+            event = {"type": "match", "match": self.public_match(match, include_last_result=result is None)}
             if result is not None:
-                if event["match"].get("lastShot"):
-                    event["match"]["lastShot"].pop("result", None)
                 event["result"] = result
             await self.emit(self._recipients(room), event)
         self._schedule_bot(match)
@@ -588,6 +604,19 @@ class GameService:
             error = "Ошибка расчёта удара; ход восстановлен"
         wall_seconds = time.perf_counter() - started
         command_id = pending["command"]["commandId"]
+        public_result = None
+        diagnostics_json = None
+        if result is not None and not error:
+            # Heavy diagnostic vectors are persisted, not broadcast. Serialize
+            # them before assigning the shared playback timestamp; otherwise a
+            # dense break can already be hundreds of ms into motion at delivery.
+            public_result = {key: value for key, value in result.items() if key not in {"state", "trajectories"}}
+            public_result["events"] = playback_events(result["events"])
+            public_result.update(wallDuration=wall_seconds, commandId=command_id,
+                                 playerId=pending["userId"], shotId=command_id)
+            diagnostics_json = encode({"commandId": command_id, "events": result["events"],
+                                       "potted": result.get("potted", []), "rules": result["rules"],
+                                       "wallDuration": wall_seconds, "simulatedDuration": result["duration"]})
         async with self.lock:
             match, current_physics, current_pending = self._match(match_id)
             if match["status"] != "calculating" or not current_pending or current_pending["command"]["commandId"] != command_id:
@@ -618,12 +647,7 @@ class GameService:
                     playback_start = self.now() + self.playback_buffer
                     match["playbackUntil"] = utc(playback_start + playback_seconds)
                     match["deadline"] = utc(playback_start + playback_seconds + room["settings"]["turnSeconds"])
-                    public_result = {key: value for key, value in result.items() if key not in {"state", "trajectories"}}
-                    public_result["wallDuration"] = wall_seconds
-                    public_result["commandId"] = command_id
-                    public_result["playerId"] = pending["userId"]
                     public_result["turnId"] = pending.get("turn", match["turn"] - 1)
-                    public_result["shotId"] = command_id
                     public_result["playbackStartAt"] = round(playback_start * 1000)
                     match["lastShot"] = {"commandId": command_id, "shotId": command_id,
                                          "playerId": pending["userId"], "startedAt": utc(playback_start),
@@ -635,10 +659,8 @@ class GameService:
                     self._event(db, "shotResult", player=pending["userId"], session=pending["session"]["id"], match=match,
                                 client_version=pending["session"]["clientVersion"], event_id=f"shot:{match_id}:{command_id}",
                                 turn_id=public_result["turnId"],
-                                payload={"commandId": command_id, "events": result["events"], "potted": result.get("potted", []),
-                                         "rules": rules, "wallDuration": wall_seconds, "simulatedDuration": result["duration"]})
-                    response_match = self.public_match(match)
-                    response_match["lastShot"].pop("result", None)
+                                payload_json=diagnostics_json)
+                    response_match = self.public_match(match, include_last_result=False)
                     response = {"match": response_match, "result": public_result, "duplicate": False}
                     db.execute("UPDATE commands SET status='done',response=? WHERE match_id=? AND command_id=?", (encode(response), match_id, command_id))
         await self.announce_match(match, public_result if result is not None and not error else None)

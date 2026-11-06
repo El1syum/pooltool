@@ -1,5 +1,9 @@
 # Shot latency — 2026-11-02
 
+For the subsequent exact detector batching, transport/scheduling and smooth
+playback update, see [2026-11-06 measurements](SHOT_PERFORMANCE_20261106.md).
+The timings below remain the historical November 2 comparison.
+
 The web service still uses the original authoritative Pooltool simulation,
 collision resolver, rules and 60 Hz playback sampling. No event limit, physics
 precision or simulated motion duration was reduced to make the UI feel faster.

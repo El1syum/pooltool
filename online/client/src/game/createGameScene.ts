@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GameAudio } from './audio'
 import { VisualAssetManager } from '../models/VisualAssetManager'
-import { isLegalCuePlacement, normalizeAim, numberForPocket, sampleTrajectory } from './playback'
+import { createPlaybackClock, createTrajectorySampler, isLegalCuePlacement, normalizeAim, numberForPocket } from './playback'
 import { applyShotPhaseLocks, isMeaningfulPowerDrag, powerDragAim, previousShotPhase } from './shotWorkflow'
 import { matchesAssistBinding } from './assistBinding'
 import {
@@ -159,7 +159,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   let interaction: SceneInteraction = { canShoot: false, canPlaceCueBall: false, spectator: false }
   let snapshot: GameSnapshot = { table: { width: 1.27, length: 2.54, height: 0.8, pockets: [] }, balls: [], cueBallId: 'cue' }
   let aim: AimParameters = { phi: 90, V0: 2, theta: 0, a: 0, b: 0 }
-  let playback: { trajectory: ShotTrajectory; startAt: number; lastT: number; eventIndex: number } | null = null
+  let playback: { trajectory: ShotTrajectory; clock: ReturnType<typeof createPlaybackClock>; sampler: ReturnType<typeof createTrajectorySampler>; lastT: number; eventIndex: number } | null = null
   let calledPocket: string | null = null
   let destroyed = false
   // Local cue stroke shown the moment the player shoots, while the server computes
@@ -383,7 +383,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       if (!visual) { visual = createBall(ball); balls.set(id, visual) }
       const radius = ball.radius ?? visual.radius
       visual.mesh.scale.setScalar(radius / visual.radius)
-      visual.mesh.position.copy(toWorld(ball.position))
+      visual.mesh.position.set(ball.position[0] - snapshot.table.width / 2, tableHeight() + ball.position[2], snapshot.table.length / 2 - ball.position[1])
       visual.mesh.visible = !ball.pocketed && ball.state !== 4 && ball.position.every(Number.isFinite)
       if (ball.quaternion) {
         visual.mesh.quaternion.set(...ball.quaternion)
@@ -1218,10 +1218,10 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       setAim({ phi: aim.phi - edgeTurn * delta * 90 * settings.sensitivity })
     }
     if (playback) {
-      // Date.now is the shared epoch clock. Parent adjusts startAt by its server-clock offset.
-      const t = Math.max(0, (Date.now() - playback.startAt) / 1000)
-      renderBalls(sampleTrajectory(playback.trajectory, t))
-      playEvents(t)
+      // Preserve the shared epoch offset, then advance with the monotonic rAF clock.
+      const t = playback.clock.time(now)
+      renderBalls(playback.sampler.sample(t))
+      if (t > 0) playEvents(t)
       if (t >= playback.trajectory.duration) {
         const final = playback.trajectory.frames[playback.trajectory.frames.length - 1]
         if (final) { snapshot = { ...snapshot, balls: final.balls.map(ball => ({ ...ball })) }; renderBalls(snapshot.balls) }
@@ -1332,7 +1332,8 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       // A remote shot (opponent/bot) has no local stroke; its cue sound comes from the events.
       if (!stroke) strokeSoundPlayed = false
       stroke = null
-      playback = { trajectory, startAt, lastT: Math.max(0, (Date.now() - startAt) / 1000), eventIndex: 0 }
+      const clock = createPlaybackClock(startAt)
+      playback = { trajectory, clock, sampler: createTrajectorySampler(trajectory), lastT: clock.time(), eventIndex: 0 }
       if (defaultAimCamera === 'cue' && cameraMode === 'cue') frameTable()
       clearKeys()
       updateAimGuide()

@@ -138,9 +138,26 @@ Do not roll back the database without a matching backup.
 There is one ASGI service worker and a configurable count of pre-warmed, killable
 CPU workers (PHYSICS_WORKERS). Each stays resident (about 230 MB measured locally)
 so shots do not pay process startup and JIT warmup. Configure PHYSICS_WORKERS=1 on
-the current two-vCPU host to preserve capacity for its existing applications.
+a small two-vCPU host to preserve capacity for its existing applications.
 `/ready` returns 503 until one worker is warm, so the deploy readiness check also
 covers warmup. A timed-out or crashed computation kills that worker and a
 replacement warms in the background; the server restores the confirmed state and
 records the rejection. With one worker, shots arriving during that warmup wait up
 to SHOT_COMPUTE_TIMEOUT_SECONDS.
+
+The 2026-11-06 host audit reported six vCPUs and 12 GiB RAM, no service CPU quota
+and low steal time. A two-physics-worker preview configuration fits that measured
+capacity; this is still one ASGI authority, not two Uvicorn workers. It reduces
+queueing between simultaneous games/bot searches, not the CPU cost of one shot.
+Keep a small host at one worker unless its available capacity is verified.
+
+The playback lead now defaults to 0.5 seconds. An existing environment explicitly
+setting `PLAYBACK_BUFFER_SECONDS=0.12` overrides the new default and must be
+updated deliberately. The preview can load non-secret performance overrides from
+`shared/shot-performance.env` through a dedicated `shot-performance.conf` drop-in,
+leaving login/platform credentials in their original files. All clients still
+use one shared start timestamp; very late receivers catch up authoritatively.
+
+Stage and warm changed Numba source at its final absolute release path, as `ops`,
+before cutover. Do not delete caches or create root-owned cache entries. Full
+worker warmup also covers high follow/side spin and an elevated cue before READY.

@@ -25,12 +25,14 @@ from pooltool.ruleset.datatypes import BallInHandOptions, ShotConstraints
 from pooltool.ruleset.eight_ball import BallGroup
 
 from .eight_ball import OnlineEightBall
+from .detection import OnlineEventDetector
 
 STATE_VERSION = 1
 MAX_EVENTS = 10000
 MAX_DURATION = 60.0
 PLAYBACK_DT = 1 / 60
 ENGINE = SimulationEngine(resolver=default_resolver())
+ENGINE.detector = OnlineEventDetector(is_3d=ENGINE.is_3d)
 
 
 class PhysicsError(ValueError):

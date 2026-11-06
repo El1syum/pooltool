@@ -67,6 +67,60 @@ export function sampleTrajectory(trajectory: ShotTrajectory, t: number): BallSta
   })
 }
 
+/**
+ * Compile ID lookups once and reuse one output buffer for every rendered frame.
+ * The returned states are transient: callers must not retain or mutate them.
+ * Sampling remains identical to sampleTrajectory, including discrete state changes.
+ */
+export function createTrajectorySampler(trajectory: ShotTrajectory): { sample: (t: number) => BallState[] } {
+  const frames = expandTrajectory(trajectory).frames
+  const byId = frames.map(frame => new Map(frame.balls.map(ball => [String(ball.id), ball])))
+  const output: BallState[] = []
+  const positions: Vec3Tuple[] = []
+  const rotations: QuaternionTuple[] = []
+  let lower = 0
+  return { sample(t) {
+    if (!frames.length) { output.length = 0; return output }
+    // Normal playback is sequential, so retain the previous interval.
+    if (t < frames[lower]!.t) lower = 0
+    while (lower + 1 < frames.length && frames[lower + 1]!.t <= t) lower++
+    const left = frames[lower]!
+    const upper = Math.min(lower + 1, frames.length - 1)
+    const right = frames[upper]!
+    const progress = Math.max(0, Math.min(1, (t - left.t) / Math.max(0.000001, right.t - left.t)))
+    output.length = left.balls.length
+    for (let index = 0; index < left.balls.length; index++) {
+      const ball = left.balls[index]!
+      const next = byId[upper]!.get(String(ball.id))
+      const other = next ?? ball
+      const position = positions[index] ?? (positions[index] = [0, 0, 0])
+      const current = output[index] ?? (output[index] = { id: ball.id, position })
+      current.id = ball.id; current.radius = ball.radius; current.state = ball.state; current.pocketed = ball.pocketed
+      for (let axis = 0; axis < 3; axis++) position[axis] = ball.position[axis]! + (other.position[axis]! - ball.position[axis]!) * progress
+      if (ball.quaternion) {
+        const start = ball.quaternion, end = other.quaternion
+        const rotation = rotations[index] ?? (rotations[index] = [0, 0, 0, 1])
+        if (next && end && t > frames[0]!.t && t < frames[frames.length - 1]!.t) {
+          let dot = 0
+          for (let axis = 0; axis < 4; axis++) dot += start[axis]! * end[axis]!
+          const sign = dot < 0 ? -1 : 1
+          for (let axis = 0; axis < 4; axis++) rotation[axis] = start[axis]! + (end[axis]! * sign - start[axis]!) * progress
+          const length = Math.hypot(rotation[0], rotation[1], rotation[2], rotation[3]) || 1
+          for (let axis = 0; axis < 4; axis++) rotation[axis] = rotation[axis]! / length
+        } else for (let axis = 0; axis < 4; axis++) rotation[axis] = start[axis]!
+        current.quaternion = rotation
+      } else current.quaternion = undefined
+    }
+    return output
+  } }
+}
+
+/** Anchor epoch synchronization once; wall-clock adjustments cannot jerk an active shot. */
+export function createPlaybackClock(startAt: number, epochNow = Date.now(), monotonicNow = performance.now()): { time: (now?: number) => number } {
+  const origin = monotonicNow - (epochNow - startAt)
+  return { time: (now = performance.now()) => Math.max(0, (now - origin) / 1000) }
+}
+
 export function isLegalCuePlacement(
   position: Vec3Tuple,
   snapshot: GameSnapshot,

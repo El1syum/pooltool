@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ApiError, CLIENT_VERSION, post, request, setToken, socketUrl, timestamp } from './api'
 import type { User, Room, Match, ShotResult } from './api'
 import { createGameScene } from './game/createGameScene'
@@ -433,6 +433,10 @@ function receiveRoom(value: Room | null) {
 }
 function receiveMatch(value: Match, result?: ShotResult) {
   if (!value || departedMatches.has(value.id) || (match.value?.id === value.id && value.revision < match.value.revision)) return
+  // Physics recordings are immutable input, not editable UI state. Deep Vue
+  // proxies turn every interpolation read into reactive dependency tracking.
+  if (result) markRaw(result)
+  if (value.lastShot) markRaw(value.lastShot)
   match.value = value
   const replay = result?.trajectory ? result : value.lastShot && 'result' in value.lastShot && value.lastShot.result?.trajectory ? value.lastShot.result : null
   if (replay) latestPlayback = { matchId: value.id, shot: replay }

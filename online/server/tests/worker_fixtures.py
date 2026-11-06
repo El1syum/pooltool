@@ -11,6 +11,8 @@ def hanging_handler(context, op, state, shot, shooter):
 
 
 def echo_handler(context, op, state, shot, shooter):
+    if shot.get("delay"):
+        time.sleep(min(float(shot["delay"]), .5))
     if shot.get("hang"):
         time.sleep(30)
     if shot.get("reject"):
