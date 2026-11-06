@@ -1,0 +1,55 @@
+{
+  "date": "2026-11-06",
+  "scope": "web frontend; no backend or physics deployment",
+  "figma": {
+    "file": "YPQR5qd4bL3LUjSRBzTuQH",
+    "framesAndGroups": 23,
+    "menuFrames": 15,
+    "downloadedOriginalAssets": 66,
+    "byteIdenticalOriginalAssets": 50,
+    "primaryVectorRasterDifference": 0,
+    "menuWebpMeanAbsoluteRgbaDifference": 0.7855
+  },
+  "localChecks": {
+    "engines": ["chromium", "webkit"],
+    "pureSsr": 94,
+    "menuRegressions": 340,
+    "independentMenuContainerChecks": 1082,
+    "hudExpandedCases": 1098,
+    "hudNegativeControlsPerEngine": 4,
+    "desktopContactOffsetsPerEngine": 6,
+    "minimumContactCaptionEffectivePx": 10,
+    "protectedContactCorePx": 48,
+    "originalDesignStates": 84,
+    "buttonGroups": 396,
+    "homeChecks": 50,
+    "historySpacingChecks": 16,
+    "dialogFocusChecks": 30,
+    "adminDialogFocusChecks": 22,
+    "realAdminLibraryScenarios": 40,
+    "typecheck": "PASS",
+    "productionBuild": "PASS",
+    "powerGaugeRasterAndReactive": "PASS both engines",
+    "realAppSuites": ["browser-smoke", "match-hud", "postgame-menu", "ranked-policy-integration", "vkplay-disabled-integration"],
+    "realAppSuitesStatus": "PASS both engines",
+    "nativePointerLock": "PASS Chromium; not granted by automated WebKit",
+    "deniedAndUnsupportedFallback": "PASS both engines"
+  },
+  "buildSha256": {
+    "index-Bcp73tUV.js": "107ce42221ce15c16a2bbd1ae3342a98d0be9aba7ce8c95999c5f64f21a3ca9a",
+    "index-BQx6c1Xi.css": "5dce60e93dc26ab372e4ae63acc281a90e8a496034fd668259d60d80485830f3",
+    "GLTFLoader-ByxTtTqt.js": "378a5009ddde805c97873c898ccf7603930846fa1f15e4c7fa1a4c2a701e49be"
+  },
+  "finalBuiltClient": {
+    "matchHud": "PASS both engines, real three-client shot/shared state",
+    "postgameMenu": "PASS 4 completed matches per engine",
+    "uncaughtErrors": 0
+  },
+  "publication": { "status": "prepared; live verification pending" },
+  "limitations": [
+    "Not an all-pixel or full-prototype implementation claim; agreed later requirements override older frames",
+    "Automated WebKit is not physical Mac Safari certification",
+    "No universal physics, network or load SLA inferred",
+    "No VK publication, EPYC migration, backend restart or model-library mutation"
+  ]
+}

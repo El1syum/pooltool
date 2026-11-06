@@ -5,7 +5,7 @@ const emit = defineEmits<{ submit: [credentials: { username: string; password: s
 const username = ref(''), password = ref('')
 const dialog = ref<HTMLElement | null>(null), usernameInput = ref<HTMLInputElement | null>(null)
 const canSubmit = computed(() => props.configured && !props.busy && username.value.trim().length > 0 && password.value.length > 0)
-let previousFocus: Element | null = null
+let previousFocus: HTMLElement | null = null
 function submit() {
   if (!canSubmit.value) return
   const credentials = { username: username.value.trim(), password: password.value }
@@ -14,20 +14,48 @@ function submit() {
 }
 function close() { password.value = ''; emit('close') }
 function onKey(event: KeyboardEvent) {
+  const root = dialog.value
+  const modals = document.querySelectorAll('[aria-modal="true"]')
+  if (!root || modals.item(modals.length - 1) !== root || event.defaultPrevented) return
   if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); return }
   if (event.key !== 'Tab') return
-  const elements = [...(dialog.value?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)') || [])]
+  const elements = [...root.querySelectorAll<HTMLElement>('button, input, a[href], select, textarea, [tabindex], [contenteditable="true"]')]
+    .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && !element.closest('[inert]')
+      && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden')
   const first = elements[0], last = elements.at(-1)
-  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
-  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+  const active = document.activeElement
+  if (!first || !last) { event.preventDefault(); root.focus(); return }
+  const outsideCycle = !(active instanceof HTMLElement) || !elements.includes(active)
+  if (event.shiftKey && (active === first || outsideCycle)) { event.preventDefault(); last.focus() }
+  else if (!event.shiftKey && (active === last || outsideCycle)) { event.preventDefault(); first.focus() }
 }
-onMounted(() => { previousFocus = document.activeElement; if (props.configured) usernameInput.value?.focus(); else dialog.value?.focus() })
-onBeforeUnmount(() => { password.value = ''; if (previousFocus instanceof HTMLElement) previousFocus.focus() })
+onMounted(() => {
+  previousFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null
+  document.addEventListener('keydown', onKey, true)
+  if (document.hasFocus()) {
+    if (props.configured && !props.busy) usernameInput.value?.focus({ preventScroll: true })
+    else dialog.value?.focus({ preventScroll: true })
+  }
+})
+onBeforeUnmount(() => {
+  const closingRoot = dialog.value
+  const restore = Boolean(closingRoot?.contains(document.activeElement)) || document.activeElement === document.body
+  document.removeEventListener('keydown', onKey, true)
+  password.value = ''
+  queueMicrotask(() => {
+    // Return only unclaimed foreground focus; a new dialog or another window
+    // keeps ownership. This never resumes game input or requests Pointer Lock.
+    const active = document.activeElement
+    const unclaimed = active === document.body || Boolean(closingRoot?.contains(active))
+    if (restore && unclaimed && document.hasFocus() && previousFocus?.isConnected && !previousFocus.closest('[inert]')
+      && !document.querySelector('[aria-modal="true"]')) previousFocus.focus({ preventScroll: true })
+  })
+})
 </script>
 
 <template>
   <div class="model-admin-backdrop" @click.self="close">
-    <section ref="dialog" class="model-admin-login" role="dialog" aria-modal="true" aria-labelledby="model-admin-title" aria-describedby="model-admin-description" tabindex="-1" @keydown="onKey">
+    <section ref="dialog" class="model-admin-login" role="dialog" aria-modal="true" aria-labelledby="model-admin-title" aria-describedby="model-admin-description" tabindex="-1">
       <header><span class="model-admin-seal" aria-hidden="true">8</span><button type="button" aria-label="Закрыть вход администратора" @click="close">Закрыть</button></header>
       <p class="model-admin-eyebrow">POOLTOOL · БИБЛИОТЕКА АССЕТОВ</p>
       <h1 id="model-admin-title">Вход администратора</h1>

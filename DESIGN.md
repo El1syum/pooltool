@@ -60,8 +60,9 @@
 - New personal appearance component; pure ID-only selection policy module.
 - Draft/selected, loading, disabled, error and fallback states must be explicit.
 - Keep personal storage separate from ModelWorkshop drafts and administrator session.
-- Full club actions share a 62px minimum height (56px at ≤480px), typography
-  and padding. Back/cancel variants change color/alignment, not button size.
+- Full club actions share a 62px minimum height (56px at ≤480px) and padding.
+  Back/cancel keeps Figma's 14px medium label, while main actions use 18px;
+  this intentional typography variant does not reduce the equal button height.
   Paired actions use equal-width/equal-height tracks; stacked groups also keep
   consistent tracks. Let multiline text grow without clipping.
 - Match result/menu action groups use full-width, equal-height tracks with a

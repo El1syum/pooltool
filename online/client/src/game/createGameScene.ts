@@ -677,12 +677,12 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   }
 
   function lockedMouseMove(event: MouseEvent): void {
-    if (document.pointerLockElement !== canvas || !canLockAimPointer() || event.buttons !== 0) return
+    if (document.pointerLockElement !== canvas || !canLockAimPointer() || event.buttons !== 0 || orbitModifierHeld()) return
     if (Number.isFinite(event.movementX)) setAim({ phi: aim.phi - event.movementX * 0.12 * settings.sensitivity })
   }
 
   function updateEdgeTurn(event: PointerEvent): void {
-    if (!canLockAimPointer() || document.pointerLockElement === canvas || event.pointerType !== 'mouse' || event.buttons !== 0) { stopEdgeTurn(); return }
+    if (!canLockAimPointer() || document.pointerLockElement === canvas || event.pointerType !== 'mouse' || event.buttons !== 0 || orbitModifierHeld()) { stopEdgeTurn(); return }
     const bounds = canvas.getBoundingClientRect()
     const margin = 24
     const x = event.clientX - bounds.left
@@ -1161,7 +1161,14 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     if (action === 'cueView') { if (!event.repeat) setCameraMode(cameraMode === 'cue' ? 'free' : 'cue'); return }
     requestAimPointerLock(false)
     keys.add(event.code)
-    if (action === 'orbit') updateOrbitButtons()
+    if (action === 'orbit') {
+      // The modifier owns hover immediately, before LMB begins camera orbit.
+      // In fallback mode an edge dwell may already be running without another
+      // pointermove, so cancel that timer as well as the previous hover sample.
+      aimHoverX = null
+      stopEdgeTurn()
+      updateOrbitButtons()
+    }
   }
   function keyUp(event: KeyboardEvent): void { keys.delete(event.code); updateOrbitButtons() }
   function clearKeys(): void { keys.clear(); updateOrbitButtons(); cancelShotGesture(); placement.visible = false; releaseAimPointerLock() }
@@ -1214,7 +1221,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     updateKeys(delta)
     // If pointer lock is unavailable/denied, dwelling at either horizontal
     // canvas edge continues turning instead of creating an unreachable sector.
-    if (edgeTurn && performance.now() - edgeSince > 350 && canLockAimPointer()
+    if (edgeTurn && performance.now() - edgeSince > 350 && canLockAimPointer() && !orbitModifierHeld()
       && document.pointerLockElement !== canvas && document.hasFocus() && !pointer) {
       setAim({ phi: aim.phi - edgeTurn * delta * 90 * settings.sensitivity })
     }

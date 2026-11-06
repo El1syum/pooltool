@@ -7,7 +7,7 @@
 | --- | --- | --- | --- |
 | `contact-ring.svg` | [102:17407](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=102-17407) | «Контур битка» | 154 × 154 |
 | `contact-reticle.svg` | [102:17407](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=102-17407) | «Прицел на битке» | 56 × 56 |
-| `cue-ball.svg` | [103:3950](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=103-3950) | «Биток», прибор точки контакта при Alt | 144 × 144 |
+| `cue-ball.svg` | [103:3950](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=103-3950) | «Биток», прибор точки контакта при удержании настраиваемой клавиши (Ctrl по умолчанию) | 144 × 144 |
 | `contact-safe-zone.png` | [103:3950](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=103-3950) | Область безопасного контакта, оригинальный PNG-экспорт **2×**, не скриншот | 188 × 188; отображается 94 × 94 |
 | `contact-dot.svg` | [103:3950](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=103-3950) | «Выбранная точка» | 16 × 16 |
 | `contact-leader.svg` | [103:3950](https://www.figma.com/design/YPQR5qd4bL3LUjSRBzTuQH/?node-id=103-3950) | «Указатель выбранного контакта» | 240.315 × 52.8881 |
@@ -24,6 +24,13 @@
 ## Динамические части без изменения оригинала
 
 `AssistRange.vue` и `CueElevationDiagram.vue` используют внешние SVG-фрагменты через `<use href="…svg#…">`. Уровень заполнения, положение бегунка и угол кия задаются трансформациями в компоненте; исходные файлы остаются неизменными.
+
+У `ShotPowerGauge.vue` точная исходная геометрия Vector 3 встроена локально с
+уникальными gradient/clip ID: это устраняет зависимость от внешних фрагментов и
+paint-server в Safari. Сам экспорт не изменён. Свежие экспорты от 6 ноября,
+включая композицию отдельных кольца и прицела направления, сверены с текущими
+ассетами попиксельно в Chromium/WebKit. Разные служебные ID экспорта не считаются
+визуальным отличием, но варианты прицела контакта и направления не подменяются.
 
 Figma экспортировала кириллические `id` как числовые XML-сущности **байтов UTF-8**. После XML-разбора эти идентификаторы соответствуют последовательности символов с кодами байтов, а не обычной кириллице. Ссылка на фрагмент намеренно строится как `encodeURIComponent(String.fromCharCode(...new TextEncoder().encode(name)))`. Нельзя заменить её простым `encodeURIComponent(name)`: браузер не найдёт оригинальный элемент. Реальная загрузка этих фрагментов, ненулевые границы, пиксельная заливка и бегунки проверяются в Chromium и WebKit тестом `tests/match-assist.mjs`.
 

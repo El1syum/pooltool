@@ -107,6 +107,21 @@ async function startSolo(page, actor) {
   assert.equal(state.room.settings.solo, true)
   return state
 }
+async function modalFocus(page, selector, { initial = false } = {}) {
+  const dialog = page.locator(selector)
+  await dialog.waitFor()
+  if (initial) assert.equal(await dialog.evaluate(element => document.activeElement === element), true, 'New match modal receives initial focus')
+  const controls = dialog.locator('button:enabled')
+  await page.keyboard.press('Shift+Tab')
+  assert.equal(await controls.last().evaluate(element => document.activeElement === element), true, 'Reverse Tab is contained in the real match modal')
+  await page.keyboard.press('Tab')
+  assert.equal(await controls.first().evaluate(element => document.activeElement === element), true, 'Forward Tab wraps in the real match modal')
+  for (let index = 0; index < await controls.count() + 2; index++) {
+    await page.keyboard.press('Tab')
+    assert.equal(await dialog.evaluate(element => element.contains(document.activeElement)), true, 'Tab cannot escape to the HUD/canvas')
+  }
+  assert.equal(await page.locator('[data-testid="match-hud"]').evaluate(element => Boolean(element.closest('[inert]'))), true, 'Background HUD is inert while a match dialog is open')
+}
 async function surrender(page, actor, matchId) {
   // Hold the actual help key even if a newly created scene's native lock grant
   // is still pending; checking pointerLockElement once races that browser event.
@@ -115,7 +130,22 @@ async function surrender(page, actor, matchId) {
   await page.waitForFunction(() => !document.pointerLockElement)
   try { await page.getByRole('button', { name: 'Меню матча', exact: true }).click() }
   finally { await page.keyboard.up('ControlLeft') }
+  await modalFocus(page, '.club-match-dialog', { initial: true })
   await equalAppActions(page, 'match-menu', '.club-dialog-actions', 5)
+  await page.getByRole('button', { name: 'Правила игры', exact: true }).click()
+  await modalFocus(page, '.hud-rules-dialog', { initial: true })
+  await page.keyboard.press('Escape')
+  await page.locator('.hud-rules-dialog').waitFor({ state: 'detached' })
+  assert.equal(await page.locator('.hud-rules').evaluate(element => document.activeElement === element), true, 'Rules restore the actual HUD trigger after a menu transition')
+  await page.keyboard.down('ControlLeft')
+  await page.waitForFunction(() => !document.pointerLockElement)
+  try { await page.getByRole('button', { name: 'Меню матча', exact: true }).click() }
+  finally { await page.keyboard.up('ControlLeft') }
+  await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
+  await modalFocus(page, '.club-match-dialog')
+  await page.keyboard.press('Escape')
+  await page.getByRole('heading', { name: 'Меню матча', exact: true }).waitFor()
+  assert.equal(await page.getByRole('heading', { name: 'Сдаться?', exact: true }).count(), 0, 'Escape cancels only surrender confirmation, not the entire match menu')
   await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
   await equalAppActions(page, 'surrender', '.club-dialog-actions', 2)
   await page.getByRole('button', { name: 'Да, сдаться', exact: true }).click()
@@ -155,6 +185,17 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
   const errors = [], failedAssets = [], actors = [], completed = []
+  await page.addInitScript(() => {
+    window.dialogFocusTrace = []
+    for (const type of ['keydown', 'keyup']) window.addEventListener(type, event => {
+      if (!/^(Control|Escape|Tab)/.test(event.code)) return
+      window.dialogFocusTrace.push({ type, code: event.code, repeat: event.repeat, focused: document.hasFocus(), visibility: document.visibilityState,
+        active: document.activeElement?.tagName, activeClass: document.activeElement?.className,
+        activeInert: Boolean(document.activeElement?.closest('[inert]')), hudInert: Boolean(document.querySelector('[data-testid="match-hud"]')?.closest('[inert]')),
+        modal: document.querySelector('[aria-modal="true"]')?.getAttribute('aria-labelledby') || null })
+      if (window.dialogFocusTrace.length > 120) window.dialogFocusTrace.shift()
+    }, true)
+  })
   page.on('pageerror', error => errors.push(error.message))
   page.on('response', response => {
     if (response.status() >= 400 && !new URL(response.url()).pathname.startsWith('/api/')) failedAssets.push(`${response.status()} ${response.url()}`)
@@ -249,6 +290,10 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     console.log(JSON.stringify({ browser: engineName, completedMatches: completed.length, playAgain: true, mainMenuActions: 4, createAndLeave: true, searchAndCancel: true, failedLeaveRecovered: true, uncaughtErrors: errors.length }))
   } catch (error) {
     await page.screenshot({ path: path.join(artifacts, `${engineName}-failure.png`), fullPage: true }).catch(() => {})
+    const diagnostics = await page.evaluate(() => ({ trace: window.dialogFocusTrace, focused: document.hasFocus(), visibility: document.visibilityState,
+      active: document.activeElement?.outerHTML?.slice(0, 500), inert: [...document.querySelectorAll('[inert]')].map(element => element.className),
+      modal: document.querySelector('[aria-modal="true"]')?.getAttribute('aria-labelledby') || null, locked: Boolean(document.pointerLockElement) })).catch(() => null)
+    await writeFile(path.join(artifacts, `${engineName}-failure-diagnostics.json`), JSON.stringify(diagnostics, null, 2))
     throw error
   } finally {
     await context.close()

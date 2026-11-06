@@ -22,8 +22,8 @@ try {
   await page.goto('http://127.0.0.1:4318/tests/match-assist-fixture.html')
   await page.waitForFunction(() => window.fixtureReady)
   await page.evaluate(() => document.fonts.ready)
-  await page.waitForFunction(() => [...document.querySelectorAll('.assist-range use, .assist-elevation > svg use')].every(use => use.getBBox().width > 0))
-  const geometry = await page.locator('.assist-range use, .assist-elevation > svg use').evaluateAll(nodes => nodes.map(node => {
+  await page.waitForFunction(() => [...document.querySelectorAll('.assist-range use, .assist-elevation-slot svg use')].every(use => use.getBBox().width > 0))
+  const geometry = await page.locator('.assist-range use, .assist-elevation-slot svg use').evaluateAll(nodes => nodes.map(node => {
     const rect = node.getBBox()
     return { href: node.getAttribute('href'), width: rect.width, height: rect.height }
   }))

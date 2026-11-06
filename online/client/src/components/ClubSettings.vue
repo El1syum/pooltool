@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { User } from '../api'
 import { DEFAULT_BINDINGS, type BindingAction, type GameSettings } from '../game/types'
 import { bindingLabel, normalizeAssistBinding } from '../game/assistBinding'
@@ -42,12 +42,18 @@ async function toggleFullscreen() {
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Escape' && !props.bindingCapture) { event.preventDefault(); event.stopPropagation(); close(); return }
   if (event.key !== 'Tab' || props.bindingCapture) return
-  const elements = [...(dialog.value?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]') || [])].filter(x => x.getClientRects().length)
+  const elements = [...(dialog.value?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], summary, [tabindex]:not([tabindex="-1"])') || [])].filter(x => {
+    const collapsed = x.closest('details:not([open])')
+    return x.tabIndex >= 0 && x.getClientRects().length && !x.closest('[inert]') && (!collapsed || collapsed.querySelector(':scope > summary')?.contains(x))
+  })
   const first = elements[0], last = elements.at(-1)
-  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+  if (!first) { event.preventDefault(); dialog.value?.focus(); return }
+  if (document.activeElement === dialog.value || !dialog.value?.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first)?.focus() }
+  else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
 }
 let previousFocus: Element | null = null
+watch(tab, () => { dialog.value?.focus({ preventScroll: true }) }, { flush: 'post' })
 onMounted(() => { previousFocus = document.activeElement; updateWindow(); window.addEventListener('resize', updateWindow); document.addEventListener('fullscreenchange', updateWindow); dialog.value?.focus() })
 onBeforeUnmount(() => { window.removeEventListener('resize', updateWindow); document.removeEventListener('fullscreenchange', updateWindow); if (previousFocus instanceof HTMLElement) previousFocus.focus() })
 </script>

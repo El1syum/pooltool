@@ -1,5 +1,6 @@
 // Real application/API integration. Test triangle files are not supplied game art.
 import assert from 'node:assert/strict'
+import { waitForConnectedHome } from './app-state.mjs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -14,7 +15,7 @@ const playwright = await import(path.isAbsolute(modulePath) ? pathToFileURL(modu
 const artifacts = path.resolve('tests/artifacts/player-appearance-integration')
 await mkdir(artifacts, { recursive: true })
 async function json(response, expected = 200) { const body = await response.json(); assert.equal(response.status(), expected, `${new URL(response.url()).pathname}`); return body }
-async function home(page) { await page.getByRole('heading', { name: 'Pooltool', exact: true }).waitFor({ timeout: 30_000 }); await page.getByRole('status').filter({ hasText: 'Соединение установлено' }).waitFor() }
+async function home(page) { await waitForConnectedHome(page) }
 async function openAppearance(page) {
   await page.bringToFront()
   if (!await page.getByRole('dialog', { name: 'Настройки', exact: true }).count()) {

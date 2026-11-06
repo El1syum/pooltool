@@ -20,10 +20,11 @@ Source: [Pooltool Figma design](https://www.figma.com/design/qLURhvhuM4AZ0xibHYe
 Call sites: `MatchHud.vue`, `ShotPowerGauge.vue` and `FigmaBallBadge.vue`. Player names, ball numbers, counts, timers, room codes and shot parameters are live data, not the example values in Figma.
 
 These earlier wedge exports are retained as reference assets only. Runtime
-`ShotPowerGauge.vue` now references the current Figma export
-`ui/figma-assist/power-gauge.svg#Vector%203` (149.714×82.5888); see that folder's
-ASSETS.md for provenance and hashes. Dynamic fill still uses external SVG `use`,
-without copying or redrawing the path. Both gauges show the same `V0 / 8` in
+`ShotPowerGauge.vue` uses the exact Vector 3 geometry of the current Figma export
+`ui/figma-assist/power-gauge.svg` (149.714×82.5888); see that folder's
+ASSETS.md for provenance and hashes. For Safari compatibility the component
+embeds that unchanged geometry with local gradient/clip IDs rather than relying
+on cross-document SVG `use` or paint-server resolution. Both gauges show `V0 / 8` in
 percent and m/s, per the user's clarification, and remain visible without the
 assistance key. Native orientation is on the right; the left rotates 180°.
 

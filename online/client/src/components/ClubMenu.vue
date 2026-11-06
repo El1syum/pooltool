@@ -20,6 +20,8 @@ const emit = defineEmits<{
 type Subview = 'choices' | 'friend' | 'rules' | 'join' | 'watch' | 'bot' | 'exit'
 const subview = ref<Subview>('choices')
 const exited = ref(false)
+const shell = ref<HTMLElement | null>(null)
+const exitDialog = ref<HTMLElement | null>(null)
 const clock = ref(Date.now())
 const startedSearch = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | undefined
@@ -27,6 +29,16 @@ onMounted(() => { timer = setInterval(() => { clock.value = Date.now() }, 1000) 
 onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 watch(() => props.view, (view, before) => { if (view !== before) subview.value = 'choices'; if (view === 'search' && before !== 'search') startedSearch.value = Date.now(); exited.value = false })
 const page = computed(() => props.view === 'play' ? subview.value : props.view === 'menu' && subview.value === 'exit' ? 'exit' : props.view)
+watch([page, exited], ([value], [before]) => {
+  if (value === 'exit') { exitDialog.value?.focus({ preventScroll: true }); return }
+  if (before !== 'exit') return
+  const active = document.activeElement
+  if (active instanceof HTMLElement && active.closest('.club-header') && shell.value?.contains(active)) return
+  const selector = value === 'menu' ? '[data-exit-trigger]' : value === 'profile' ? '.club-account' : '.club-brand'
+  const target = shell.value?.querySelector<HTMLElement>(selector)
+  const focusTarget = target?.matches(':disabled') ? shell.value?.querySelector<HTMLElement>('.club-brand') : target
+  focusTarget?.focus({ preventScroll: true })
+}, { flush: 'post' })
 const disabled = computed(() => props.busy || !props.connected)
 const base = import.meta.env.BASE_URL || '/'
 const asset = (name: string, extension = 'svg') => `${base}ui/club-menu/${name}.${extension}`
@@ -55,10 +67,21 @@ function enteredCode(event: Event) { emit('update:code', (event.target as HTMLIn
 function chosenTime(event: Event) { emit('update:turnSeconds', Number((event.target as HTMLSelectElement).value)) }
 function historyDate(item: Record<string, unknown>) { const value = timestamp(item.finishedAt as string || item.startedAt as string); return value ? new Date(value).toLocaleString('ru-RU') : '—' }
 function confirmExit() { exited.value = true; emit('exit') }
+function cancelExit() { subview.value = 'choices'; exited.value = false }
+function exitKey(event: KeyboardEvent) {
+  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelExit(); return }
+  if (event.key !== 'Tab') return
+  const buttons = [...(exitDialog.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])].filter(button => button.getClientRects().length)
+  const first = buttons[0], last = buttons.at(-1)
+  if (!first) { event.preventDefault(); exitDialog.value?.focus(); return }
+  if (document.activeElement === exitDialog.value || !exitDialog.value?.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first)?.focus() }
+  else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+}
 </script>
 
 <template>
-  <main class="club-shell" :data-club-view="page" aria-label="Бильярдный клуб">
+  <main ref="shell" class="club-shell" :data-club-view="page" aria-label="Бильярдный клуб">
     <img class="club-background" :src="asset('club-background', 'webp')" alt="" aria-hidden="true" />
     <div class="club-shade" aria-hidden="true"></div>
     <header class="club-header">
@@ -74,18 +97,18 @@ function confirmExit() { exited.value = true; emit('exit') }
       <div v-if="page === 'menu'" class="club-main-menu">
         <div class="club-game-title"><p>ИСКУССТВО ТОЧНОГО УДАРА</p><h1>Pooltool</h1><div><i></i><span>БИЛЬЯРД</span><i></i></div></div>
         <nav class="club-actions" aria-label="Главное меню">
-          <button v-for="action in mainActions" :key="action.label" type="button" class="club-action" :class="{ 'club-action-primary': action.primary }" :disabled="busy || (action.primary && !connected)" @click="action.action"><img :src="asset(action.icon)" alt="" /><span>{{ action.label }}</span><img class="club-chevron" :src="asset(action.primary ? 'chevron-dark' : 'chevron-gold')" alt="" /></button>
+          <button v-for="action in mainActions" :key="action.label" type="button" class="club-action" :class="{ 'club-action-primary': action.primary }" :data-exit-trigger="action.icon === 'exit' ? '' : undefined" :disabled="busy || (action.primary && !connected)" @click="action.action"><img :src="asset(action.icon)" alt="" /><span>{{ action.label }}</span><img class="club-chevron" :src="asset(action.primary ? 'chevron-dark' : 'chevron-gold')" alt="" /></button>
         </nav>
         <p class="club-footnote">Ваш стол ждёт. Сыграем партию?</p>
         <button v-if="matchAvailable" class="club-text-button" @click="emit('navigate', 'match')">Вернуться в матч</button>
         <button v-if="room && !matchAvailable" class="club-text-button" :disabled="busy" @click="emit('leave')">Выйти из комнаты</button>
       </div>
-      <section v-else-if="page === 'exit'" class="club-card club-exit" role="dialog" aria-modal="true" aria-labelledby="club-exit-title">
+      <section v-else-if="page === 'exit'" ref="exitDialog" class="club-card club-exit" role="dialog" aria-modal="true" aria-labelledby="club-exit-title" tabindex="-1" @keydown="exitKey">
         <div class="club-exit-seal"><img :src="asset('exit-large')" alt="" /></div>
-        <div class="club-section-title"><p>ДО НОВОЙ ПАРТИИ</p><h1 id="club-exit-title">{{ exited ? 'До встречи за столом' : 'Покинуть клуб?' }}</h1><span>{{ exited ? 'Можно закрыть эту вкладку. Ваш профиль и настройки сохранены.' : 'Вы действительно хотите выйти из игры? Ваш профиль и настройки сохранены.' }}</span></div>
+        <div class="club-section-title"><p>ДО НОВОЙ ПАРТИИ</p><h1 id="club-exit-title">{{ exited ? 'До встречи за столом' : 'Покинуть клуб?' }}</h1><span><template v-if="exited">Можно закрыть эту вкладку. Ваш профиль и настройки сохранены.</template><template v-else>Вы действительно хотите выйти из игры?<br />Ваш профиль и настройки сохранены.</template></span></div>
         <div class="club-actions">
           <button v-if="!exited" class="club-action club-action-primary" :disabled="busy" @click="confirmExit"><img :src="asset('exit-dark')" alt="" /><span>Выйти из игры</span><img :src="asset('chevron-dark')" alt="" /></button>
-          <button class="club-action club-action-back" @click="subview = 'choices'; exited = false"><img :src="asset('arrow-left')" alt="" /><span>{{ exited ? 'Вернуться в клуб' : 'Отмена' }}</span></button>
+          <button class="club-action club-action-back" @click="cancelExit"><img :src="asset('arrow-left')" alt="" /><span>{{ exited ? 'Вернуться в клуб' : 'Отмена' }}</span></button>
         </div><p class="club-footnote">{{ matchAvailable ? 'Незавершённую партию нужно покинуть через меню матча.' : 'Отмена вернёт вас в главное меню.' }}</p>
       </section>
       <div v-else class="club-section" :class="{ 'club-section-wide': page === 'rules', 'club-section-form': ['search', 'join', 'watch', 'lobby', 'bot'].includes(page), 'club-section-profile': page === 'profile' }">
@@ -99,6 +122,7 @@ function confirmExit() { exited.value = true; emit('exit') }
           <div class="club-actions"><button class="club-action" @click="subview = 'rules'"><img :src="asset('sliders')" alt="" /><span>Настройки игры</span><img :src="asset('chevron-gold')" alt="" /></button><button class="club-action club-action-primary" :disabled="disabled" @click="emit('createRoom')"><img :src="asset('plus')" alt="" /><span>Создать игру</span><img :src="asset('chevron-dark')" alt="" /></button><button class="club-action" @click="subview = 'join'"><img :src="asset('key')" alt="" /><span>Присоединиться</span><img :src="asset('chevron-gold')" alt="" /></button><button class="club-action club-action-back" @click="back"><img :src="asset('arrow-left')" alt="" /><span>Назад</span></button></div>
         </template>
         <section v-else-if="page === 'rules'" class="club-card">
+          <div class="club-parameters">
           <div class="club-parameter"><span>Дисциплина</span><span class="club-fixed-value">Пул-8</span></div>
           <div class="club-parameter"><span>Формат матча</span><span class="club-fixed-value">Одна партия</span></div>
           <label class="club-parameter"><span>Время на ход</span><select :value="turnSeconds" @change="chosenTime"><option v-for="seconds in [30, 60, 90, 120, 180]" :key="seconds" :value="seconds">{{ seconds }} секунд</option></select></label>
@@ -106,8 +130,11 @@ function confirmExit() { exited.value = true; emit('exit') }
           <div class="club-parameter"><span>Стол</span><span class="club-fixed-value">Стандартный · Пул-8</span></div>
           <div class="club-parameter"><span>Линия прицеливания</span><button class="club-text-button" @click="emit('settings')">В настройках графики</button></div>
           <div class="club-parameter"><span>Наблюдатели</span><span class="club-muted">Разрешены по коду комнаты</span></div>
-          <div class="club-divider"></div><p class="club-small-note">Правила применятся к новой комнате. Изменение внешних моделей не меняет физику.</p>
+          </div>
+          <div class="club-rule-actions">
+          <div class="club-divider"></div><p class="club-small-note">Правила применятся к новой комнате.</p>
           <div class="club-actions-inline"><button class="club-action club-action-back" @click="back"><img :src="asset('arrow-left')" alt="" /><span>Назад</span></button><button class="club-action club-action-primary" @click="subview = 'friend'"><img :src="asset('check-dark')" alt="" /><span>Сохранить правила</span><img :src="asset('chevron-dark')" alt="" /></button></div>
+          </div>
         </section>
         <section v-else-if="page === 'join' || page === 'watch'" class="club-card">
           <label class="club-code-label">{{ page === 'watch' ? 'Код наблюдения' : 'Код приглашения' }}<input class="club-code-input" :value="code" aria-label="Код комнаты" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" @input="enteredCode" @keyup.enter="!disabled && code.length === 6 && emit('joinRoom', page === 'watch')" /></label>

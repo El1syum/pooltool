@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { clickHudAction } from './app-state.mjs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -19,11 +20,15 @@ async function api(actor, endpoint, body, method = 'POST') {
   return result
 }
 async function graphics(page) {
-  if (!await page.getByRole('dialog', { name: 'Настройки', exact: true }).count()) {
-    await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
+  const settings = page.locator('.club-settings-shell')
+  if (!await settings.count()) {
+    await clickHudAction(page, page.getByRole('button', { name: 'Меню матча', exact: true }))
     await page.getByRole('button', { name: 'Настройки', exact: true }).click()
   }
-  await page.getByRole('button', { name: 'Графика', exact: true }).click()
+  if (!await settings.getByRole('heading', { name: 'Графика', exact: true }).count()) {
+    if (!await settings.getByRole('button', { name: 'Графика', exact: true }).count()) await settings.getByRole('button', { name: 'Назад', exact: true }).click()
+    await settings.getByRole('button', { name: 'Графика', exact: true }).click()
+  }
   return page.getByRole('switch', { name: 'Линия прицеливания', exact: true })
 }
 async function assertPolicy(page, { locked, checked }) {
@@ -90,11 +95,12 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     // Changing another preference while locked must not leak the derived false
     // value into the server's saved casual settings through update:settings.
     await first.getByRole('button', { name: 'Закрыть без сохранения на сервер', exact: true }).click()
-    await first.getByRole('button', { name: 'Меню матча', exact: true }).click()
+    await clickHudAction(first, first.getByRole('button', { name: 'Меню матча', exact: true }))
     await first.getByRole('button', { name: 'Настройки', exact: true }).click()
     await first.getByRole('button', { name: 'Звук', exact: true }).click()
     await first.getByLabel('Общая громкость', { exact: true }).evaluate(input => { input.value = '0.6'; input.dispatchEvent(new Event('input', { bubbles: true })) })
     await first.getByRole('button', { name: 'Сохранить', exact: true }).click()
+    await first.locator('.club-settings-shell').waitFor({ state: 'hidden' })
     const saved = (await api(actors[0], '/api/me/settings', undefined, 'GET')).settings
     assert.equal(saved.showAimGuide, true)
     assert.equal(saved.volume, 0.6)

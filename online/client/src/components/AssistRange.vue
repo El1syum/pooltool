@@ -15,6 +15,7 @@ const thumb = computed(() => part(props.kind === 'power' ? 'Бегунок' : '�
 </script>
 
 <template>
+  <div class="assist-range-slot" :class="`assist-range-slot-${kind}`">
   <span class="assist-range" :style="{ width: `${width}px`, height: `${height}px` }">
     <svg :width="width" :height="height" :viewBox="`0 0 ${width} ${height}`" aria-hidden="true" overflow="visible">
       <use :href="track" />
@@ -23,4 +24,5 @@ const thumb = computed(() => part(props.kind === 'power' ? 'Бегунок' : '�
     </svg>
     <input :aria-label="label" type="range" :min="min" :max="max" :step="step || 0.1" :value="value" :disabled="disabled" @input="emit('change', Number(($event.target as HTMLInputElement).value))" />
   </span>
+  </div>
 </template>

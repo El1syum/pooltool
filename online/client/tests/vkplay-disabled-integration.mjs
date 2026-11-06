@@ -1,6 +1,7 @@
 // Actual App + real API regression for the deliberately disabled platform mode.
 // No SDK, GAS or platform account is mocked into a successful login here.
 import assert from 'node:assert/strict'
+import { waitForConnectedHome } from './app-state.mjs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -32,7 +33,7 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
   try {
     await page.goto(base)
     await page.getByRole('heading', { name: 'Pooltool', exact: true }).waitFor({ timeout: 30_000 })
-    await page.getByRole('status').filter({ hasText: 'Соединение установлено' }).waitFor()
+    await waitForConnectedHome(page)
     const token = await page.evaluate(() => localStorage.getItem('pooltool.token'))
     assert.ok(token, 'Ordinary preview continues to create a real guest session')
     const identity = await context.request.get(`${base}/api/me`, { headers: { Authorization: `Bearer ${token}` } })
@@ -53,7 +54,7 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     assert.equal(await page.evaluate(() => localStorage.getItem('pooltool.token')), token)
     assert.deepEqual(requests.slice(boundary).filter(item => item.path !== '/api/auth/config'), [])
     await page.goto(base)
-    await page.getByRole('status').filter({ hasText: 'Соединение установлено' }).waitFor({ timeout: 30_000 })
+    await waitForConnectedHome(page)
     assert.equal(await page.evaluate(() => localStorage.getItem('pooltool.token')), token)
     const restored = await context.request.get(`${base}/api/me`, { headers: { Authorization: `Bearer ${token}` } })
     assert.equal((await restored.json()).user.id, user.id)

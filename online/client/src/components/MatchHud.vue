@@ -117,7 +117,7 @@ defineExpose({ closeControls })
       </button>
       <img v-else class="hud-power-reticle" :src="assistAsset('power-reticle')" alt="" />
       <div v-if="headingView" class="hud-direction-control"><img :src="assistAsset('direction-arrow')" alt="" /><span>Мышь ↔ · направление удара</span></div>
-      <div v-if="phase === 'aim' && showAssist && localTurn" class="hud-contact-annotation" :style="{ left: `${158 + aim.a * 77}px`, top: `${158 - aim.b * 77}px` }"><img :src="assistAsset('contact-leader')" alt="" /><span>{{ contactDescription }}</span></div>
+      <div v-if="phase === 'aim' && showAssist && localTurn" class="hud-contact-annotation" :style="{ left: `${158 + aim.a * 77}px`, top: `${158 - aim.b * 77}px` }"><img :src="assistAsset('contact-leader')" alt="" /></div>
       <div v-if="phase === 'power'" class="hud-charge" aria-live="polite">
         <ShotPowerGauge class="hud-percent-wedge" :fraction="powerFraction" unit="percent" label="Сила удара в процентах" />
         <ShotPowerGauge class="hud-speed-wedge" :fraction="powerFraction" unit="speed" label="Скорость удара в метрах в секунду" />
@@ -126,6 +126,7 @@ defineExpose({ closeControls })
       <span v-if="phase === 'power'" class="hud-target-caption">Мышь ↕ · сила удара</span>
     </div>
 
+    <span v-if="phase === 'aim' && showAssist && localTurn" class="hud-contact-caption" :style="{ '--contact-offset-x': `${aim.a * 77}px`, '--contact-offset-y': `${-aim.b * 77}px` }">{{ contactDescription }}</span>
     <MatchAssistPanels v-if="showAssist && localTurn && !canPlace" :aim="aim" :phase="phase" :show-stage="!showOverviewInstruction" :assist-key-label="assistKeyLabel" :can-shoot="canShoot" @aim="emit('aim', $event)" @phase="emit('phase', $event)" />
 
     <footer class="hud-footer">

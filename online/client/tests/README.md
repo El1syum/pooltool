@@ -1,5 +1,32 @@
 # Browser smoke checks
 
+## Full Figma frontend audit (2026-11-06)
+
+`menu-audit-regressions.mjs` checks long names in every menu/settings header,
+lobby status wrapping, keyboard focus in settings/exit, original desktop home
+and rules geometry, lobby/control gaps and 14px medium Back labels with equal
+62/56px action heights. Negative controls reject the former values.
+
+`dialog-focus.mjs` uses the real AccessibleDialog and production CSS: initial
+focus, both Tab directions, inert background/restoration, removed/disabled focused
+controls, Escape, parent focus ownership and transitions. `admin-dialog-focus.mjs`
+covers busy/unconfigured/login focus and password clearing with no API requests.
+These are component checks, not a substitute for real App/Pooltool integrations.
+
+`app-state.mjs` observes authenticated connection through the actual enabled
+home Play action. Integrations no longer wait for the deliberately removed
+healthy connection caption. Its HUD helper uses the real Ctrl pause/unlock
+gesture, never a forced click through Pointer Lock or scripted native unlock.
+
+`cue-pointer-lock.mjs` also verifies that a remapped orbit modifier immediately
+suppresses pre-LMB heading changes in native Pointer Lock and denied/unsupported
+fallbacks. It starts a real edge dwell before keydown, proves it stops without
+another mouse event, and checks that the real camera still orbits while every
+shot parameter, preparation phase and shot count stay unchanged.
+
+See [the audit report](../../docs/FIGMA_AUDIT_20261106.md) for all23 source frames,
+strict original-asset verification and explicit prototype/product exceptions.
+
 ## Home viewport fit (2026-11-06)
 
 `node tests/home-viewport.mjs` checks the actual ClubMenu in Chromium/WebKit
@@ -207,6 +234,22 @@ intentional geometry. Results/screenshots live in ignored `tests/artifacts`.
 The isolated real-App `postgame-menu.mjs` additionally audits actual match-menu,
 surrender and result action groups at desktop/mobile/landscape sizes, including
 scroll reachability of the last action, while retaining the full lifecycle flow.
+
+## Match responsive layout audit
+
+`match-audit-layout.mjs` uses the real MatchHud/assist components, production CSS,
+original local assets and fonts in its own loopback Vite fixture (port 4326).
+Run `node tests/match-audit-layout.mjs`; set `BROWSER=webkit` for the second engine
+and `PLAYWRIGHT_MODULE` as above when Playwright is bundled outside the project.
+It covers 15 viewport sizes and 11 heading/contact/power/overview/spectator/
+calculation/placement/finished states. Checks include independent-block
+intersections, viewport bounds, visible-control hit testing, both always-visible
+power meters, all Ctrl-controlled cards, seven preserved 1920px Figma slots,
+original SVG root dimensions, keyboard sliders and two negative controls for the
+old desktop-breakpoint and short-landscape failures. Low-height card reflow is
+an explicit responsive adaptation, not a second supplied mobile Figma frame.
+Screenshots/reports go to ignored `tests/artifacts/match-audit-layout`. The probe
+does not create rooms, call the API or claim a physical-shot/end-to-end test.
 
 ## Prepared models and personal appearance
 

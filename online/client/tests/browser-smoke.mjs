@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { clickHudAction, waitForConnectedHome } from './app-state.mjs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -26,7 +27,7 @@ async function api(page, endpoint, body, method = 'POST') {
 async function openControls(page) {
   await page.bringToFront()
   const panel = page.locator('#hud-controls')
-  if (!await panel.isVisible()) await page.getByRole('button', { name: 'Параметры удара', exact: true }).click()
+  if (!await panel.isVisible()) await clickHudAction(page, page.getByRole('button', { name: 'Параметры удара', exact: true }))
   await panel.waitFor({ state: 'visible' })
 }
 
@@ -38,7 +39,7 @@ async function closeControls(page) {
 
 async function openSettings(page) {
   await page.bringToFront()
-  await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
+  await clickHudAction(page, page.getByRole('button', { name: 'Меню матча', exact: true }))
   await page.getByRole('dialog').getByRole('button', { name: 'Настройки', exact: true }).click()
   const dialog = page.locator('.club-settings-shell')
   await dialog.waitFor()
@@ -107,7 +108,7 @@ for (const engineName of engines) {
         if (/\/models\/balls\/[^/]+\.png$/.test(new URL(response.url()).pathname) && response.ok()) textures.add(response.url())
       })
       await page.goto(base)
-      await page.getByRole('status').filter({ hasText: 'Соединение установлено' }).waitFor({ timeout: 30_000 })
+      await waitForConnectedHome(page)
       await page.getByRole('button', { name: 'Играть', exact: true }).click()
       return page
     }

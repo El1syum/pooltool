@@ -10,10 +10,12 @@ The accepted specification is implemented for functional eight-ball: private
 rooms and invite codes, casual/ranked matchmaking, two players and spectators,
 server-owned turns/physics/rules, reconnect, timeouts, surrender, Elo, editable
 profiles, match history, persistent input/graphics/audio settings and telemetry.
-The user deferred final Figma styling and VK publication on 2026-10-14. The client
-uses functional controls until finished designer layouts are available.
+VK publication remains deferred. Since 2026-11-03 the menu and match HUD use the
+approved Figma reference; subsequent user changes and the latest audit are in
+`docs/FIGMA_AUDIT_20261106.md`. Functional controls use real server data.
 Physics and rules are the real pooltool engine, but the browser renderer is a
-separate, simplified Three.js scene (procedural table, original ball textures):
+separate Three.js scene (procedural fallback, shared cosmetic GLB library,
+original ball textures):
 the desktop Panda3D renderer cannot run in a browser, and the fork's sparse
 checkout omits pooltool's room/table/cue art. It does
 not use Figma screenshots as assets. Ball textures are original pooltool assets.
@@ -36,8 +38,9 @@ cd ../..
 Open http://127.0.0.1:8790 in two separate browser profiles/private windows. Create
 a room, join with its six-character code, and confirm readiness in both clients.
 Both ready players start the match automatically. A third browser can join as a
-spectator with the same code. For solo play choose a difficulty under "Игра с ботом". After the break, select the called ball and pocket
-before striking, as required by pooltool's eight-ball rules. Ball-in-hand after a
+spectator with the same code. For solo play use the full "Тренировка с ботом"
+button and choose a difficulty. Ball/pocket declarations are optional, including
+for the eight; they mark a target but do not restrict a legal pot. Ball-in-hand after a
 foul requires legal cue placement; the opening placement is optional behind the
 head string. Settings are stored per guest/user locally and synchronized to the
 server; command and telemetry retries are idempotent.

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { waitForConnectedHome } from './app-state.mjs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -23,7 +24,7 @@ async function openModels(page) {
   await page.getByRole('button', { name: 'Модели стола и окружения', exact: true }).click()
   await page.getByRole('heading', { name: 'Мастерская моделей', exact: true }).waitFor()
 }
-async function home(page) { await page.getByRole('heading', { name: 'Pooltool', exact: true }).waitFor({ timeout: 30_000 }); await page.getByRole('status').filter({ hasText: 'Соединение установлено' }).waitFor() }
+async function home(page) { await waitForConnectedHome(page) }
 async function ready(page) { await page.getByRole('button', { name: 'Готов', exact: true }).click() }
 
 const results = []

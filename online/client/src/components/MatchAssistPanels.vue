@@ -47,12 +47,12 @@ function spin(event: PointerEvent) {
     </section>
     <section v-if="phase !== 'overview'" class="assist-card assist-contact" :class="{ 'assist-contact-lower': phase === 'power' }" aria-label="Прибор точки контакта">
       <h2>ТОЧКА КОНТАКТА</h2>
-      <div class="assist-cue-face" role="slider" tabindex="0" aria-label="Точка контакта на схеме битка" :aria-valuetext="contactText" :aria-disabled="!canShoot || phase !== 'aim'" @pointerdown="spin" @pointermove="spin" @keydown.left.prevent="change('a', aim.a - 0.05)" @keydown.right.prevent="change('a', aim.a + 0.05)" @keydown.up.prevent="change('b', aim.b + 0.05)" @keydown.down.prevent="change('b', aim.b - 0.05)">
+      <div class="assist-cue-face-slot"><div class="assist-cue-face" role="slider" tabindex="0" aria-label="Точка контакта на схеме битка" :aria-valuetext="contactText" :aria-disabled="!canShoot || phase !== 'aim'" @pointerdown="spin" @pointermove="spin" @keydown.left.prevent="change('a', aim.a - 0.05)" @keydown.right.prevent="change('a', aim.a + 0.05)" @keydown.up.prevent="change('b', aim.b + 0.05)" @keydown.down.prevent="change('b', aim.b - 0.05)">
         <img class="assist-cue-sphere" :src="asset('cue-ball')" alt="" />
         <img class="assist-safe-zone" :src="asset('contact-safe-zone', 'png')" alt="" />
         <span class="assist-axis-x"></span><span class="assist-axis-y"></span>
         <img class="assist-contact-dot" :src="asset('contact-dot')" alt="" :style="{ left: `${64 + aim.a * 72}px`, top: `${64 - aim.b * 72}px` }" />
-      </div>
+      </div></div>
       <strong class="assist-contact-value">{{ contactText }}</strong>
       <p>{{ phase === 'aim' ? 'Мышь — точка контакта. Направление удара не меняется.' : 'ПКМ — к точке контакта' }}</p>
     </section>

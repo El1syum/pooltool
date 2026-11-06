@@ -1,6 +1,7 @@
 // Full, opt-in administration regression against the real App and real API.
 // Mutations are deliberately restricted to an isolated loopback test service.
 import assert from 'node:assert/strict'
+import { clickHudAction, waitForConnectedHome } from './app-state.mjs'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -32,11 +33,12 @@ async function until(task, message, timeout = 30_000) {
   throw new Error(message)
 }
 async function home(page) {
-  await page.getByRole('heading', { name: 'Pooltool', exact: true }).waitFor({ timeout: 30_000 })
-  await page.getByRole('status').filter({ hasText: 'Соединение установлено' }).waitFor()
+  await waitForConnectedHome(page)
 }
 async function openWorkshop(page, inMatch = false) {
-  if (inMatch) await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
+  if (inMatch) {
+    await clickHudAction(page, page.getByRole('button', { name: 'Меню матча', exact: true }))
+  }
   await page.getByRole('button', { name: 'Настройки', exact: true }).click()
   await page.getByRole('button', { name: 'Модели стола и окружения', exact: true }).click()
   await page.getByRole('heading', { name: 'Мастерская моделей', exact: true }).waitFor()

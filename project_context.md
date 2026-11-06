@@ -668,6 +668,39 @@ installed, no upgrades/services/ports/API/firewall/accounts/keys changed.
 Old82.47.143.103:8790 game/release/backend/DB/models/config untouched.
 Migration and live end-to-end/capacity qualification require a separate step.
 
+## Full frontend/Figma audit (2026-11-06)
+
+Read `online/docs/FIGMA_AUDIT_20261106.md` and
+`online/docs/frontend_figma_evidence_20261106.json`. Fresh full contexts and
+reference screenshots obtained for23 current YPQR Figma frames/groups;66 source
+assets checked, original vectors verified by exact raster comparisons. No
+reference screenshots or temporary download URLs added to production UI.
+
+Menu typography/gaps/native desktop geometry restored while keeping no-scroll
+home, equal action heights, full bot entry and Ctrl/remapping requirements.
+Long names/lobby status bounded. Accessible match/rules dialogs now isolate
+background focus, handle removed/disabled controls and restore only unclaimed
+foreground focus; settings/exit/admin login keyboard cases corrected. No cursor
+capture added. Actual native orbit/hover aiming conflict fixed independently.
+HUD intermediate desktop/short landscape/portrait collisions corrected using
+proportional original SVG slots, not hidden controls. Contact caption no longer
+shrinks inside nested transforms; desktop coordinates retained, mobile>=10px.
+
+Local verification:94 pure/SSR,340 menu regressions,1082 independent container
+checks,1098 HUD cases,84 original design states,396 button groups,50 home,16
+history,30 dialog and22 admin-dialog checks PASS. Raster/reactive gauge tests
+PASS both engines. Real App/Pooltool integrations (three-client shot/reconnect,
+postgame navigation, settings, ranked aim policy, VK-disabled guest) and40 real
+admin-library scenarios PASS. Chromium native Pointer Lock and both fallback
+paths tested; WebKit native grant not available. Independent reviews CLEAR.
+
+Final candidate index-Bcp73tUV.js / index-BQx6c1Xi.css built and typechecked;
+final compiled-client match-hud+postgame-menu also PASS both engines,4 additional
+finished matches/engine and zero JS errors. Frontend-only publication prepared;
+live hash/layout/model checks pending.
+Backend/physics/EPYC migration remain HELD. Never deploy backend from this
+frontend task or include the unrelated user docs3D_MODELS_WEB/GRAPHICS_ENGINE_WEB.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

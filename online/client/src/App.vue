@@ -13,6 +13,7 @@ import ClubSettings from './components/ClubSettings.vue'
 import ModelWorkshop from './components/ModelWorkshop.vue'
 import ModelAdminLogin from './components/ModelAdminLogin.vue'
 import PlayerAppearance from './components/PlayerAppearance.vue'
+import AccessibleDialog from './components/AccessibleDialog.vue'
 import { applyMatchVisualPolicy, getAimGuidePolicy } from './game/matchPolicy'
 import { createServerModelLibrary } from './models/serverLibrary'
 import { profileFromLibrary } from './models/libraryProfile'
@@ -939,8 +940,7 @@ onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(c
       <div v-for="player in offlinePlayers" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
       <div v-if="match.status === 'finished'" class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><div class="result-actions"><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave">В главное меню</button><button @click="showProfile">История и рейтинг</button></div></div>
     </main>
-    <div v-if="gameMenuOpen" class="modal-backdrop club-match-backdrop" @click.self="gameMenuOpen = false; surrenderConfirmation = false">
-      <section class="club-match-dialog" role="dialog" aria-modal="true" aria-labelledby="game-menu-title">
+    <AccessibleDialog v-if="gameMenuOpen" title-id="game-menu-title" dialog-class="club-match-dialog" backdrop-class="club-match-backdrop" return-focus-selector=".hud-match-menu" @close="gameMenuOpen = false; surrenderConfirmation = false">
         <span class="club-dialog-eyebrow">POOLTOOL · 8-BALL</span>
         <h1 id="game-menu-title">{{ surrenderConfirmation ? 'Сдаться?' : 'Меню матча' }}</h1>
         <template v-if="surrenderConfirmation"><p>Вам будет засчитано поражение. Результат рейтинговой партии повлияет на Эло.</p><div class="club-dialog-actions"><button class="club-dialog-primary" :disabled="busy" @click="surrender">Да, сдаться</button><button @click="surrenderConfirmation = false">Продолжить игру</button></div></template>
@@ -950,18 +950,15 @@ onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(c
           <button @click="gameMenuOpen = false; rulesOpen = true">Правила игры</button><button @click="toggleSound">{{ settings.volume > 0 ? 'Выключить звук' : 'Включить звук' }}</button>
           <button v-if="isPlayer && match?.status !== 'finished'" :disabled="busy" @click="surrenderConfirmation = true">Сдаться</button><button v-else :disabled="busy" @click="leave">В главное меню</button></div>
         </template>
-      </section>
-    </div>
-    <div v-if="rulesOpen" class="modal-backdrop" @click.self="rulesOpen = false">
-      <section class="settings-dialog hud-rules-dialog" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+    </AccessibleDialog>
+    <AccessibleDialog v-if="rulesOpen" title-id="rules-title" dialog-class="settings-dialog hud-rules-dialog" return-focus-selector=".hud-rules" @close="rulesOpen = false">
         <h1 id="rules-title">Правила 8-BALL</h1>
         <p>После распределения групп игрок забивает свои цельные или полосатые шары. Восьмёрку нужно забить после всех семи шаров своей группы. Заказывать шар и лузу не требуется, в том числе для восьмёрки.</p>
         <p>Выбор шара и лузы в параметрах удара необязателен и служит для отметки цели. Ошибочный первый контакт, падение битка и другие нарушения оценивает сервер; после фола биток ставится в разрешённой зоне.</p>
         <p>До первого ЛКМ наведите направление удара. Клик по свободному месту сцены фиксирует его и открывает выбор точки контакта кия с битком. Подтвердите точку таким же кликом — попадать по битку не нужно. Затем отдельно зажмите ЛКМ, оттяните кий вниз для выбора силы и отпустите кнопку для удара. Клики по прицельным шарам и лузам сохраняют выбор заказа. Правая кнопка возвращает на предыдущий этап.</p>
         <p>Удерживайте {{ assistKeyLabel }} для дополнительных приборов. Клавиша меняется в настройках управления. Shift + колесо меняет наклон кия. Альтернативное управление доступно в панели «Параметры удара». В рейтинговых матчах линия прицеливания принудительно отключена. Настройки и меню не останавливают таймер сетевой партии.</p>
         <button @click="rulesOpen = false">Закрыть правила</button>
-      </section>
-    </div>
+    </AccessibleDialog>
     <ClubSettings v-if="settingsOpen" :settings="effectiveSettings" :binding-capture="bindingCapture" :binding-capture-error="bindingCaptureError" :capture-labels="captureLabels" :binding-conflicts="bindingConflicts" :aim-guide-locked="aimGuidePolicy.locked" :in-match="view === 'match'" :user="user" :client-version="CLIENT_VERSION" @update:settings="updateSettings" @capture="bindingCapture = $event" @reset="settings = defaults()" @save="saveSettings" @close="settingsOpen = false; bindingCapture = null" @models="openModels" @appearance="openAppearance" />
     <PlayerAppearance v-if="appearanceOpen" :library="modelCatalogue" :selection="playerAssets" :snapshot="match?.snapshot" :loading="modelCatalogueLoading" :error="modelCatalogueError" @apply="applyPlayerAssets" @close="closeAppearance" @retry="loadModelLibrary" @manage="openModels" />
     <ModelAdminLogin v-if="modelAdminOpen" :busy="modelAdminBusy" :error="modelAdminError" :configured="modelLibrary.session.value.configured" @submit="loginModelAdmin" @close="modelAdminOpen = false; modelAdminError = ''" />
