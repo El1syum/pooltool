@@ -25,6 +25,20 @@ test('home uses local source WebP/SVGs and four Figma menu actions', async () =>
   assert.match(html, /Тест Игрока/)
   assert.doesNotMatch(html, /figma\.com\/api|1240 RP|Александр/)
 })
+
+test('healthy connection footer is absent but a lost connection remains announced', async () => {
+  for (const view of ['menu', 'play', 'profile']) {
+    const html = await render(Menu, menu({ view }))
+    const footer = html.match(/<footer\b[^>]*>[\s\S]*?<\/footer>/)?.[0]
+    assert.ok(footer, 'Keep the breadcrumb/version footer')
+    assert.doesNotMatch(footer, /class="club-connection/)
+    assert.doesNotMatch(footer, /Соединение установлено/)
+  }
+  const offline = await render(Menu, menu({ connected: false, connection: 'Подключение потеряно' }))
+  assert.match(offline, /club-connection-offline/)
+  assert.match(offline, /role="status"/)
+  assert.match(offline, /Подключение потеряно/)
+})
 test('play renders bot training as a fifth full action with the supplied native SVG', async () => {
   const html = await render(Menu, menu({ view: 'play' }))
   for (const text of ['Случайный противник', 'Рейтинговая игра', 'Игра с другом', 'Просмотр матча', 'Тренировка с ботом']) assert.match(html, new RegExp(text))

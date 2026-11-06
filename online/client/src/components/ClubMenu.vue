@@ -138,6 +138,6 @@ function confirmExit() { exited.value = true; emit('exit') }
         </section>
       </div>
     </section>
-    <footer class="club-footer"><span>{{ breadcrumb }}</span><span>POOLTOOL · v.{{ clientVersion }}</span><p class="club-connection" role="status" :class="{ 'club-connection-offline': !connected }">{{ connection || (connected ? 'Соединение установлено' : 'Подключение потеряно') }}</p></footer>
+    <footer class="club-footer"><span>{{ breadcrumb }}</span><span>POOLTOOL · v.{{ clientVersion }}</span><p v-if="!connected" class="club-connection club-connection-offline" role="status">{{ connection || 'Подключение потеряно' }}</p></footer>
   </main>
 </template>

@@ -229,4 +229,43 @@
   .club-control-mouse .club-range-value { width:100%; max-width:none; }
   .club-control-mouse .club-range-value input[type=range] { flex:1; width:auto; }
 }
+/* Only the home surface fits the viewport; long forms keep their own scroll. */
+.club-shell[data-club-view="menu"] { height:100vh; height:100dvh; min-height:0; }
+.club-shell[data-club-view="menu"] > .club-header { flex-basis:clamp(56px,10dvh,112px); }
+.club-shell[data-club-view="menu"] .club-account { min-width:0; max-width:50%; }
+.club-shell[data-club-view="menu"] .club-account-text { min-width:0; overflow:hidden; }
+.club-shell[data-club-view="menu"] .club-account-text > span { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.club-shell[data-club-view="menu"] > .club-content { flex:1 1 0; min-height:0; padding-block:clamp(8px,2dvh,32px); }
+.club-shell[data-club-view="menu"] > .club-footer { flex-basis:clamp(36px,6dvh,64px); display:grid; grid-template-columns:minmax(0,1fr) auto; align-content:center; gap:4px 16px; }
+.club-shell[data-club-view="menu"] .club-footer > span:first-child { max-width:none; justify-self:start; text-align:left; }
+.club-shell[data-club-view="menu"] .club-connection { position:static; grid-column:1 / -1; max-width:100%; line-height:12px; text-align:left; }
+.club-shell[data-club-view="menu"] .club-main-menu { gap:clamp(12px,3dvh,32px); }
+.club-shell[data-club-view="menu"] .club-game-title { gap:clamp(6px,1.3dvh,14px); }
+.club-shell[data-club-view="menu"] .club-game-title h1 { font-size:clamp(36px,7.8dvh,var(--home-title-max,70px)); line-height:1.15; }
+.club-shell[data-club-view="menu"] .club-actions { gap:clamp(8px,1.3dvh,12px); }
+@media (max-width:480px) {
+  .club-shell[data-club-view="menu"] { --home-title-max:60px; }
+}
+@media (max-height:620px) {
+  .club-shell[data-club-view="menu"] > .club-header { flex-basis:48px; }
+  .club-shell[data-club-view="menu"] > .club-content { padding-block:8px; }
+  .club-shell[data-club-view="menu"] > .club-footer { flex-basis:40px; }
+  .club-shell[data-club-view="menu"] .club-main-menu { gap:8px; }
+  .club-shell[data-club-view="menu"] .club-game-title { gap:4px; }
+  .club-shell[data-club-view="menu"] .club-game-title h1 { font-size:36px; line-height:1; }
+  .club-shell[data-club-view="menu"] .club-game-title > p { font-size:8px; letter-spacing:2px; }
+  .club-shell[data-club-view="menu"] .club-game-title > div { gap:10px; font-size:10px; }
+  .club-shell[data-club-view="menu"] .club-game-title i { width:32px; }
+  .club-shell[data-club-view="menu"] .club-actions { gap:6px; }
+  .club-shell[data-club-view="menu"] .club-footnote { font-size:11px; line-height:1.4; }
+}
+@media (max-height:440px) and (min-width:560px) {
+  .club-shell[data-club-view="menu"] > .club-content { padding-inline:16px; }
+  .club-shell[data-club-view="menu"] .club-main-menu { width:900px; display:grid; grid-template-columns:minmax(180px,.8fr) minmax(320px,1fr); column-gap:16px; row-gap:8px; }
+  .club-shell[data-club-view="menu"] .club-game-title { grid-column:1; grid-row:1; }
+  .club-shell[data-club-view="menu"] .club-footnote { grid-column:1; grid-row:2; }
+  .club-shell[data-club-view="menu"] .club-main-menu > .club-text-button { grid-column:1; grid-row:3; justify-self:center; }
+  .club-shell[data-club-view="menu"] .club-actions { grid-column:2; grid-row:1 / 4; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .club-shell[data-club-view="menu"] .club-action { padding-inline:10px; gap:8px; font-size:15px; }
+}
 @media (prefers-reduced-motion:reduce) { .club-search-arc { animation:none; } }

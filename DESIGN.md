@@ -88,6 +88,12 @@
 - Stack paired club actions at ≤480px; keep their equal sizing and readable
   labels. Dialogs must scroll inside the viewport, not clip their last action.
 - Touch uses buttons/selects, not keyboard-only camera gestures.
+- Home alone fits the viewport: flexible content replaces the old 706px minimum,
+  spacing/title/chrome adapt to height, and short landscape uses a side-by-side
+  title and two-column action grid. Do not hide or clip content to remove scroll.
+  Keep 62/56px main actions and optional return/leave links reachable. Longer
+  profile/settings/forms retain scrolling. Healthy connection text is omitted
+  from the menu footer; an offline warning remains visible in its own row.
 
 ## Interaction states
 

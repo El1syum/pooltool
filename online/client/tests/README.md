@@ -1,5 +1,13 @@
 # Browser smoke checks
 
+## Home viewport fit (2026-11-06)
+
+`node tests/home-viewport.mjs` checks the actual ClubMenu in Chromium/WebKit
+at 14 viewport sizes, plus long names, optional return/room links, offline text
+and real keyboard focus. It checks real scroll extents and visible content,
+not merely hidden scrollbars. The former 706px minimum is a negative control;
+profile scrolling and access to all six Play actions remain covered.
+
 ## History scrollbar spacing (2026-11-06)
 
 `node tests/history-spacing.mjs` checks the actual ClubMenu component with 24

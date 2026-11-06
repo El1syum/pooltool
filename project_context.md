@@ -613,6 +613,31 @@ with matching local/HTTP JS+CSS hashes and JS/static/admin-write0. All own test
 rooms were left normally and browser/Vite processes stopped.
 Do NOT deploy backend from this branch: physics 2.5s target still HELD (see above).
 
+## Home viewport fit and connection footer (2026-11-06)
+
+Home (`data-club-view=menu`) now uses the actual viewport height and flexible
+content instead of the former 112+706+82px forced minimum. Height-aware chrome,
+title and spacing plus a short-landscape title/action-grid layout fit without
+hiding overflow or shrinking the shared 62/56px action targets. Long account
+names truncate safely; optional resume/room actions remain visible. Profile,
+settings and longer forms retain scrolling. Healthy connection footer text is
+not rendered; offline status remains visible in its own home-footer row.
+
+Verification: 94 unit/SSR checks, typecheck/build and 50 actual-component browser
+checks PASS. Matrix includes 14 window sizes, 320x480/568x320, single-line labels,
+long names, optional links, offline feedback, keyboard focus, old-706px negative
+control and profile/Play reachability. Independent architecture review CLEAR.
+Published actual App passed 28 viewport checks across Chromium/WebKit, plus
+profile/play return-to-home; no JS/static/admin-write errors. Initial public
+readiness wait timed out; a fresh-context rerun with unchanged criteria passed.
+
+Frontend-only publication: index-DA73iau8.js / index-DGVq_61U.css, HTTP hashes
+match the tested local build. Backup: shared/backup-home-fit-20261106; all 88
+pre-existing finished payloads preserved, SQLite integrity ok. Backend PID1024133,
+catalogue v5, model bytes and private configuration unchanged; old chunks kept.
+The separately held physics implementation was NOT deployed. All own browser/
+Vite processes stopped; the public layout check created no rooms or matches.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
