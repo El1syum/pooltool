@@ -473,6 +473,26 @@ visible, six open pockets, cap replacement/reset 6→0→6, stable marker UUIDs,
 disposal/reload and JS0. Independent code review APPROVE; architecture CLEAR.
 Final closeups and overview checked, including lower cabinet/apron continuity.
 
+Deployed implementation `4d41d17`: ordinary URL serves `index-B2ngEgHf.js`,
+`GLTFLoader-QUjeh2Y9.js`; CSS unchanged. Library v5 publishes new immutable ID
+`01d31e7634c9409dbbd752197daebd48` with exact V6 hash; old
+`2dc5c0956a32488b86e6667aa857d910` disabled, bytes/config retained. Real App with
+old explicit personal selection was separately tested: reconciles to default,
+loads only the new GLB, no JS/admin writes. Environment selection unchanged.
+Online backup `/opt/pooltool-online/shared/backup-pockets-20261106` preserves
+SQLite/catalogue/old GLB/entry HTML. All 71 previous finished payloads preserved
+byte-identically, integrity ok; backend PID 1024133 unchanged, physics not
+restarted, guest on and VK Play disabled/unconfigured. Published client hashes
+match the tested build; old hashed chunks retained, entry document switched last.
+
+Public final Chromium/WebKit three-client real-physics/HUD/shared-AI/menu checks
+passed: new model in all three clients, 16 ball textures, equal final state,
+JS/static0. First Chromium attempt had transient 502 on ball5 PNG and elevation
+SVG; both URLs returned 200, unchanged strict retry passed. Fail evidence retained,
+no tests weakened. All disposable browser/test processes stopped and own rooms
+cleaned up normally. Cosmetic rollback must use catalogue API + old HTML, not
+restore the whole live database over matches created after backup.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
