@@ -427,6 +427,25 @@ finish→menu→play passed both browsers with equal final states and JS0. Isola
 two-game/four-shot probe passed (development-host p50 173 ms/max 261 ms, not SLA).
 Independent code review APPROVE and architecture review CLEAR.
 
+Deployed `63e9a4c` to the ordinary preview URL. Active release:
+`/opt/pooltool-online/releases/20261106-physics-latency`; client
+`/assets/index-Dm3Ebd1c.js`, CSS `/assets/index-yJpNpetd.css`. Online SQLite backup:
+`/opt/pooltool-online/shared/backup-physics-63e9a4c`; all 68 pre-existing finished
+payloads preserved byte-identically, catalogue unchanged, integrity ok. Old
+release/chunks retained. Physics was warmed at the final path as `ops` before
+cutover; backend PID 1024133, two physics processes, one ASGI, about 529 MB cgroup
+memory after warmup. Non-secret `shared/shot-performance.env` is loaded through
+the dedicated `shot-performance.conf` drop-in (`PHYSICS_WORKERS=2`, playback lead
+0.5 s); original credential/platform files were not modified. Guest remains on,
+VK Play disabled/unconfigured. Published detector/client hashes match the tested
+local files. Local QA, remote isolated QA unit and SSH forward were stopped.
+
+Public final Chromium/WebKit three-client real-physics/shared-AI/HUD/menu checks
+passed: server calculations 1.090/0.846 s, all delivery leads positive
+(Chromium 261–285 ms, WebKit 198–206 ms), equal final states, JS/static0. The first
+Chromium run saw transient HTTP 502 for two ball PNGs; both URLs then returned
+200 and the unchanged strict retry passed. No checks were weakened.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

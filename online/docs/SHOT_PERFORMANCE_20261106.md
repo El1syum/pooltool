@@ -21,6 +21,10 @@ This is a 1.285× speedup (22.2% less calculation time), not a load SLA. Complet
 results compare equal, including events, rules, final state and playback frames.
 The earlier single 12.699-second observation includes different runtime/load
 conditions and is not substituted for the paired baseline.
+Historical five-second client performance averages around that observed case
+were 56–71 FPS; those averages do not rule out short stalls, but did not show a
+sustained rendering-throughput collapse. No automatic visual-quality reduction
+was introduced to mask the timing problems.
 
 ## Changes
 
@@ -72,6 +76,15 @@ WebKit, with matching final states and no JavaScript/static-resource errors.
 An isolated two-game/four-shot concurrency probe reported p50 173 ms and maximum
 261 ms on the development machine. It is not a production capacity SLA. Headless
 software-GPU frame timings likewise are not a physical-device FPS guarantee.
+
+Published final Chromium/WebKit checks used the real shared AI model in all
+three clients: server calculation 1.090/0.846 seconds, delivery lead
+261–285/198–206 ms, identical final states and working finish→menu→play. Both
+successful runs had zero JS/static errors. Chromium's first attempt encountered
+two transient HTTP 502 texture responses; both subsequently returned 200 and an
+unchanged strict retry passed. Deployment preserved all 68 prior completed match
+payloads and the model catalogue; SQLite integrity was checked. See
+`../../project_context.md` for the release/backup/configuration record.
 
 ## Repeating measurements
 
