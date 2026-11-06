@@ -347,6 +347,10 @@ for (const engineName of engines) {
     await current.keyboard.press('ArrowRight')
     assert.equal(await current.getByTestId('match-hud').getAttribute('data-aim-direction'), heading, 'Contact phase locks direction keys too')
     await new Promise(resolve => setTimeout(resolve, 750)) // allow the cue-camera easing to settle before visual QA
+    await current.waitForFunction(() => {
+      const images = [...document.querySelectorAll('.hud-target img')]
+      return images.length >= 2 && images.every(image => image.complete && image.naturalWidth > 0)
+    })
     await current.screenshot({ path: path.join(artifacts, `${engineName}-aim-state.png`), fullPage: true })
     const reticleGeometry = await current.locator('.hud-target img').evaluateAll(images => images.map(image => {
       const rect = image.getBoundingClientRect()

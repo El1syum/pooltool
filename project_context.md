@@ -574,10 +574,10 @@ real worker probe to qualify a candidate CPU under intended concurrency.
 
 ## History spacing, Safari gauges and bot entry (2026-11-06)
 
-History Elo cells reserve 12px inline-end padding without changing the 700px
+History Elo cells reserve 24px inline-end padding without changing the 700px
 grid or adding scrollbar-gutter (Chromium gutter/horizontal-end bug avoided).
 Actual ClubMenu text-range checks: 16 PASS, Chromium/WebKit, 1440/760/390/320px,
-native/16px scrollbars, 24 rows, far-right scroll and zero-padding negative control.
+native/16px scrollbars, 24 rows, far-right scroll and 0/12px negative controls.
 Bot training is a full fifth Play choice before Back with the supplied Bot.svg
 (native 14x18, 20px scale-down slot), matching 62/56px actions; footer link removed.
 Keyboard, difficulty/time/start-event, Back and busy/offline checks pass both engines.
@@ -592,8 +592,25 @@ automated WebKit baseline; this removes compatibility risk, not device certifica
 
 Final 93 unit/SSR checks, typecheck/build and 396 actual-component geometry checks
 PASS; independent scoped review CLEAR. DESIGN.md preserves the existing style.
-Frontend-only publication planned: index-tkk90ZTo.js / index-DEXxo64U.css.
-Backup/invariants: shared/backup-interface-fixes-20261106, 82 finished payloads.
+First frontend-only publication (6da10e3): index-tkk90ZTo.js / index-DEXxo64U.css.
+Backup/invariants: shared/backup-interface-fixes-20261106, 82 finished payloads
+preserved, backend PID1024133/model catalogue v5/GLBs/private config unchanged.
+Published actual-App checks passed Chromium/WebKit (28 groups, JS/static/admin
+writes0), plus real three-client shot/shared-AI/final-state/menu checks in both
+engines. Earlier failed evidence retained: transient HTTP502 and an image-load
+race; HUD checks now wait for decoded nonempty reticle images, not a fixed delay.
+Bot select checks use exact accessible combobox names instead of label text
+that includes descendant option strings in production HTML.
+User requested more breathing room after initial 12px publication; increased
+to 24px and strengthened the history regression to reject the previous 12px.
+The 24px version passed all 16 real text-range checks and typecheck/build.
+Published frontend now serves index-CCa8CCqm.js / index-D4tc7b01.css; old hashed
+chunks retained. Second online backup: shared/backup-history-space-24-20261106,
+all 86 pre-existing finished payloads preserved, SQLite integrity ok. Backend
+PID1024133, model catalogue/files and private configuration remain unchanged.
+Final published 24px build passed 28 actual-App groups across Chromium/WebKit,
+with matching local/HTTP JS+CSS hashes and JS/static/admin-write0. All own test
+rooms were left normally and browser/Vite processes stopped.
 Do NOT deploy backend from this branch: physics 2.5s target still HELD (see above).
 
 ## Git identity

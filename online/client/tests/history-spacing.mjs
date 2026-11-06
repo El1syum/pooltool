@@ -57,16 +57,18 @@ try {
           const barStyle = scrollbar === '16px' ? await page.addStyleTag({ content:
             '.club-history::-webkit-scrollbar { width:16px; height:16px; }' }) : null
           try {
-            // The original no-padding style must fail the real text-edge test.
-            const oldStyle = await page.addStyleTag({ content: '.club-history-elo { padding-inline-end:0!important; }' })
-            const before = await measure(page)
-            assert.ok(before.cells.some(cell => cell.gap < 11.5), 'negative control must reproduce the missing gap')
-            await oldStyle.evaluate(node => node.remove())
+            // Both the original and the previous 12px gap must fail this gate.
+            for (const previousGap of [0, 12]) {
+              const oldStyle = await page.addStyleTag({ content: `.club-history-elo { padding-inline-end:${previousGap}px!important; }` })
+              const before = await measure(page)
+              assert.ok(before.cells.some(cell => cell.gap < 23.5), `${previousGap}px negative control must detect insufficient spacing`)
+              await oldStyle.evaluate(node => node.remove())
+            }
             const after = await measure(page)
             assert.equal(after.cells.length, 24)
             assert.ok(after.verticalOverflow, 'actual overflowing history is required')
             assert.ok(after.bodyWidth <= width + 1, 'no document-level horizontal overflow')
-            assert.ok(after.cells.every(cell => cell.gap >= 11.5), JSON.stringify(after))
+            assert.ok(after.cells.every(cell => cell.gap >= 23.5), JSON.stringify(after))
             if (width <= 390) assert.ok(after.scrollLeft > 0, 'test the actual horizontal right edge on mobile')
             results.push({ engine, width, scrollbar, minimumTextGap: Math.min(...after.cells.map(cell => cell.gap)),
               gutter: after.gutter, horizontalScroll: after.scrollLeft, status: 'PASS' })

@@ -4,9 +4,9 @@
 
 `node tests/history-spacing.mjs` checks the actual ClubMenu component with 24
 history rows at 1440/760/390/320px in Chromium/WebKit, with native and 16px
-scrollbars. Real text ranges must retain a 12px right gap, including at the
-horizontal scroll limit. A temporary zero-padding negative control reproduces
-the original defect. No API, user, match or model-library writes are performed.
+scrollbars. Real text ranges must retain a 24px right gap, including at the
+horizontal scroll limit. Temporary 0/12px negative controls detect insufficient
+spacing. No API, user, match or model-library writes are performed.
 
 ## Shot playback performance (2026-11-06)
 

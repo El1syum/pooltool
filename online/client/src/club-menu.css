@@ -119,7 +119,7 @@
 .club-history li > * { min-width:0; overflow-wrap:anywhere; }
 .club-history time, .club-history li > span:nth-child(3), .club-history strong { white-space:nowrap; }
 .club-history strong { font-weight:400; color:var(--club-cream); }
-.club-history-elo { padding-inline-end:12px; text-align:right; white-space:nowrap; font-size:inherit; font-variant-numeric:tabular-nums; }
+.club-history-elo { padding-inline-end:24px; text-align:right; white-space:nowrap; font-size:inherit; font-variant-numeric:tabular-nums; }
 .club-footer { position:relative; flex:0 0 82px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 48px; color:var(--club-muted); font-size:11px; }
 .club-footer > span:nth-child(2) { color:#728078; letter-spacing:1px; white-space:nowrap; }
 .club-connection { position:absolute; left:48px; bottom:8px; margin:0; font-size:9px; color:#728078; max-width:calc(100% - 96px); }

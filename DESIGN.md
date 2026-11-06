@@ -68,7 +68,7 @@
   48px minimum. Workshop toolbars share compact line-height/minimum height.
   Header close icons, text links, switches, value fields, ball/pocket selectors
   and camera icon widths are intentional variants, not full-action buttons.
-- The final text column of scrollable match history reserves 12px on its right,
+- The final text column of scrollable match history reserves 24px on its right,
   including at the far-right horizontal scroll position. Keep the existing grid
   column alignment and native scrollbar; do not rely on scrollbar gutter alone.
 - Bot training is a full action in the Play choices, before Back, not a footer
