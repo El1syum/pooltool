@@ -696,8 +696,20 @@ paths tested; WebKit native grant not available. Independent reviews CLEAR.
 
 Final candidate index-Bcp73tUV.js / index-BQx6c1Xi.css built and typechecked;
 final compiled-client match-hud+postgame-menu also PASS both engines,4 additional
-finished matches/engine and zero JS errors. Frontend-only publication prepared;
-live hash/layout/model checks pending.
+finished matches/engine and zero JS errors. Source commit bf40bb0 pushed.
+Frontend-only publication installed4files, assetsfirst/HTMLlast/oldchunkskept.
+Live28viewport/profile/play/home checks PASS both engines; HTTP hashes match.
+Backup shared/backup-frontend-figma-final-20261106,88priorfinished payloads
+preserved,integrityok,PID1024133/cataloguev5/GLBs/privateconfigunchanged.
+Live WebKit3client/customGLB/realshot/postgame PASS. Two Chromiumlive attempts
+hit one static502 each, different files, not counted as passing. Localservice
+logs show no502;16local+16external staticGETs200; anotherexternalfetch saw a
+socketclose. Do not claim a proven cause or hide failures. Final separate native
+Chromiumlive run PASS samecriteria,16textures,customGLB3clients,realshot/sharedstate,
+postgame and JS/staticerrors0. Final invariantsPASS:88priorfinished preserved,
+92finishednow(4owntestmatches),samePID/catalogue/GLB/config. No assertion weakened
+and no network-cause/SLA guarantee inferred. All local test services and temporary
+admin credentials already stopped/removed.
 Backend/physics/EPYC migration remain HELD. Never deploy backend from this
 frontend task or include the unrelated user docs3D_MODELS_WEB/GRAPHICS_ENGINE_WEB.
 

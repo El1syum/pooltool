@@ -148,6 +148,7 @@ for (const engineName of engines) {
   const delivery = new Map()
   const errors = []
   const badAssets = []
+  const assetErrorDetails = []
   const textures = new Set()
   const workload = []
   const customModelsLoaded = new Set()
@@ -222,7 +223,14 @@ for (const engineName of engines) {
         const pathname = new URL(response.url()).pathname
         if (/\/models\/balls\/[^/]+\.png$/.test(pathname) && response.ok()) textures.add(pathname)
         if (requiredTable && pathname === requiredTable.url && response.ok()) customModelsLoaded.add(index)
-        if (/\.(css|js|svg|woff2?|ttf|png|webp)$/.test(pathname) && !response.ok()) badAssets.push(`${response.status()} ${pathname}`)
+        if (/\.(css|js|svg|woff2?|ttf|png|webp)$/.test(pathname) && !response.ok()) {
+          badAssets.push(`${response.status()} ${pathname}`)
+          const headers = response.headers()
+          // Static GET diagnostics only; never record auth/cookie headers or API bodies.
+          assetErrorDetails.push({ status: response.status(), pathname,
+            server: headers.server || null, via: headers.via || null,
+            contentType: headers['content-type'] || null })
+        }
       })
       page.on('request', request => {
         if (request.method() !== 'POST' || !request.url().endsWith('/api/telemetry/events')) return
@@ -533,7 +541,7 @@ for (const engineName of engines) {
     for (let index = 0; index < pages.length; index++) await pages[index].screenshot({ path: path.join(artifacts, `${engineName}-failure-${index}.png`), fullPage: true }).catch(() => {})
     console.error(`${engineName}: ${error.stack || error}`)
     if (errors.length) console.error(JSON.stringify({ jsErrors: errors }))
-    if (badAssets.length) console.error(JSON.stringify({ badAssets }))
+    if (badAssets.length) console.error(JSON.stringify({ badAssets, assetErrorDetails }))
     process.exitCode = 1
   } finally {
     if (room) for (const actor of actors) await api(actor, `/api/rooms/${room.code}/leave`, {}, 'POST', [200, 403, 404, 409]).catch(() => {})
