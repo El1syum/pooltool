@@ -1,0 +1,212 @@
+@font-face { font-family: 'Pooltool Inter'; src: url('/fonts/Inter-Variable.ttf') format('truetype'); font-style: normal; font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Pooltool Lora'; src: url('/fonts/Lora-Variable.ttf') format('truetype'); font-style: normal; font-weight: 400 700; font-display: swap; }
+
+.hud-root { --hud-cream: #f1ede1; --hud-muted: #959f91; --hud-gold: #c7aa72; position: absolute; inset: 0; z-index: 3; color: var(--hud-cream); font-family: 'Pooltool Inter', sans-serif; font-optical-sizing: none; pointer-events: none; }
+.hud-root button { font-family: inherit; color: inherit; cursor: pointer; }
+.hud-root button:disabled { cursor: not-allowed; }
+.hud-root button:focus-visible { outline: 2px solid var(--hud-gold); outline-offset: 4px; }
+.hud-root img { max-width: none; }
+.hud-identity { position: absolute; left: 35px; top: 42px; display: flex; align-items: center; gap: 12px; }
+.hud-seal { width: 38px; height: 38px; border: 1px solid var(--hud-gold); border-radius: 50%; display: grid; place-items: center; color: var(--hud-gold); font-family: 'Pooltool Lora', serif; font-size: 27px; font-weight: 400; }
+.hud-wordmark { display: flex; flex-direction: column; gap: 3px; }
+.hud-wordmark strong { font-size: 15px; line-height: 18px; font-weight: 600; }
+.hud-wordmark span { color: var(--hud-muted); font-size: 9px; line-height: 11px; white-space: nowrap; }
+.hud-scoreboard { position: absolute; width: 1440px; height: 176px; top: 0; left: 50%; transform: translateX(-50%); padding: 26px 48px 20px; display: grid; grid-template-columns: 500px 248px 500px; justify-content: space-between; align-items: center; }
+.hud-player { height: 130px; border: 1px solid #343c31; background: #1b211c; border-radius: 12px; padding: 20px; display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: center; gap: 16px; position: relative; overflow: hidden; }
+.hud-player:first-child { grid-column: 1; }
+.hud-player:nth-child(2) { grid-column: 3; }
+.hud-player-active { background: #262d23; border-color: #6f6246; }
+.hud-player-active::before { content: ''; position: absolute; width: 3px; height: 82px; border-radius: 2px; background: var(--hud-gold); top: 23px; left: -1px; }
+.hud-avatar { border-radius: 50%; width: 54px; height: 54px; display: grid; place-items: center; background: #363b36; border: 1px solid #4b5148; font-family: 'Pooltool Lora', serif; font-size: 21px; }
+.hud-player-active .hud-avatar { background: #3d4736; border-color: #6f6246; }
+.hud-player-identity { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.hud-player-name { display: flex; align-items: center; gap: 12px; white-space: nowrap; min-width: 0; }
+.hud-player-name strong { font-size: 19px; line-height: 23px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.hud-player-name > span { color: var(--hud-muted); font-size: 10px; line-height: 12px; flex-shrink: 0; }
+.hud-pocketed-row { display: flex; align-items: center; gap: 6px; min-height: 26px; }
+.hud-pocketed-label, .hud-empty-balls { color: var(--hud-muted); font-size: 10px; line-height: 12px; }
+.hud-pocketed-label { white-space: nowrap; }
+.hud-empty-balls { overflow: hidden; text-overflow: ellipsis; }
+.hud-player-total { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.hud-player-total strong { font-size: 40px; line-height: 40px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.hud-player-active .hud-player-total strong { color: var(--hud-gold); }
+.hud-player-total span { font-size: 11px; line-height: 13px; color: var(--hud-muted); }
+.hud-clock { grid-column: 2; grid-row: 1; width: 248px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.hud-turn-label { display: flex; align-items: center; gap: 8px; color: var(--hud-gold); font-size: 12px; line-height: 15px; font-weight: 600; max-width: 100%; }
+.hud-turn-label span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud-clock-digits { font-size: 38px; line-height: 38px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.hud-clock-low .hud-clock-digits { color: #e7b394; }
+.hud-rack-detail { color: var(--hud-muted); font-size: 11px; line-height: 13px; }
+.hud-utilities { position: absolute; right: 14px; top: 26px; display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+.hud-root .hud-leave { display: flex; align-items: center; gap: 8px; padding: 0 16px 0 0; border: none; background: transparent; border-radius: 0; color: var(--hud-muted); font-size: 12px; line-height: 15px; }
+.hud-root .hud-leave:hover { background: transparent; color: var(--hud-cream); }
+.hud-root .hud-icon-button { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; background: transparent; border: 1px solid #343c31; border-radius: 6px; }
+.hud-root .hud-icon-button:hover { background: #262d23; }
+.hud-icon-button[aria-pressed=true] { opacity: .55; }
+.hud-match-status { position: absolute; left: 50%; transform: translateX(-50%); top: 188px; padding: 5px 12px; border-radius: 4px; font-size: 11px; line-height: 15px; text-align: center; color: var(--hud-muted); background: #1b211c99; max-width: min(680px, calc(100% - 32px)); }
+.hud-status-attention { color: var(--hud-cream); background: #403720eb; border: 1px solid #6f6246; }
+.hud-footer { position: absolute; width: 1104px; max-width: calc(100% - 48px); left: 50%; transform: translateX(-50%); bottom: 26px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0; text-align: left; }
+.hud-footer-actions { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+.hud-footer button { pointer-events: auto; background: none; border: 0; border-radius: 0; padding: 0; color: var(--hud-muted); font-size: 11px; line-height: 14px; white-space: nowrap; }
+.hud-footer button:hover { color: var(--hud-cream); background: none; }
+.hud-room-code { justify-self: center; }
+.hud-footer .hud-rules { justify-self: end; display: flex; align-items: center; gap: 7px; }
+.hud-ball { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 999px; overflow: hidden; display: inline-block; position: relative; box-shadow: 1px 3px 3.12px #0006; vertical-align: middle; }
+.hud-ball-stripe { position: absolute; left: 0; top: 6.24px; width: 26px; height: 13.52px; }
+.hud-ball-shading { position: absolute; top: 0; left: 0; }
+.hud-ball-medallion { position: absolute; width: 12.74px; height: 12.74px; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 50%; background: #f8f2de; display: grid; place-items: center; color: #1b211c; font-family: 'Pooltool Inter', sans-serif; font-size: 7.54px; font-weight: 700; line-height: normal; }
+.hud-ball-highlight { position: absolute; left: 5.2px; top: 3.38px; }
+.hud-compact .hud-identity { left: 24px; top: 27px; }
+.hud-compact .hud-player { display: none; }
+.hud-compact .hud-scoreboard { width: 248px; height: 127px; left: 0; top: 118px; transform: none; padding: 21px 0 0; display: block; isolation: isolate; background: none; }
+.hud-compact .hud-scoreboard::before { content: ''; position: absolute; z-index: -1; left: 0; top: 0; width: 272px; height: 127px; background: linear-gradient(90deg, #1b211c, #1b211c00); }
+.hud-compact .hud-match-status { top: auto; bottom: 76px; }
+.hud-target { position: absolute; left: 50%; top: 50%; width: 316px; height: 316px; transform: translate(-50%, -50%); }
+.hud-root .hud-reticle { position: absolute; left: 0; top: 0; width: 316px; height: 316px; padding: 0; border: 0; border-radius: 50%; background: transparent; opacity: 1; pointer-events: none; }
+.hud-root .hud-reticle-interactive { pointer-events: auto; cursor: crosshair; }
+.hud-root .hud-reticle:hover { background: transparent; }
+.hud-reticle-ring { position: absolute; left: 0; top: 0; }
+.hud-reticle-center { position: absolute; left: 127px; top: 127px; }
+.hud-power-gauge { position: absolute; overflow: visible; }
+.hud-speed-wedge { left: 252px; top: 12px; transform: rotate(180deg); }
+.hud-percent-wedge { left: -181px; top: 173px; }
+.hud-power-number, .hud-speed-number { position: absolute; font-size: 29px; line-height: 35px; font-weight: 500; color: #fff; white-space: nowrap; }
+.hud-power-number { left: -101px; top: 123px; transform: translateX(-50%); }
+.hud-speed-number { left: 413px; top: 160px; transform: translateX(-50%); }
+.hud-phase-hint { position: absolute; left: 50%; bottom: 108px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); text-align: center; margin: 0; padding: 6px 12px; font-size: 11px; color: var(--hud-muted); border-radius: 4px; background: #1b211caa; }
+.hud-controls { position: absolute; right: 24px; bottom: 66px; width: 328px; max-width: calc(100% - 32px); max-height: calc(100% - 180px); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; padding: 20px; border: 1px solid #6f6246; border-radius: 12px; background: #1b211cf5; box-shadow: 0 12px 48px #0007; }
+.hud-controls-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.hud-controls h2 { color: var(--hud-cream); font-size: 15px; line-height: 20px; margin: 0; font-weight: 600; }
+.hud-controls button { background: #262d23; border: 1px solid #4b5148; border-radius: 5px; padding: 7px 10px; color: var(--hud-cream); font-size: 12px; }
+.hud-controls button:hover:not(:disabled) { background: #3d4736; }
+.hud-controls-heading button { background: none; border: 0; padding: 0 3px; font-size: 24px; line-height: 24px; color: var(--hud-muted); }
+.hud-controls label { display: block; margin: 12px 0; color: var(--hud-muted); font-size: 11px; line-height: 15px; }
+.hud-controls input[type=range] { display: block; width: 100%; margin: 7px 0 0; accent-color: var(--hud-gold); }
+.hud-camera-actions, .hud-call-balls, .hud-call-pockets, .hud-shot-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.hud-camera-actions button { min-width: 32px; padding: 6px 8px; }
+.hud-camera-actions > button, .hud-shot-actions > button { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+.hud-call-title { color: var(--hud-muted); font-size: 11px; margin: 14px 0 8px; }
+.hud-call-title span { color: var(--hud-gold); }
+.hud-call-balls button { width: 34px; height: 34px; padding: 3px; border: 1px solid transparent; background: transparent; }
+.hud-call-balls button.selected, .hud-call-pockets button.selected { border-color: var(--hud-gold); box-shadow: 0 0 0 1px var(--hud-gold); }
+.hud-call-pockets button { width: 34px; height: 34px; border-radius: 50%; padding: 0; }
+.hud-shot-actions { margin: 18px 0 10px; }
+.hud-shot-actions button { flex: 1; min-width: 0; }
+.hud-shot-actions .hud-primary { background: var(--hud-gold); color: #1b211c; border-color: var(--hud-gold); font-weight: 600; }
+.hud-controls-help { margin: 15px 0 0; color: var(--hud-muted); font-size: 10px; line-height: 16px; }
+
+/* The match owns the viewport; menus/lobby retain their existing layout. */
+.app-shell.in-match { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.in-match .app-header { display: none; }
+.in-match .figma-match-screen { position: relative; display: block; flex: 1; width: 100%; height: 100%; min-height: 0; }
+.in-match .figma-match-screen .stage-wrap { position: absolute; inset: 0; display: block; }
+.in-match .figma-match-screen .game-stage { width: 100%; height: 100%; min-height: 0; }
+.in-match .error-banner { position: absolute; top: 200px; left: 50%; transform: translateX(-50%); z-index: 12; max-width: min(680px, calc(100% - 32px)); font: 12px 'Pooltool Inter', sans-serif; border: 1px solid #9e7152; border-radius: 6px; background: #3e2f26; }
+.in-match .figma-match-screen .offline-banner { position: absolute; z-index: 5; left: 50%; bottom: 142px; transform: translateX(-50%); max-width: calc(100% - 32px); border-radius: 6px; font: 12px/1.5 'Pooltool Inter', sans-serif; background: #403720ee; color: #f1ede1; }
+.in-match .shot-toast { top: 198px; z-index: 4; font-family: 'Pooltool Inter', sans-serif; background: #1b211cee; border-color: #6f6246; color: #f1ede1; }
+.in-match .shot-toast span { color: #c8cbbd; }
+.in-match .shot-toast.good { border-color: #899d69; }
+.in-match .shot-toast.bad { border-color: #bb7e64; }
+.in-match .figma-match-screen > .result-panel { position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(480px, calc(100% - 32px)); max-height: 80%; overflow-y: auto; padding: 32px; border: 1px solid #6f6246; border-radius: 12px; background: #1b211cf5; font-family: 'Pooltool Inter', sans-serif; }
+.in-match .modal-backdrop { background: #090e0bc9; }
+.in-match .settings-dialog { border: 1px solid #6f6246; border-radius: 12px; background: #1b211c; font-family: 'Pooltool Inter', sans-serif; font-optical-sizing: none; color: #f1ede1; }
+.in-match .settings-dialog p { color: #b0b6a7; }
+.in-match .settings-dialog button, .in-match .result-panel button { background: #262d23; border-color: #6f6246; }
+.in-match .settings-dialog button:hover, .in-match .result-panel button:hover { background: #3d4736; }
+.in-match .settings-dialog input, .in-match .settings-dialog select { accent-color: #c7aa72; }
+.in-match .hud-status-quiet { width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (max-width: 1840px) {
+  .hud-identity { top: 24px; left: 24px; }
+  .hud-scoreboard { top: 82px; width: calc(100% - 48px); height: 112px; padding: 0; grid-template-columns: minmax(0, 1fr) 180px minmax(0, 1fr); column-gap: 24px; }
+  .hud-player { width: auto; height: 112px; padding: 16px; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; }
+  .hud-avatar { width: 44px; height: 44px; font-size: 19px; }
+  .hud-player-active::before { top: 18px; height: 74px; }
+  .hud-player-name { flex-wrap: wrap; gap: 3px 10px; }
+  .hud-player-name strong { font-size: 17px; line-height: 21px; }
+  .hud-player-total strong { font-size: 32px; line-height: 34px; }
+  .hud-clock { width: 180px; }
+  .hud-pocketed-label { display: none; }
+  .hud-pocketed-row { flex-wrap: wrap; gap: 4px; max-height: 56px; overflow: auto; }
+  .hud-match-status { top: 208px; }
+  .hud-compact .hud-scoreboard { top: 118px; width: 248px; height: 127px; padding-top: 21px; }
+  .hud-compact .hud-clock { width: 248px; }
+}
+@media (max-width: 900px) {
+  .hud-scoreboard { top: 80px; width: calc(100% - 32px); grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1fr); gap: 12px; }
+  .hud-player { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 12px; }
+  .hud-avatar { display: none; }
+  .hud-player-name strong { font-size: 14px; line-height: 18px; }
+  .hud-clock { width: 120px; }
+  .hud-clock-digits { font-size: 32px; }
+  .hud-turn-label { font-size: 11px; gap: 6px; }
+  .hud-identity { left: 16px; top: 20px; gap: 9px; }
+  .hud-seal { width: 34px; height: 34px; font-size: 24px; }
+  .hud-wordmark strong { font-size: 13px; }
+  .hud-utilities { right: 16px; top: 18px; gap: 8px; }
+  .hud-footer { max-width: calc(100% - 32px); bottom: 20px; gap: 8px; }
+  .hud-footer-actions { gap: 7px; }
+  .hud-controls { right: 16px; bottom: 68px; }
+}
+@media (min-width: 621px) and (max-width: 760px) {
+  .hud-target { transform: translate(-50%, -50%) scale(.84); }
+}
+@media (max-width: 620px) {
+  .hud-identity, .hud-compact .hud-identity { left: 14px; top: 17px; gap: 8px; }
+  .hud-wordmark span { font-size: 8px; line-height: 10px; }
+  .hud-seal { width: 30px; height: 30px; font-size: 22px; }
+  .hud-wordmark strong { font-size: 12px; line-height: 15px; }
+  .hud-utilities { right: 12px; top: 14px; gap: 7px; }
+  .hud-root .hud-leave { padding-right: 4px; }
+  .hud-leave span { display: none; }
+  .hud-root .hud-icon-button { width: 34px; height: 34px; }
+  .hud-scoreboard { width: calc(100% - 24px); top: 66px; height: auto; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+  .hud-player { height: 116px; padding: 12px; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; border-radius: 9px; }
+  .hud-player:first-child { grid-column: 1; grid-row: 1; }
+  .hud-player:nth-child(2) { grid-column: 2; grid-row: 1; }
+  .hud-player-active::before { top: 17px; height: 80px; }
+  .hud-player-name { gap: 2px; align-items: flex-start; }
+  .hud-player-name strong { font-size: 12px; line-height: 16px; max-width: 100%; }
+  .hud-player-name > span { font-size: 8px; line-height: 11px; }
+  .hud-player-total strong { font-size: 23px; line-height: 25px; }
+  .hud-player-total span { font-size: 8px; }
+  .hud-player-identity { gap: 7px; }
+  .hud-empty-balls { font-size: 8px; line-height: 12px; }
+  .hud-pocketed-row { gap: 3px; max-height: 55px; }
+  .hud-clock { grid-column: 1 / -1; grid-row: 2; width: 100%; display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; padding: 0 8px; align-items: center; }
+  .hud-turn-label { justify-self: end; max-width: 120px; font-size: 10px; }
+  .hud-clock-digits { font-size: 26px; line-height: 30px; }
+  .hud-rack-detail { font-size: 9px; text-align: left; }
+  .hud-match-status { top: 232px; width: max-content; font-size: 10px; }
+  .hud-footer { bottom: 17px; max-width: calc(100% - 28px); grid-template-columns: 1fr auto; gap: 8px; }
+  .hud-footer-actions { flex-direction: column; align-items: flex-start; gap: 7px; }
+  .hud-footer button { font-size: 9px; line-height: 12px; }
+  .hud-room-code { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  .hud-rules { grid-column: 2; grid-row: 1; }
+  .hud-phase-hint { bottom: 104px; font-size: 10px; line-height: 15px; }
+  .hud-compact .hud-scoreboard { top: 77px; width: 176px; height: 104px; padding: 12px 0; }
+  .hud-compact .hud-clock { width: 176px; display: flex; gap: 8px; padding: 0; }
+  .hud-compact .hud-clock-digits { font-size: 30px; }
+  .hud-compact .hud-turn-label { justify-self: auto; max-width: 150px; }
+  .hud-target { transform: translate(-50%, -50%) scale(.76); }
+  .hud-power-number { left: -32px; top: 100px; font-size: 23px; transform: none; }
+  .hud-speed-number { left: 240px; top: 192px; font-size: 23px; transform: none; }
+  .hud-speed-wedge { left: 175px; top: -16px; transform: rotate(180deg) scale(.75); transform-origin: center; }
+  .hud-percent-wedge { left: -109px; top: 193px; transform: scale(.75); transform-origin: center; }
+  .hud-controls { left: 12px; right: 12px; bottom: 72px; width: auto; max-width: none; max-height: min(62vh, calc(100% - 142px)); padding: 16px; }
+}
+@media (max-width: 360px) {
+  .hud-target { transform: translate(-50%, -50%) scale(.64); }
+}
+@media (max-height: 600px) and (min-width: 621px) {
+  .hud-scoreboard { top: 72px; height: 90px; }
+  .hud-player { height: 90px; padding: 12px; }
+  .hud-player-active::before { top: 12px; height: 64px; }
+  .hud-avatar { display: none; }
+  .hud-player { grid-template-columns: minmax(0, 1fr) auto; }
+  .hud-match-status { top: 170px; }
+  .hud-controls { max-height: calc(100% - 112px); }
+  .hud-compact .hud-scoreboard { top: 80px; height: 110px; }
+  .hud-target { transform: translate(-50%, -50%) scale(.7); }
+  .hud-phase-hint { bottom: 54px; }
+}

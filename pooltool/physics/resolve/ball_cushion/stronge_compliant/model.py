@@ -28,7 +28,10 @@ logger = logging.getLogger(__name__)
 def _solve(ball: Ball, cushion: Cushion, omega_ratio: float) -> tuple[Ball, Cushion]:
     rvw = ball.state.rvw.copy()
 
-    logger.debug(f"v={rvw[1]}, w={rvw[2]}")
+    # NumPy array formatting is substantial work even if DEBUG is disabled:
+    # f-strings are evaluated before logging checks the level.
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"v={rvw[1]}, w={rvw[2]}")
 
     normal_direction = cushion.get_normal_3d(ball.xyz)
     relative_contact_velocity = surface_velocity(rvw, -normal_direction, ball.params.R)
@@ -37,9 +40,10 @@ def _solve(ball: Ball, cushion: Cushion, omega_ratio: float) -> tuple[Ball, Cush
         relative_contact_velocity, normal_direction, True
     )
 
-    logger.debug(f"v_c_0={relative_contact_velocity}")
-    logger.debug(f"n={normal_direction}, t={tangent_direction}")
-    logger.debug(f"v_n_0={v_n_0}, v_t_0={v_t_0}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"v_c_0={relative_contact_velocity}")
+        logger.debug(f"n={normal_direction}, t={tangent_direction}")
+        logger.debug(f"v_n_0={v_n_0}, v_t_0={v_t_0}")
 
     # inverse inertia matrix coefficients for sphere half-space collision
     effective_mass = ball.params.m
@@ -71,8 +75,9 @@ def _solve(ball: Ball, cushion: Cushion, omega_ratio: float) -> tuple[Ball, Cush
         -normal_direction, Dv_t * tangent_direction
     )
 
-    logger.debug(f"v_n_f={v_n_f}, v_t_f={v_t_f}")
-    logger.debug(f"Dv_n={Dv_n}, Dv_t={Dv_t}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"v_n_f={v_n_f}, v_t_f={v_t_f}")
+        logger.debug(f"Dv_n={Dv_n}, Dv_t={Dv_t}")
 
     # Calculate final relative contact velocity from stronge output (`v_n_f` and `v_t_f`)
     # and from `rvw` which was modified based on stronge output,
@@ -81,7 +86,8 @@ def _solve(ball: Ball, cushion: Cushion, omega_ratio: float) -> tuple[Ball, Cush
     relative_contact_velocity_f = surface_velocity(
         rvw, -normal_direction, ball.params.R
     )
-    logger.debug(f"v_c_f={v_c_f}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"v_c_f={v_c_f}")
     assert np.allclose(v_c_f, relative_contact_velocity_f), (
         f"v_c_f={v_c_f}, relative_contact_velocity_f={relative_contact_velocity_f}"
     )

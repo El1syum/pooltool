@@ -1,0 +1,488 @@
+{
+  "schema": 1,
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "workerCount": 2,
+  "repeats": 5,
+  "requestedSamples": 20,
+  "perCasePriming": false,
+  "workerTimeoutSeconds": 60.0,
+  "startupTimeoutSeconds": 240.0,
+  "maximumSeconds": 2.5,
+  "scope": "Isolated real PhysicsWorkers, calculation including queue/IPC plus complete full-result JSON; excludes network, DB, playback lead and oracle validation",
+  "note": "A finite warm probe, not an exhaustive/load SLA. Rejected/invalid/incomplete results never count as fast completions.",
+  "samples": [
+    {
+      "case": "recorded_dense_1675",
+      "phase": "individual",
+      "repetition": 1,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6491699299999709,
+      "jsonSeconds": 0.03209433000029094,
+      "completePlusJsonSeconds": 0.6812642600002619,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "individual",
+      "repetition": 1,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8397830899998553,
+      "jsonSeconds": 0.031628680000267195,
+      "completePlusJsonSeconds": 0.8714117700001225,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "individual",
+      "repetition": 2,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6515680699999393,
+      "jsonSeconds": 0.02698289999989356,
+      "completePlusJsonSeconds": 0.6785509699998329,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "individual",
+      "repetition": 2,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8301876999998967,
+      "jsonSeconds": 0.031475090000185446,
+      "completePlusJsonSeconds": 0.8616627900000822,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "individual",
+      "repetition": 3,
+      "status": "complete",
+      "calculateIpcSeconds": 0.66178833999993,
+      "jsonSeconds": 0.027321060000303987,
+      "completePlusJsonSeconds": 0.689109400000234,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "individual",
+      "repetition": 3,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8228297400000883,
+      "jsonSeconds": 0.028184520000195334,
+      "completePlusJsonSeconds": 0.8510142600002837,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "individual",
+      "repetition": 4,
+      "status": "complete",
+      "calculateIpcSeconds": 0.5423594699996102,
+      "jsonSeconds": 0.030095230000370066,
+      "completePlusJsonSeconds": 0.5724546999999802,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "individual",
+      "repetition": 4,
+      "status": "complete",
+      "calculateIpcSeconds": 0.9999553700004071,
+      "jsonSeconds": 0.032070889999886276,
+      "completePlusJsonSeconds": 1.0320262600002934,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "individual",
+      "repetition": 5,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6569038600000567,
+      "jsonSeconds": 0.04119324000021152,
+      "completePlusJsonSeconds": 0.6980971000002683,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "individual",
+      "repetition": 5,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8340683100000206,
+      "jsonSeconds": 0.03210652999996455,
+      "completePlusJsonSeconds": 0.8661748399999851,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "simultaneous",
+      "repetition": 1,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6376631899997847,
+      "jsonSeconds": 0.030496410000068863,
+      "completePlusJsonSeconds": 0.6681595999998535,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "simultaneous",
+      "repetition": 1,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8234213199998521,
+      "jsonSeconds": 0.031045589999848744,
+      "completePlusJsonSeconds": 0.8544669099997009,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "simultaneous",
+      "repetition": 2,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6410289599998578,
+      "jsonSeconds": 0.030251529999986815,
+      "completePlusJsonSeconds": 0.6712804899998446,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "simultaneous",
+      "repetition": 2,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8161657600003309,
+      "jsonSeconds": 0.03115851999973529,
+      "completePlusJsonSeconds": 0.8473242800000662,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "simultaneous",
+      "repetition": 3,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6410939900001722,
+      "jsonSeconds": 0.030453149999630114,
+      "completePlusJsonSeconds": 0.6715471399998023,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "simultaneous",
+      "repetition": 3,
+      "status": "complete",
+      "calculateIpcSeconds": 0.8106375699999262,
+      "jsonSeconds": 0.031233570000040345,
+      "completePlusJsonSeconds": 0.8418711399999665,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "simultaneous",
+      "repetition": 4,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6461030000000392,
+      "jsonSeconds": 0.03021822000027896,
+      "completePlusJsonSeconds": 0.6763212200003181,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "simultaneous",
+      "repetition": 4,
+      "status": "complete",
+      "calculateIpcSeconds": 0.9824663900003543,
+      "jsonSeconds": 0.03166779999992286,
+      "completePlusJsonSeconds": 1.0141341900002772,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "recorded_dense_1675",
+      "phase": "simultaneous",
+      "repetition": 5,
+      "status": "complete",
+      "calculateIpcSeconds": 0.6500370389999262,
+      "jsonSeconds": 0.030866929999774584,
+      "completePlusJsonSeconds": 0.6809039689997007,
+      "fullResultJsonBytes": 1513737,
+      "exactEquality": true,
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "55a88f0ddf82df8ed670bddc15a56e773dfd579835d824e34d1af1c59af1ed24",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "deadlineExceeded": false
+    },
+    {
+      "case": "weak_dense_break",
+      "phase": "simultaneous",
+      "repetition": 5,
+      "status": "complete",
+      "calculateIpcSeconds": 0.9596801389998291,
+      "jsonSeconds": 0.03001373999995849,
+      "completePlusJsonSeconds": 0.9896938789997876,
+      "fullResultJsonBytes": 1727917,
+      "exactEquality": true,
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "7091a41610902fa15cda50eec073aa1c0d89a646fbb09bd4bf2ebfb2511716ce",
+      "events": 2453,
+      "duration": 3.983090991,
+      "frames": 240,
+      "deadlineExceeded": false
+    }
+  ],
+  "pairs": [
+    {
+      "repetition": 1,
+      "cases": [
+        "recorded_dense_1675",
+        "weak_dense_break"
+      ],
+      "calculateAndJsonMakespanSeconds": 0.8547717100000227,
+      "completeExact": true
+    },
+    {
+      "repetition": 2,
+      "cases": [
+        "recorded_dense_1675",
+        "weak_dense_break"
+      ],
+      "calculateAndJsonMakespanSeconds": 0.8507268499997735,
+      "completeExact": true
+    },
+    {
+      "repetition": 3,
+      "cases": [
+        "recorded_dense_1675",
+        "weak_dense_break"
+      ],
+      "calculateAndJsonMakespanSeconds": 0.8452660999996624,
+      "completeExact": true
+    },
+    {
+      "repetition": 4,
+      "cases": [
+        "recorded_dense_1675",
+        "weak_dense_break"
+      ],
+      "calculateAndJsonMakespanSeconds": 1.0176971199998661,
+      "completeExact": true
+    },
+    {
+      "repetition": 5,
+      "cases": [
+        "recorded_dense_1675",
+        "weak_dense_break"
+      ],
+      "calculateAndJsonMakespanSeconds": 0.9932104790000267,
+      "completeExact": true
+    }
+  ],
+  "failures": [],
+  "startupSeconds": 37.52852816699988,
+  "readyWorkerCount": 2,
+  "workerPids": [
+    3506,
+    3507
+  ],
+  "abortedAfterNonDeadlineFailure": false,
+  "cleanup": {
+    "seconds": 0.07349501999988206,
+    "allChildrenStopped": true,
+    "survivingPids": []
+  },
+  "completeExactSamples": 20,
+  "maxSeconds": 1.0320262600002934,
+  "summaries": {
+    "individual": {
+      "recorded_dense_1675": {
+        "completeExactSamples": 5,
+        "calculateIpcSeconds": {
+          "median": 0.6515680699999393,
+          "maximum": 0.66178833999993
+        },
+        "jsonSeconds": {
+          "median": 0.030095230000370066,
+          "maximum": 0.04119324000021152
+        },
+        "completePlusJsonSeconds": {
+          "median": 0.6812642600002619,
+          "maximum": 0.6980971000002683
+        }
+      },
+      "weak_dense_break": {
+        "completeExactSamples": 5,
+        "calculateIpcSeconds": {
+          "median": 0.8340683100000206,
+          "maximum": 0.9999553700004071
+        },
+        "jsonSeconds": {
+          "median": 0.031628680000267195,
+          "maximum": 0.03210652999996455
+        },
+        "completePlusJsonSeconds": {
+          "median": 0.8661748399999851,
+          "maximum": 1.0320262600002934
+        }
+      }
+    },
+    "simultaneous": {
+      "recorded_dense_1675": {
+        "completeExactSamples": 5,
+        "calculateIpcSeconds": {
+          "median": 0.6410939900001722,
+          "maximum": 0.6500370389999262
+        },
+        "jsonSeconds": {
+          "median": 0.030453149999630114,
+          "maximum": 0.030866929999774584
+        },
+        "completePlusJsonSeconds": {
+          "median": 0.6715471399998023,
+          "maximum": 0.6809039689997007
+        }
+      },
+      "weak_dense_break": {
+        "completeExactSamples": 5,
+        "calculateIpcSeconds": {
+          "median": 0.8234213199998521,
+          "maximum": 0.9824663900003543
+        },
+        "jsonSeconds": {
+          "median": 0.03115851999973529,
+          "maximum": 0.03166779999992286
+        },
+        "completePlusJsonSeconds": {
+          "median": 0.8544669099997009,
+          "maximum": 1.0141341900002772
+        }
+      }
+    }
+  },
+  "status": "PASS",
+  "goldenPlatform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "goldenSourceCommit": "fc9e96eea2076d01d11ba8b95287023079ac9f5e",
+  "goldenFileSha256": "cde9dc5a209c03d9431ab7d18bad87c9e74f5bc1fe7672274f984ee3d5d0e95a"
+}

@@ -1,0 +1,103 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><title>Prepared table geometry/runtime audit</title></head><body style="margin:0;background:#102125"><div id="stage" style="height:850px;width:1280px"></div><script type="module">
+// Real prepared model + actual Three.js renderer. No artwork is synthesized here.
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { createGameScene } from '/src/game/createGameScene.ts'
+window.preparedErrors=[];window.preparedStats=[]
+let raw=null,runtime=null,renderScene=null,reference=null,initialProceduralPocketDisks=0
+const visible=object=>{for(let node=object;node;node=node.parent)if(!node.visible)return false;return true}
+const allMeshes=root=>{const meshes=[];root.traverse(object=>{if(object.isMesh&&visible(object))meshes.push(object)});return meshes}
+const profile={version:1,table:{name:'Prepared QA',source:{kind:'url',url:'/models/library/prepared-table.glb'},position:[0,0,0],rotation:[0,0,0],scale:[1,1,1],replaceProcedural:true,material:{},materials:{},hiddenNodes:[]},environment:null}
+window.preparedQa={
+ async rawGeometry(snapshot){
+  reference=snapshot
+  raw=(await new GLTFLoader().parseAsync(await(await fetch('/models/library/prepared-table.glb')).arrayBuffer(), '')).scene
+  raw.updateMatrixWorld(true)
+  const meshes=allMeshes(raw),bounds=new THREE.Box3().setFromObject(raw)
+  const ray=new THREE.Raycaster(new THREE.Vector3(),new THREE.Vector3(0,-1,0))
+  let vertices=0,triangles=0
+  for(const mesh of meshes){vertices+=mesh.geometry.getAttribute('position').count*(mesh.isInstancedMesh?mesh.count:1);triangles+=(mesh.geometry.index?.count??mesh.geometry.getAttribute('position').count)/3*(mesh.isInstancedMesh?mesh.count:1)}
+  const width=snapshot.table.width,length=snapshot.table.length
+  const pockets=snapshot.table.pockets.map(p=>{const point=p.center??p.position;return{id:String(p.id),x:point[0]-width/2,z:length/2-point[1],radius:p.radius}})
+  const grid=[],conflicts=[],intrusions=[]
+  let intrusionVertices=0
+  const point=new THREE.Vector3()
+  for(const mesh of meshes){
+   // Rebuilt collision cushions/jaws legitimately occupy the cut-off corner
+   // boundary. The all-mesh ray grid still covers them; this extra scan catches
+   // tiny decorative-shell remnants between grid samples, not physical jaws.
+   if(/cloth|cushion|jaw/i.test(mesh.name))continue
+   const positions=mesh.geometry.getAttribute('position')
+   for(let index=0;index<positions.count;index++){
+    point.fromBufferAttribute(positions,index).applyMatrix4(mesh.matrixWorld)
+    if(Math.abs(point.x)>=width/2-.035||Math.abs(point.z)>=length/2-.035||point.y<-.0007||pockets.some(p=>Math.hypot(p.x-point.x,p.z-point.z)<p.radius+.004))continue
+    intrusionVertices++
+    if(intrusions.length<50)intrusions.push({name:mesh.name,point:point.toArray()})
+   }
+  }
+  for(let ix=0;ix<29;ix++)for(let iz=0;iz<59;iz++){
+   const x=(-width/2+.035)+(width-.07)*ix/28,z=(-length/2+.035)+(length-.07)*iz/58
+   if(pockets.some(p=>Math.hypot(p.x-x,p.z-z)<p.radius+.004))continue
+   ray.ray.origin.set(x,.3,z);ray.near=0;ray.far=.35
+   const hits=ray.intersectObjects(meshes,false),hit=hits[0]
+   const sample={x,z,y:hit?.point.y??null,name:hit?.object.name??null}
+   grid.push(sample)
+   const near=new Set(hits.filter(h=>Math.abs(h.point.y)<.0007).map(h=>h.object.uuid))
+   if(near.size>1)conflicts.push({...sample,layers:[...new Set(hits.filter(h=>Math.abs(h.point.y)<.0007).map(h=>h.object.name))]})
+  }
+  const openings=[]
+  for(const pocket of pockets){
+   ray.ray.origin.set(pocket.x,.3,pocket.z);ray.near=0;ray.far=1.4
+   const hits=ray.intersectObjects(meshes,false)
+   openings.push({...pocket,hits:hits.slice(0,5).map(h=>({y:h.point.y,name:h.object.name}))})
+  }
+  return{vertices,triangles,meshCount:meshes.length,bounds:{min:bounds.min.toArray(),max:bounds.max.toArray()},grid,conflicts,intrusionVertices,intrusions,openings}
+ },
+ async runtime(snapshot){
+  reference=snapshot
+  const original=THREE.Scene.prototype.add
+  THREE.Scene.prototype.add=function(...objects){renderScene=this;return original.apply(this,objects)}
+  try{runtime=createGameScene(document.querySelector('#stage'),{onError:message=>window.preparedErrors.push(message),onPerformance:sample=>window.preparedStats.push(sample)})}finally{THREE.Scene.prototype.add=original}
+  runtime.setSettings({quality:'medium',volume:0,showAimGuide:false,showPocketLabels:false})
+  runtime.setState(snapshot)
+  runtime.setInteraction({canShoot:false,canPlaceCueBall:false,spectator:true})
+  initialProceduralPocketDisks=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='CircleGeometry'&&mesh.userData.pocketId!==undefined).length
+  const report=await runtime.setVisualAssets(profile)
+  runtime.resetCamera(true)
+  return report
+ },
+ runtimeMetrics(){
+  renderScene.updateMatrixWorld(true)
+  const meshes=allMeshes(renderScene),balls=meshes.filter(mesh=>mesh.userData.ballId!==undefined),container=renderScene.getObjectByName('pooltool-Prepared QA')
+  const rawCloth=container?.getObjectByName('Rebuilt_Flat_Cloth_Open_Pockets')
+  const cloth=rawCloth?new THREE.Box3().setFromObject(rawCloth):null
+  const ray=new THREE.Raycaster(new THREE.Vector3(),new THREE.Vector3(0,-1,0))
+  const ballChecks=balls.map(ball=>{
+   const p=ball.getWorldPosition(new THREE.Vector3());ray.ray.origin.set(p.x,3,p.z)
+   const hit=ray.intersectObjects(meshes,false)[0]
+   return{id:String(ball.userData.ballId),uuid:ball.uuid,y:p.y,firstHitBall:hit?.object.userData.ballId===undefined?null:String(hit.object.userData.ballId),firstHitName:hit?.object.name??null}
+  })
+  return{container:!!container,containerY:container?.position.y,cloth:cloth?{min:cloth.min.toArray(),max:cloth.max.toArray()}:null,ballChecks,visibleProceduralBeds:meshes.filter(mesh=>mesh.geometry.type==='BoxGeometry'&&mesh.geometry.parameters.height===.025).length,
+   initialProceduralPocketDisks,visibleProceduralPocketDisks:meshes.filter(mesh=>mesh.geometry.type==='CircleGeometry'&&mesh.userData.pocketId!==undefined).length,
+   pocketMarkers:meshes.filter(mesh=>mesh.geometry.type==='TorusGeometry'&&mesh.userData.pocketId!==undefined).map(mesh=>({id:String(mesh.userData.pocketId),uuid:mesh.uuid}))}
+ },
+ shadowQuality(quality){runtime.setSettings({quality})},
+ async disposeReload(){
+  const container=renderScene.getObjectByName('pooltool-Prepared QA'),geometries=new Set(),materials=new Set(),textures=new Set(),counts={geometry:0,material:0,texture:0}
+  container.traverse(object=>{if(!object.isMesh)return;geometries.add(object.geometry);for(const material of Array.isArray(object.material)?object.material:[object.material]){materials.add(material);for(const value of Object.values(material))if(value?.isTexture)textures.add(value)}})
+  for(const geometry of geometries)geometry.addEventListener('dispose',()=>counts.geometry++)
+  for(const material of materials)material.addEventListener('dispose',()=>counts.material++)
+  for(const texture of textures)texture.addEventListener('dispose',()=>counts.texture++)
+  const uuids=allMeshes(renderScene).filter(mesh=>mesh.userData.ballId!==undefined).map(mesh=>mesh.uuid).sort(),markerUuids=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='TorusGeometry'&&mesh.userData.pocketId!==undefined).map(mesh=>mesh.uuid).sort()
+  await runtime.setVisualAssets({version:1,table:null,environment:null})
+  const removed=!container.parent,restoredBeds=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='BoxGeometry'&&mesh.geometry.parameters.height===.025).length,
+   restoredPocketDisks=allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='CircleGeometry'&&mesh.userData.pocketId!==undefined).length
+  const firstCounts={...counts}
+  const report=await runtime.setVisualAssets(profile)
+  return{removed,restoredBeds,restoredPocketDisks,counts:firstCounts,expected:{geometry:geometries.size,material:materials.size,texture:textures.size},freshContainer:renderScene.getObjectByName('pooltool-Prepared QA')!==container,ballsStable:JSON.stringify(uuids)===JSON.stringify(allMeshes(renderScene).filter(mesh=>mesh.userData.ballId!==undefined).map(mesh=>mesh.uuid).sort()),
+   pocketMarkersStable:JSON.stringify(markerUuids)===JSON.stringify(allMeshes(renderScene).filter(mesh=>mesh.geometry.type==='TorusGeometry'&&mesh.userData.pocketId!==undefined).map(mesh=>mesh.uuid).sort()),report}
+ },
+ destroy(){runtime?.destroy();runtime=null;return document.querySelectorAll('#stage canvas').length},
+}
+window.fixtureReady=true
+</script></body></html>

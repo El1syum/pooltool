@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="62" height="65" viewBox="0 0 62 65" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Group 509" opacity="0.48">
+<rect id="Horizontal crosshair" y="30" width="20" height="3" fill="#B5B7A5"/>
+<rect id="Horizontal crosshair_2" x="43" y="30" width="19" height="3" fill="#B5B7A5"/>
+<rect id="Vertical crosshair" x="30" width="3" height="20" fill="#B5B7A5"/>
+<rect id="Vertical crosshair_2" x="30" y="43" width="3" height="22" fill="#B5B7A5"/>
+<path id="Strike point" d="M42 31.5C42 37.299 37.299 42 31.5 42C25.701 42 21 37.299 21 31.5C21 25.701 25.701 21 31.5 21C37.299 21 42 25.701 42 31.5Z" stroke-width="2" stroke="#F8F2DE"/>
+</g>
+</svg>

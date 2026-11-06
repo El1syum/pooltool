@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Button layout component regression</title></head>
+<body><div id="fixture"></div><script type="module">
+// Explicit layout-only fixture using actual components. No game/backend writes.
+import { createApp, defineComponent, h, reactive } from 'vue'
+import ClubMenu from '/src/components/ClubMenu.vue'
+import ClubSettings from '/src/components/ClubSettings.vue'
+import PlayerAppearance from '/src/components/PlayerAppearance.vue'
+import ModelWorkshop from '/src/components/ModelWorkshop.vue'
+import ModelAdminLogin from '/src/components/ModelAdminLogin.vue'
+import MatchHud from '/src/components/MatchHud.vue'
+import { DEFAULT_BINDINGS } from '/src/game/types.ts'
+import { defaultPreviewSnapshot } from '/src/models/previewSnapshot.ts'
+import { defaultPlayerAssetSelection } from '/src/models/playerSelection.ts'
+import '/src/style.css'
+import '/src/match-hud.css'
+import '/src/match-design.css'
+
+const user = reactive({ id: 'layout-player', displayName: 'Тест Игрока', elo: 1267, games: 17, wins: 9, losses: 8, settings: {} })
+const emptyLibrary = { version: 1, assets: [], profile: { tableId: null, environmentId: null } }
+const state = reactive({ surface: 'club', view: 'menu', code: 'ABC123', name: user.displayName, turnSeconds: 120,
+  botDifficulty: 'medium', searchMode: 'casual', busy: false, connected: true, clientVersion: 'layout-test',
+  room: null, settingsKey: 0, bindingCapture: null, bindingConflicts: [], configured: true, canManage: true,
+  appearanceLoading: false, settings: { quality: 'medium', volume: .5, sensitivity: 1, bindings: { ...DEFAULT_BINDINGS }, showAimGuide: true, showPocketLabels: true },
+})
+const snapshot = defaultPreviewSnapshot()
+const counters = { writes: 0, events: [] }
+const adapter = { async load() { return structuredClone(emptyLibrary) },
+  async upload() { counters.writes++; throw Error('Layout fixture forbids mutations') },
+  async update() { counters.writes++; throw Error('Layout fixture forbids mutations') },
+  async remove() { counters.writes++; throw Error('Layout fixture forbids mutations') },
+  async publish() { counters.writes++; throw Error('Layout fixture forbids mutations') },
+}
+function lobby() {
+  state.room = { id: 'layout-room', code: 'ABC123', hostId: user.id,
+    players: [{ id: user.id, displayName: user.displayName, ready: false }], spectators: [], status: 'waiting', settings: { turnSeconds: state.turnSeconds, ranked: false } }
+  state.view = 'lobby'
+}
+window.buttonLayoutFixture = { state, counters, snapshot, lobby, setSurface(surface) { state.surface = surface; state.settingsKey++ } }
+const app = defineComponent({ setup() { return () => {
+  if (state.surface === 'settings') return h(ClubSettings, { key: state.settingsKey, user, settings: state.settings,
+    bindingCapture: state.bindingCapture, bindingConflicts: state.bindingConflicts,
+    captureLabels: { ...Object.fromEntries(Object.keys(DEFAULT_BINDINGS).map(key => [key, key])), shoot: 'Удар', assist: 'Дополнительные приборы' },
+    aimGuideLocked: state.searchMode === 'ranked', inMatch: false, clientVersion: 'layout-test',
+    'onUpdate:settings': value => state.settings = value, onClose: () => state.surface = 'club', onSave: () => counters.events.push('settings-save') })
+  if (state.surface === 'appearance') return h(PlayerAppearance, { library: emptyLibrary, selection: defaultPlayerAssetSelection(), snapshot,
+    loading: state.appearanceLoading, onClose: () => counters.events.push('appearance-close'), onApply: () => counters.events.push('appearance-apply') })
+  if (state.surface === 'workshop') return h(ModelWorkshop, { key: state.canManage, library: adapter, canManage: state.canManage,
+    onClose: () => counters.events.push('workshop-close'), onRequestAdmin: () => counters.events.push('workshop-admin') })
+  if (state.surface === 'login') return h(ModelAdminLogin, { busy: state.busy, error: '', configured: state.configured,
+    onClose: () => counters.events.push('login-close'), onSubmit: () => counters.events.push('login-submit') })
+  if (state.surface === 'hud') return h(MatchHud, { match: { id: 'layout-match', roomId: 'layout-room', status: 'active', revision: 1,
+    currentPlayer: 0, snapshot, players: [user, { id: 'layout-opponent', displayName: 'Соперник', elo: 1000 }], startedAt: new Date().toISOString() },
+    user, room: null, aim: { phi: 90, V0: 3, theta: 0, a: 0, b: 0 }, phase: 'overview', canShoot: !state.busy,
+    canPlace: false, canReposition: true, placingCue: false, connected: true, connection: 'Подключено', remaining: 60, elapsed: 10,
+    statusText: 'Ваш ход', volume: .5, topViewKey: 'KeyT', calledBall: '', calledPocket: '', cameraMode: 'free', showAssist: false })
+  return h(ClubMenu, { ...state, user,
+    onNavigate: value => state.view = value, onSettings: () => state.surface = 'settings',
+    onSearch: mode => { state.searchMode = mode; state.view = 'search' }, onCancelSearch: () => state.view = 'play',
+    onCreateRoom: lobby, onLeave: () => { state.room = null; state.view = 'play' },
+    onReady: () => state.room.players[0].ready = !state.room.players[0].ready,
+    'onUpdate:code': value => state.code = value, 'onUpdate:name': value => state.name = value,
+    'onUpdate:turnSeconds': value => state.turnSeconds = value, 'onUpdate:botDifficulty': value => state.botDifficulty = value,
+    onSaveName: () => counters.events.push('name-save') })
+} } })
+createApp(app).mount('#fixture')
+window.fixtureReady = true
+</script></body></html>

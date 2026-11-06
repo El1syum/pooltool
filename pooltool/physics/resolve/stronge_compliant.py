@@ -568,9 +568,10 @@ def resolve_collinear_compliant_frictional_inelastic_collision(
 
     v_n_f = v_n_restitution(t_f, v_n_0, omega_n, e_n)
 
-    logger.debug(
-        f"v_t_0/(mu * v_n_0)={v_t_0 / (mu * v_n_0)}, v_t_f/(mu * v_n_0)={v_t_f / (mu * v_n_0)}"
-    )
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            f"v_t_0/(mu * v_n_0)={v_t_0 / (mu * v_n_0)}, v_t_f/(mu * v_n_0)={v_t_f / (mu * v_n_0)}"
+        )
     if v_t_f > 0:
         logger.debug("v_t reversed direction!")
 

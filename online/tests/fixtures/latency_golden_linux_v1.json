@@ -1,0 +1,189 @@
+{
+  "schema": 1,
+  "reference": "Pre-change legacy scalar detector; complete engine result including all 60Hz frames, events and rules",
+  "sourceCommit": "fc9e96e",
+  "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "cases": {
+    "recorded_dense_1675": {
+      "inputSha256": "be4de4ec33d298c1ae0604e4a60c1846aa6455668ba7dfdce904e6834150db79",
+      "resultSha256": "1049b77158503bcf186336c5613f4053527616b4435843f95683d772741842d6",
+      "events": 1675,
+      "duration": 5.828306948,
+      "frames": 351,
+      "tags": [
+        "recorded",
+        "dense",
+        "follow"
+      ],
+      "status": "complete"
+    },
+    "weak_dense_break": {
+      "inputSha256": "6d9b3db8bcb71709b4ec59d49e0fbb812a949b352f430d489382f3000d513e06",
+      "resultSha256": "4a8457ef247876ce2d77f6c2cffb542e5e094f4e7a45fd7e3943a4e2fddc09c8",
+      "events": 2439,
+      "duration": 3.983090991,
+      "frames": 240,
+      "tags": [
+        "dense",
+        "slow-break",
+        "near-rest-contacts"
+      ],
+      "status": "complete"
+    },
+    "minimum_speed_miss": {
+      "inputSha256": "6d74257f76cb9f29586ead12928a4f38922e50f3a87185644cc47d887b7c4dcc",
+      "resultSha256": "74c4e73c139b7434ddeccf79f557f4d4ec6514b04002d5f505988a6501adae07",
+      "events": 5,
+      "duration": 0.571296474,
+      "frames": 36,
+      "tags": [
+        "minimum-speed",
+        "foul"
+      ],
+      "status": "complete"
+    },
+    "slow_break": {
+      "inputSha256": "2b91d0a707d6f525b79aa83e411ba15a0f967461b86404af4ee8bb59a7169569",
+      "resultSha256": "4fd11b5a8f16fbe352d72e6f090f7d7412044ebd126c298889700b5e46efcb6b",
+      "events": 5,
+      "duration": 2.285185898,
+      "frames": 139,
+      "tags": [
+        "slow-break",
+        "dense"
+      ],
+      "status": "complete"
+    },
+    "maximum_speed_break": {
+      "inputSha256": "ef125510e18b44ead71c34daed037c4ee7214e721c9ddc3168207807a4f5c0b2",
+      "resultSha256": "50ca2a55845add8fb7116f16906d72a43af2929fe6bd0efca43e6c357e4af724",
+      "events": 140,
+      "duration": 9.366774963,
+      "frames": 564,
+      "tags": [
+        "maximum-speed",
+        "dense"
+      ],
+      "status": "complete"
+    },
+    "maximum_follow_break": {
+      "inputSha256": "876f015dc776cedc5155e771ebd07471f687b881afb1f0cb1076b80e796cfd8e",
+      "resultSha256": "a3fb326a93a5271b1c7dd42311734e561cc571736b9025764ce7072534c11517",
+      "events": 1258,
+      "duration": 6.685909692,
+      "frames": 403,
+      "tags": [
+        "maximum-speed",
+        "maximum-spin",
+        "dense"
+      ],
+      "status": "complete"
+    },
+    "maximum_draw_break": {
+      "inputSha256": "54699d20268c4091b375fd675e57be793b1fc61a6844fd34b10e6ca431bd0f58",
+      "resultSha256": "8433f3d67a57e6167b4ed7a487690988835cf143f80fe7f3978e0f41b6ffe3e9",
+      "events": 90,
+      "duration": 7.067966046,
+      "frames": 426,
+      "tags": [
+        "maximum-speed",
+        "maximum-spin",
+        "draw",
+        "dense"
+      ],
+      "status": "complete"
+    },
+    "maximum_side_spin": {
+      "inputSha256": "ca781014c576da2486a8eb80c1b0c117acbabbca917561b25783096ac0111742",
+      "resultSha256": "c76e0daa9c9d2cb802acca7f72241c0575ffe758659d78a5ea0a0608f23b45f5",
+      "events": 166,
+      "duration": 24.828335275,
+      "frames": 1491,
+      "tags": [
+        "maximum-speed",
+        "maximum-spin",
+        "side",
+        "dense"
+      ],
+      "status": "complete"
+    },
+    "maximum_elevation": {
+      "inputSha256": "60c58cacdf2a31c2b134289cd5b654c2ad7a66e806f02255d304d503705c4944",
+      "resultSha256": "4dd138090782a7787eafaa0ff407ddecf1787b90d8443482cf43d2e46cb9cc09",
+      "events": 841,
+      "duration": 7.479170771,
+      "frames": 450,
+      "tags": [
+        "maximum-speed",
+        "maximum-elevation",
+        "maximum-spin"
+      ],
+      "status": "complete"
+    },
+    "grazing_ball": {
+      "inputSha256": "5a437a12499c646c223f3a43782fc940030f4a3f4924da9b987dbd2304de9435",
+      "resultSha256": "3b6de3f67b35bb7ebf423a6c244eeccc3d12cd3025b389de6243acd362cc38c1",
+      "events": 51,
+      "duration": 4.533029626,
+      "frames": 273,
+      "tags": [
+        "grazing",
+        "near-degenerate"
+      ],
+      "status": "complete"
+    },
+    "near_parallel_rail": {
+      "inputSha256": "59f8829a2cfa05f43a41ddfc74e9236169c72ce51d87853eca568014776a106c",
+      "resultSha256": "4fccd1be197d9d8a163903e83c9cd02f8ea1039ffad23613f22b02243c13b611",
+      "events": 5,
+      "duration": 0.239635833,
+      "frames": 16,
+      "tags": [
+        "near-parallel",
+        "rail",
+        "near-degenerate"
+      ],
+      "status": "complete"
+    },
+    "head_on_draw": {
+      "inputSha256": "3b3213c345cb48f5927ac9bd97247544838d1806a4e9f6f22b8786c92bc46cba",
+      "resultSha256": "b640cb4477baa87c491e7d47b4447478b7e9974e9642e6e90ce0ec3f29c16ff3",
+      "events": 9,
+      "duration": 2.096451031,
+      "frames": 127,
+      "tags": [
+        "draw",
+        "degenerate-polynomial",
+        "corner-pot"
+      ],
+      "status": "complete"
+    },
+    "scratch_blocked_respot": {
+      "inputSha256": "18425c4b7d10dfea28a810bef8e0c04facc228da49e07a5ffe79bbb37f42f558",
+      "resultSha256": "f3568a6d55332c3be6df1165f4b789ff6a129070b77543d921b4b54cc358162d",
+      "events": 4,
+      "duration": 0.154971614,
+      "frames": 11,
+      "tags": [
+        "scratch",
+        "foul",
+        "blocked-respot"
+      ],
+      "status": "complete"
+    },
+    "after_foul_placement": {
+      "inputSha256": "eddddc46ab08b373958ca11de8c7b9b3faa5852e8f1758202e1a88486f1faade",
+      "resultSha256": "24b8bb12f518afa82a1c999ea4162679124773d5f9d4035c872faa8f79c2caef",
+      "events": 5,
+      "duration": 0.676556949,
+      "frames": 42,
+      "tags": [
+        "respot",
+        "placement",
+        "turn-one"
+      ],
+      "status": "complete"
+    }
+  }
+}

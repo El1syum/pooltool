@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "name": "AI-Hybrid-Playable",
+  "file": "AI-Hybrid-Playable.glb",
+  "bytes": 3080684,
+  "sha256": "12a337bb1a6a6f7b2f24301662379f28557ecad6ee47c00a4dc10be58ab000cc",
+  "sourceType": "user-provided AI-generated tabletop",
+  "sourceFile": "988622829db13444d3990892467e02a2.glb",
+  "sourceSha256": "51edb85ba60d1b7746df54d63a0f72dcf88972339474ee465b2056c449e3257d",
+  "sourceBytes": 84875620,
+  "triangles": 81066,
+  "vertices": 64056,
+  "meshes": 7,
+  "materials": 7,
+  "calibration": { "width": 0.9906, "length": 1.9812, "clothY": 0, "floorY": -0.708 },
+  "config": { "position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1], "replaceProcedural": true, "material": {}, "materials": {}, "hiddenNodes": [] },
+  "rebuilt": ["flat cloth with sub-millimetre lining clearance", "six closed engine-aligned cushion rails and rounded jaws", "continuous wooden deck and closed apron", "six open leather-lined wells with hard crease normals", "legs and leveling feet"],
+  "retained": ["lower AI decorative shell", "original embedded basecolor atlas and lower-shell normal texture"],
+  "limitations": "Lower decorative AI shell retains minor organic irregularities. Cosmetic art only; does not define or replace server physics."
+}

@@ -1,0 +1,24 @@
+<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Personal appearance component fixture</title></head><body style="margin:0;background:#102125"><button id="opener">Открыть тестовый экран</button><div id="app"></div><script type="module">
+// Explicit local component fixture. The triangle GLB is test geometry, not supplied game art.
+import { createApp, ref, h } from 'vue'
+import * as THREE from 'three'
+import PlayerAppearance from '/src/components/PlayerAppearance.vue'
+import { defaultPlayerAssetSelection } from '/src/models/playerSelection.ts'
+import { defaultPreviewSnapshot } from '/src/models/previewSnapshot.ts'
+import '/src/style.css'
+import '/src/match-hud.css'
+window.appliedSelections=[];window.closedCount=0;window.manageCount=0;window.retryCount=0
+const config=()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1],replaceProcedural:false,material:{},materials:{},hiddenNodes:[]})
+const asset=(id,role='table',enabled=true,url=`/models/library/${id}.glb`)=>({id,role,enabled,url,name:id==='table-a'?'Клубный стол':'Зал',bytes:2048,config:config()})
+const initial={version:1,profile:{tableId:null,environmentId:null},assets:[asset('table-a'),asset('room-a','environment'),asset('disabled-table','table',false),asset('broken-table','table',true,'/models/library/broken.glb')]}
+const library=ref(initial),selection=ref(defaultPlayerAssetSelection()),open=ref(true),loading=ref(false),error=ref('')
+const snapshot=new URLSearchParams(location.search).has('live')?defaultPreviewSnapshot():null
+if(snapshot){snapshot.table.width=.82;snapshot.table.length=1.64}
+const sceneAdd=THREE.Scene.prototype.add
+THREE.Scene.prototype.add=function(...objects){window.fixtureRenderScene=this;return sceneAdd.apply(this,objects)}
+window.fixtureModules={THREE}
+window.appearanceFixture={setLibrary:value=>library.value=value,setSelection:value=>selection.value=value,setLoading:value=>loading.value=value,setError:value=>error.value=value,open:()=>open.value=true,getSelection:()=>JSON.parse(JSON.stringify(selection.value)),initial}
+document.querySelector('#opener').addEventListener('click',()=>open.value=true)
+createApp({setup(){return()=>open.value?h(PlayerAppearance,{library:library.value,selection:selection.value,snapshot,loading:loading.value,error:error.value,onApply:value=>{selection.value=value;window.appliedSelections.push(JSON.parse(JSON.stringify(value)));open.value=false},onClose:()=>{window.closedCount++;open.value=false},onRetry:()=>window.retryCount++,onManage:()=>window.manageCount++}):null}}).mount('#app')
+window.fixtureReady=true
+</script></body></html>
