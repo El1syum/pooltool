@@ -517,6 +517,27 @@ surrender/result geometry gates passed 1440×900/390×844/320×568/844×390, las
 reachable, failed-leave recovery and finish→menu→play retained, JS/static0.
 Independent code/spec APPROVE; architecture CLEAR. Local QA service stopped.
 
+Deployed implementation `ff41927`: default URL now serves `index-DE1_yFdn.js`
+and `index-DVWWsFWW.css`, hashes match the final tested build. Old chunks retained,
+new assets installed before atomic HTML switch. Online SQLite/HTML/invariant
+backup: `/opt/pooltool-online/shared/backup-buttons-20261106`; all 74 previous
+finished payloads byte-identical, integrity ok. Backend PID 1024133 unchanged;
+catalogue v5, selected AI table, both immutable model files, private server/VK
+configuration unchanged. Guest remains enabled, VK Play disabled/unconfigured.
+
+Public compiled App geometry smoke passed Chromium/WebKit: 24 real profile/
+graphics/sound/controls/lobby groups, DOM dimensions and label bounds, readiness
+and exit→menu, new HTTP JS/CSS hashes, JS/static/admin-write0. Catalogue before/
+after deep-equal v5. Own one guest/room per browser; rooms left normally, browser
+processes stopped. Evidence in `tests/artifacts/button-layout-public`.
+
+Public full three-client HUD/real-shot/shared-table/final-state/spectator/menu
+checks passed Chromium/WebKit with JS/static0. WebKit passed first; two initial
+Chromium attempts rejected transient HTTP502 on ball7/ball14 PNGs. URLs then
+returned200; third unchanged strict pass, no test/browser-parameter weakening.
+Failed evidence retained in button-live-match{,-chromium-retry,-chromium-final}.
+Own rooms and all test processes closed normally. No backend/auth/model changes.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
