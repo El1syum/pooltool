@@ -572,6 +572,30 @@ service unit was changed this investigation. GPU is not a drop-in accelerator
 for this CPU/Numba sequential solver. Use the committed same-platform corpus and
 real worker probe to qualify a candidate CPU under intended concurrency.
 
+## History spacing, Safari gauges and bot entry (2026-11-06)
+
+History Elo cells reserve 12px inline-end padding without changing the 700px
+grid or adding scrollbar-gutter (Chromium gutter/horizontal-end bug avoided).
+Actual ClubMenu text-range checks: 16 PASS, Chromium/WebKit, 1440/760/390/320px,
+native/16px scrollbars, 24 rows, far-right scroll and zero-padding negative control.
+Bot training is a full fifth Play choice before Back with the supplied Bot.svg
+(native 14x18, 20px scale-down slot), matching 62/56px actions; footer link removed.
+Keyboard, difficulty/time/start-event, Back and busy/offline checks pass both engines.
+
+ShotPowerGauge inlines the exact original Figma Vector 3 path with unique local
+gradient/clip IDs, removing external use-fragment/mask/paint resolution dependency.
+Original shape (149.714x82.5888), positions, percent/m/s and Ctrl policy unchanged.
+Chromium/WebKit raster + reactive 0/25/50/75/100→25 checks pass: visible zero-power
+outline, blocked former SVG, query/hash and hidden-shape/visible-number negative
+control. The particular physical Mac/Safari issue was not reproduced by current
+automated WebKit baseline; this removes compatibility risk, not device certification.
+
+Final 93 unit/SSR checks, typecheck/build and 396 actual-component geometry checks
+PASS; independent scoped review CLEAR. DESIGN.md preserves the existing style.
+Frontend-only publication planned: index-tkk90ZTo.js / index-DEXxo64U.css.
+Backup/invariants: shared/backup-interface-fixes-20261106, 82 finished payloads.
+Do NOT deploy backend from this branch: physics 2.5s target still HELD (see above).
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

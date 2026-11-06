@@ -25,10 +25,22 @@ test('home uses local source WebP/SVGs and four Figma menu actions', async () =>
   assert.match(html, /Тест Игрока/)
   assert.doesNotMatch(html, /figma\.com\/api|1240 RP|Александр/)
 })
-test('play retains all four modes and bot entry, with actual Elo', async () => {
+test('play renders bot training as a fifth full action with the supplied native SVG', async () => {
   const html = await render(Menu, menu({ view: 'play' }))
   for (const text of ['Случайный противник', 'Рейтинговая игра', 'Игра с другом', 'Просмотр матча', 'Тренировка с ботом']) assert.match(html, new RegExp(text))
   assert.match(html, /1\s*267 Эло/)
+  const actionClasses = [...html.matchAll(/<button\b[^>]*class="([^"]*)"[^>]*>/g)].map(match => match[1].split(/\s+/))
+  assert.equal(actionClasses.filter(classes => classes.includes('club-action')).length, 6, JSON.stringify(actionClasses))
+  assert.match(html, /<button[^>]*class="club-action"[^>]*><img[^>]*ui\/club-menu\/bot\.svg[^>]*class="club-bot-icon"[^>]*><span>Тренировка с ботом<\/span><img[^>]*chevron-gold\.svg/)
+  assert.doesNotMatch(html, /class="club-text-button"[^>]*>Тренировка с ботом/)
+  assert.ok(html.indexOf('Тренировка с ботом') < html.indexOf('<span>Назад</span>'))
+})
+
+test('bot training entry follows the common busy and disconnected action lock', async () => {
+  for (const overrides of [{ busy: true }, { connected: false }]) {
+    const html = await render(Menu, menu({ view: 'play', ...overrides }))
+    assert.match(html, /<button[^>]*class="club-action"[^>]*disabled[^>]*><img[^>]*bot\.svg[^>]*><span>Тренировка с ботом/)
+  }
 })
 test('search time and Elo use actual provided values', async () => {
   const html = await render(Menu, menu({ view: 'search', searchMode: 'ranked', searchElapsedSeconds: 74, ratingWindow: 100 }))
@@ -76,7 +88,7 @@ test('settings index uses Figma summary slots with current values instead of sam
 })
 
 test('all referenced original SVG assets have valid standalone SVG metadata', async () => {
-  const assets = ['online-dot', 'play', 'chevron-dark', 'chevron-gold', 'settings', 'user', 'exit', 'shuffle', 'trophy', 'users', 'eye', 'arrow-left', 'circle-dot', 'sliders', 'plus', 'key', 'log-in', 'eye-muted', 'eye-dark', 'copy', 'wait-dot', 'search-arc', 'x', 'pencil', 'profile-trophy', 'check-dark', 'monitor', 'volume', 'mouse', 'exit-large', 'exit-dark', 'chevron-down', 'toggle-on', 'toggle-off']
+  const assets = ['online-dot', 'play', 'chevron-dark', 'chevron-gold', 'settings', 'user', 'exit', 'shuffle', 'trophy', 'users', 'eye', 'bot', 'arrow-left', 'circle-dot', 'sliders', 'plus', 'key', 'log-in', 'eye-muted', 'eye-dark', 'copy', 'wait-dot', 'search-arc', 'x', 'pencil', 'profile-trophy', 'check-dark', 'monitor', 'volume', 'mouse', 'exit-large', 'exit-dark', 'chevron-down', 'toggle-on', 'toggle-off']
   for (const asset of assets) {
     const svg = await readFile(new URL(`../public/ui/club-menu/${asset}.svg`, import.meta.url), 'utf8')
     assert.match(svg, /^<svg\b/)

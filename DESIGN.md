@@ -68,6 +68,11 @@
   48px minimum. Workshop toolbars share compact line-height/minimum height.
   Header close icons, text links, switches, value fields, ball/pocket selectors
   and camera icon widths are intentional variants, not full-action buttons.
+- The final text column of scrollable match history reserves 12px on its right,
+  including at the far-right horizontal scroll position. Keep the existing grid
+  column alignment and native scrollbar; do not rely on scrollbar gutter alone.
+- Bot training is a full action in the Play choices, before Back, not a footer
+  text link. Use the supplied gold bot SVG at native size in a 20px icon slot.
 
 ## Accessibility
 
@@ -102,6 +107,8 @@
 ## Implementation constraints
 
 - Vue 3 / TypeScript / Three.js, existing CSS and components; no new design system.
+- Power gauges keep the original vector geometry and live fill, but must render
+  without cross-document SVG fragment or paint-server resolution in Safari.
 - GLB self-contained, ≤50MiB, ≤1M rendered vertices; prefer substantially smaller
   web assets. No external resource URIs or unsupported required decoders.
 - Server table reference determines calibration; live-match snapshot wins over any

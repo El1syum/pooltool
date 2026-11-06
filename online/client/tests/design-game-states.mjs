@@ -133,7 +133,8 @@ try {
           assert.ok(geometry.stage && close(geometry.stage.x, 40) && close(geometry.stage.y, 220) && close(geometry.stage.width, 320), `${label}: Figma general stage slot`)
         }
         if (state.phase === 'power') {
-          await page.waitForFunction(() => [...document.querySelectorAll('.hud-power-gauge use')].every(node => node.getBBox().width > node.ownerSVGElement.viewBox.baseVal.width * .9))
+          await page.waitForFunction(() => [...document.querySelectorAll('.hud-power-gauge .hud-gauge-shape')].length === 2
+            && [...document.querySelectorAll('.hud-power-gauge .hud-gauge-shape')].every(node => node.getBBox().width > node.ownerSVGElement.viewBox.baseVal.width * .9))
           const meters = await page.getByRole('meter').evaluateAll(nodes => nodes.map(node => {
             const r = node.getBoundingClientRect()
             return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom }

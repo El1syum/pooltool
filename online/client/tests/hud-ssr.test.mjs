@@ -3,6 +3,7 @@ import { after, before, test } from 'node:test'
 import { createServer } from 'vite'
 import { createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
+import { readFile } from 'node:fs/promises'
 
 let server, Hud
 before(async () => {
@@ -84,7 +85,12 @@ test('timers, mapped key hint and the single match-menu action use current value
 
 test('power phase renders original vector gauges as live percent and speed, never elevation', async () => {
   const html = await render(fixture({ phase: 'power', showAssist: true }))
-  for (const name of ['power-reticle', 'power-gauge']) assert.match(html, new RegExp(`${name}\\.svg`))
+  assert.match(html, /power-reticle\.svg/)
+  const source = await readFile(new URL('../public/ui/figma-assist/power-gauge.svg', import.meta.url), 'utf8')
+  const originalPath = source.match(/<path id="Vector 3" d="([^"]+)"/)[1]
+  assert.equal([...html.matchAll(/class="hud-gauge-shape" d="([^"]+)"/g)].filter(match => match[1] === originalPath).length, 2,
+    'Both gauges inline the exact original Figma path without an external SVG fragment')
+  assert.doesNotMatch(html, /<use[^>]+power-gauge\.svg/)
   assert.match(html, /30%/)
   assert.match(html, /2.4 м\/с/)
   assert.match(html, /aria-label="Прибор наклона кия"/)

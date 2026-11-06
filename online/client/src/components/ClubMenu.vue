@@ -47,6 +47,7 @@ const choices = [
   { label: 'Рейтинговая игра', icon: 'trophy', primary: false, action: () => emit('search', 'ranked') },
   { label: 'Игра с другом', icon: 'users', primary: false, action: () => { subview.value = 'friend' } },
   { label: 'Просмотр матча', icon: 'eye', primary: false, action: () => { subview.value = 'watch' } },
+  { label: 'Тренировка с ботом', icon: 'bot', primary: false, action: () => { subview.value = 'bot' } },
 ]
 const ready = computed(() => props.room?.players.find(player => player.id === props.user.id)?.ready || false)
 function back() { if (page.value === 'choices' || page.value === 'profile') emit('navigate', 'menu'); else if (page.value === 'rules' || page.value === 'join') subview.value = 'friend'; else subview.value = 'choices' }
@@ -90,9 +91,8 @@ function confirmExit() { exited.value = true; emit('exit') }
       <div v-else class="club-section" :class="{ 'club-section-wide': page === 'rules', 'club-section-form': ['search', 'join', 'watch', 'lobby', 'bot'].includes(page), 'club-section-profile': page === 'profile' }">
         <div class="club-section-title"><p>{{ title[0] }}</p><h1>{{ title[1] }}</h1><span>{{ title[2] }}</span></div>
         <template v-if="page === 'choices'">
-          <div class="club-actions"><button v-for="action in choices" :key="action.label" class="club-action" :class="{ 'club-action-primary': action.primary }" :disabled="disabled" @click="action.action"><img :src="asset(action.icon)" alt="" /><span>{{ action.label }}</span><small v-if="action.label === 'Рейтинговая игра'">{{ number(user.elo) }} Эло</small><img v-else :src="asset(action.primary ? 'chevron-dark' : 'chevron-gold')" alt="" /></button><button class="club-action club-action-back" @click="back"><img :src="asset('arrow-left')" alt="" /><span>Назад</span></button></div>
+          <div class="club-actions"><button v-for="action in choices" :key="action.label" class="club-action" :class="{ 'club-action-primary': action.primary }" :disabled="disabled" @click="action.action"><img :src="asset(action.icon)" :class="{ 'club-bot-icon': action.icon === 'bot' }" alt="" /><span>{{ action.label }}</span><small v-if="action.label === 'Рейтинговая игра'">{{ number(user.elo) }} Эло</small><img v-else :src="asset(action.primary ? 'chevron-dark' : 'chevron-gold')" alt="" /></button><button class="club-action club-action-back" @click="back"><img :src="asset('arrow-left')" alt="" /><span>Назад</span></button></div>
           <p class="club-footnote">Пул-8 · Онлайн · {{ connected ? 'Соединение установлено' : 'Подключение потеряно' }}</p>
-          <button class="club-text-button" @click="subview = 'bot'">Тренировка с ботом</button>
         </template>
         <template v-else-if="page === 'friend'">
           <div class="club-rule-summary"><img :src="asset('circle-dot')" alt="" /><div><strong>Пул-8 · Одна партия</strong><span>{{ turnSeconds }} сек. на удар · Стандартный стол · Без рейтинга</span></div></div>

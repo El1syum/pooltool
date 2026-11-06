@@ -365,7 +365,8 @@ for (const engineName of engines) {
     await current.locator('.hud-percent-wedge').waitFor()
     await new Promise(resolve => setTimeout(resolve, 750))
     await current.screenshot({ path: path.join(artifacts, `${engineName}-power-state.png`), fullPage: true })
-    await current.waitForFunction(() => [...document.querySelectorAll('.hud-power-gauge use')].every(use => use.getBBox().width > 140))
+    await current.waitForFunction(() => [...document.querySelectorAll('.hud-power-gauge .hud-gauge-shape')].length === 2
+      && [...document.querySelectorAll('.hud-power-gauge .hud-gauge-shape')].every(shape => shape.getBBox().width > 140))
     const wedgeGeometry = await current.locator('.hud-charge svg').evaluateAll(gauges => gauges.map(gauge => {
       const rect = gauge.getBoundingClientRect()
       return { name: gauge.getAttribute('aria-label'), natural: [gauge.width.baseVal.value, gauge.height.baseVal.value], rendered: [rect.width, rect.height] }

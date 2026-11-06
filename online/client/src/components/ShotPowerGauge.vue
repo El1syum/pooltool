@@ -2,11 +2,14 @@
 import { computed, useId } from 'vue'
 
 const props = defineProps<{ fraction: number; label: string; unit: 'percent' | 'speed' }>()
-const gradientId = `shot-power-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+const id = `shot-power-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+const gradientId = `${id}-gradient`
+const clipId = `${id}-clip`
 const fillStart = computed(() => 1 - Math.max(0, Math.min(1, Number.isFinite(props.fraction) ? props.fraction : 0)))
-const base = import.meta.env.BASE_URL || '/'
-// Reference the original Figma vector, rather than copying/redrawing its path.
-const outline = `${base}ui/figma-assist/power-gauge.svg#Vector%203`
+// Exact Vector 3 path from public/ui/figma-assist/power-gauge.svg. Keep the
+// geometry, clip and gradient in one SVG for Safari compatibility instead of
+// depending on cross-document <use>/mask/paint resolution. Nothing is rasterized.
+const outline = 'M0 0.000183105C32.1958 24.2798 44.9683 41.8182 54.9846 82.5886L149.714 82.5886L0 0.000183105Z'
 </script>
 
 <template>
@@ -19,7 +22,9 @@ const outline = `${base}ui/figma-assist/power-gauge.svg#Vector%203`
         <stop :offset="fillStart" stop-color="#C7AA72" stop-opacity="1" />
         <stop offset="1" stop-color="#C7AA72" />
       </linearGradient>
+      <clipPath :id="clipId" clipPathUnits="userSpaceOnUse"><path :d="outline" /></clipPath>
     </defs>
-    <use :href="outline" :fill="`url(#${gradientId})`" />
+    <path class="hud-gauge-shape" :d="outline" :fill="`url(#${gradientId})`"
+      stroke="#D9D9D9" stroke-width="2" :clip-path="`url(#${clipId})`" />
   </svg>
 </template>

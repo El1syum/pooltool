@@ -1,5 +1,13 @@
 # Browser smoke checks
 
+## History scrollbar spacing (2026-11-06)
+
+`node tests/history-spacing.mjs` checks the actual ClubMenu component with 24
+history rows at 1440/760/390/320px in Chromium/WebKit, with native and 16px
+scrollbars. Real text ranges must retain a 12px right gap, including at the
+horizontal scroll limit. A temporary zero-padding negative control reproduces
+the original defect. No API, user, match or model-library writes are performed.
+
 ## Shot playback performance (2026-11-06)
 
 `playback-smooth.mjs` requires `SHOT_RESULT_PATH` pointing to an actual result
@@ -121,9 +129,14 @@ Use `POOLTOOL_URL`, `BROWSERS=chromium,webkit` and `PLAYWRIGHT_MODULE` as above.
 button with a legacy `callShotRequired=true` component fixture.
 
 `power-gauges.mjs` is an isolated visual component check, not gameplay evidence.
-It renders the actual Vue HUD and original external Figma SVG in Chromium/WebKit,
-counts gold pixels at 0/25/50/100%, verifies both units share the same fill and
-checks 1920px Figma offsets plus 640/390/320px viewport bounds. It starts/stops
+It renders the actual Vue HUD and exact inline Figma path in Chromium/WebKit,
+counts visible outline/gold pixels at 0/25/50/100%, verifies both units share
+the same fill and checks 1920px Figma offsets plus 640/390/320px viewport bounds.
+Live Vue updates also cover 0→25→50→75→100→25%, unique local paint/clip IDs,
+query/hash URLs and a blocked former external SVG. A hidden-shape negative
+control detects missing triangles even when the numeric labels remain visible.
+This is automated WebKit coverage, not certification on a physical Mac/Safari.
+It starts/stops
 temporary Vite on port 4314. Set `BROWSER=webkit` for WebKit; it also needs `pngjs`
 (or `PNG_MODULE` pointing at its `lib/png.js`), analogous to `PLAYWRIGHT_MODULE`.
 
