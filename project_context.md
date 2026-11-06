@@ -382,6 +382,19 @@ three consecutive Chromium runs and WebKit passed. Legacy shot workflow and
 four completed-match/menu cycles per browser passed. Independent code review
 APPROVE and architecture review CLEAR.
 
+Deployed `1ea5ebc` to the ordinary testing URL with client
+`/assets/index-aGRR4d-a.js` and CSS `/assets/index-yJpNpetd.css`. Backup:
+`/opt/pooltool-online/shared/backup-cursor-resume-1ea5ebc`. Static assets were
+installed before the entry document, old chunks retained, backend PID 328303
+unchanged. All 65 pre-existing finished payloads preserved, model catalogue
+unchanged, SQLite integrity ok. Published JS/CSS SHA-256 match local tested files.
+Public Chromium/WebKit three-client real-physics HUD tests passed, including
+explicit resume after blur, a real shot/shared final state and finish→menu→play;
+the shared AI table loaded in all three clients, no JS/static-resource errors.
+Final legacy postgame regression also passed four completed matches per browser
+on this build. Disposable local QA service stopped after verification. No backend,
+credentials, VK Play configuration or user library data changed.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author
