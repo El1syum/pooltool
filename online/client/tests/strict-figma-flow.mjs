@@ -35,11 +35,13 @@ const breadcrumb = (page, path, label) => page.getByRole('navigation', { name: p
 async function checkBreadcrumb(crumb) {
   const style = await crumb.evaluate(node => {
     const css = getComputedStyle(node)
-    return { cursor: css.cursor, underline: css.textDecorationLine, height: node.getBoundingClientRect().height }
+    return { cursor: css.cursor, decoration: css.textDecorationLine, height: node.getBoundingClientRect().height }
   })
   assert.equal(style.cursor, 'pointer')
-  assert.equal(style.underline, 'underline')
+  assert.equal(style.decoration, 'none')
   assert.ok(style.height >= 24, 'Breadcrumb hit target is at least 24 pixels tall')
+  await crumb.hover()
+  assert.equal(await crumb.evaluate(node => getComputedStyle(node).textDecorationLine), 'none', 'Hover must not restore the underline')
 }
 
 assert.equal((await api('/ready')).physics, 'pooltool')

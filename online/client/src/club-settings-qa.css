@@ -76,7 +76,7 @@
   color: inherit;
   text-align: left;
 }
-.club-settings-shell .club-breadcrumbs button:hover { text-decoration: underline; color: var(--club-cream); }
+.club-settings-shell .club-breadcrumbs button:hover { color: var(--club-cream); }
 .club-settings-shell .club-footer > span:last-child { color: #728078; letter-spacing: 1px; white-space: nowrap; }
 
 /* Render over the real match HUD/scene. App owns dimming and the live footer. */

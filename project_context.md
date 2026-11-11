@@ -806,8 +806,9 @@ show a lock instead of an arrow. Switch captions keep their neutral color
 during hover and focus, without hiding keyboard focus. Editable key bindings
 show the existing pencil icon; fixed inputs are plain values. The match round
 line preserves the exact Figma spacing around its separator. Existing
-breadcrumb links have visible underlines and 24px-high hit targets; the
-current page remains a label. Item 6 (gold heading contrast) is expressly
+breadcrumb links retain 24px-high hit targets and visible keyboard focus;
+underlines were removed on request. The current page remains a label.
+Item 6 (gold heading contrast) is expressly
 excluded; the heading styles and previously closed table items are unchanged.
 
 ## Selectable anti-aliasing and assist shortcut (2026-11-11)
