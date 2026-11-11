@@ -741,9 +741,14 @@ Final candidate index-BYALLak6.js / index-DGybUydt.css, typecheck/build PASS.
 Profile persistence/retry/reset/stale-tab and ranked/assist/browser-smoke both
 engines PASS, actual three-client shots, reconnect, bindings/permissions.
 Final match-hud/postgame-menu both engines PASS on same build,8 completed
-postgame matches and zero errors. Frontend-only staged archive has13 exact
-files (HTML,3 chunks,9 SVGs); public gate pending. Do not deploy backend from
-this branch.
+postgame matches and zero errors. Frontend source eed610a pushed and published
+on ordinary 82.47.143.103:8790,13 exact files (HTML,3 chunks,9 SVGs), HTTP hashes
+match, assets first and HTML last. Live bot/menu/settings/320px surrender
+and postgame smoke PASS Chromium/WebKit, JS/static/admin-write0. Backup
+shared/backup-frontend-qa-20261111; all98 prior finished preserved,100 after
+own tests, integrity ok. PID1024133, catalogue v5/GLBs/private config unchanged.
+Local isolated service and browsers stopped. Do not deploy backend from this
+branch.
 
 ## Git identity
 
