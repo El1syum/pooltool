@@ -769,7 +769,14 @@ finishes including ranked winner/loser, no transient panel/reload, history/Elo,
 cancel, failed leave/manual retry and lost successful response. Fresh restore
 and actual dropped WS ack PASS both engines. Candidate index-BVeBYGqJ.js /
 GLTFLoader-rTOfuB11.js; CSS index-DGybUydt.css byte-identical to QA release.
-Public verification pending; backend/physics deployment remains out of scope.
+Supplemental Chromium ranked/HUD/multiplayer and ordinary bot-expiry replay
+PASS. Source 0bfd469 published frontend-only on the ordinary preview address.
+All4 public file hashes match. Live bot surrender PASS Chromium/WebKit: no
+result node, main menu enabled, room released, history retained, JS/static0.
+Backup shared/backup-frontend-surrender-home-20261111; all101 previous
+finished payloads preserved,103 after own smoke games, integrity ok. Backend
+PID1024133, catalogue v5, model bytes and private config unchanged. All local
+test servers and browser contexts stopped.
 
 ## Git identity
 
