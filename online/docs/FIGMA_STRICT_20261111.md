@@ -17,4 +17,6 @@ The Old and Concept frames are not implementation references for this pass.
 - Live values, actual controls and the selected 3D assets replace the prototype's sample accounts, ranks, ping, values and 3D scene. Unimplemented options in the design are read-only; unavailable rating season/league data is not fabricated. Both quick and ranked search read actual queue elapsed time. Ranked aiming aid stays disabled on the renderer.
 - The existing authenticated model tools remain available separately at `/?tools=models`, with no link from the game. Platform authentication and technical recovery gates are not player menu designs.
 
+Follow-up exception: the profile's previous match history was restored at the user's request. The existing authenticated feed supplies the 100 most recent finished matches. The other player screens and the direct bot button are unchanged.
+
 Current verification: `club-menu-browser.mjs`, `match-assist.mjs`, `power-gauges.mjs`, `qa-settings.mjs`, `strict-figma-flow.mjs`, `ranked-policy-integration.mjs`, `assist-binding-integration.mjs`, `cursor-resume-app.mjs`, `surrender-recovery.mjs` and the unit/SSR suite. Tests that deliberately targeted removed controls are historical unless updated for these frames.

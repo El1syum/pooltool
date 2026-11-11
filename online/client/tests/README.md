@@ -11,8 +11,9 @@ running only private-room and solo lanes on the public test deployment.
 `STRICT_FIGMA_SCREENSHOTS` optionally captures real screens. Use the club/HUD
 fixtures, settings audit and focused real server tests below for visual and
 control coverage. Earlier audit entries document their releases: expectations
-for a result panel, history UI, ready button or advanced drawers no longer
-describe the current interface.
+for a result panel, ready button or advanced drawers no longer describe the
+current interface. Profile history is restored on request and is covered by
+`history-spacing.mjs` and the real match flows.
 
 ## Surrender navigation
 

@@ -130,6 +130,14 @@
 .club-stat-grid span { font-size:11px; color:var(--club-muted); line-height:1.5; }
 .club-profile-actions { display:flex; flex-direction:column; width:100%; gap:12px; }
 .club-profile-actions > .club-small-note { font-size:11px; line-height:normal; min-height:13px; }
+.club-history-title { font:22px 'Pooltool Lora',serif; margin:4px 0 0; }
+.club-history { width:100%; max-width:100%; min-width:0; list-style:none; padding:0; margin:0; max-height:250px; overflow:auto; overscroll-behavior:contain; }
+.club-history:focus-visible { outline:2px solid var(--club-gold); outline-offset:3px; }
+.club-history li { display:grid; grid-template-columns:160px minmax(180px,1fr) 112px 120px 88px; min-width:700px; gap:10px; padding:12px 0; border-bottom:1px solid var(--club-line); font-size:11px; color:var(--club-muted); }
+.club-history li > * { min-width:0; overflow-wrap:anywhere; }
+.club-history time, .club-history li > span:nth-child(3), .club-history strong { white-space:nowrap; }
+.club-history strong { font-weight:400; color:var(--club-cream); }
+.club-history-elo { padding-inline-end:24px; text-align:right; white-space:nowrap; font-size:inherit; font-variant-numeric:tabular-nums; }
 .club-footer { position:relative; flex:0 0 82px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 48px; color:var(--club-muted); font-size:11px; }
 .club-footer > span:nth-child(2) { color:#728078; letter-spacing:1px; white-space:nowrap; }
 .club-breadcrumbs { min-width:0; line-height:1.5; overflow-wrap:anywhere; text-align:left; }

@@ -42,7 +42,7 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     contexts.push(context)
     await context.addInitScript(() => {
       window.qaUndesignedUI = false
-      const extras = '.result-panel,.shot-toast,.offline-banner,.hud-rules-dialog,.game-resume-notice,.model-game-notice,.hud-control-drawer,.clipboard-feedback,.club-history'
+      const extras = '.result-panel,.shot-toast,.offline-banner,.hud-rules-dialog,.game-resume-notice,.model-game-notice,.hud-control-drawer,.clipboard-feedback'
       new MutationObserver(records => {
         for (const record of records) for (const node of record.addedNodes) if (node instanceof Element && (node.matches(extras) || node.querySelector(extras))) window.qaUndesignedUI = true
       }).observe(document, { childList: true, subtree: true })
@@ -192,7 +192,12 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     assert.ok(await hasNoExtras(host.page))
     await host.page.locator('.club-main-menu').getByRole('button', { name: 'Профиль', exact: true }).click()
     await heading(host.page, 'Ваш профиль').waitFor()
-    assert.equal(await host.page.getByRole('heading', { name: 'История матчей', exact: true }).count(), 0)
+    await heading(host.page, 'История матчей').waitFor()
+    const rows = host.page.locator('.club-history li')
+    assert.equal(await rows.count(), 2)
+    assert.match(await rows.first().innerText(), /против Бот/)
+    assert.deepEqual(await rows.locator('strong').allTextContents(), ['Поражение', 'Поражение'])
+    assert.deepEqual(await rows.locator('.club-history-elo').allTextContents(), ['—', '—'])
     await capture(host.page, 'profile')
     assert.deepEqual(errors, [])
     console.log(JSON.stringify({ engine, local, guestRoomsAutoStart: true, spectator: true, canvasShot: local, surrenderReturnsEveryoneHome: true, historyRetained: true, botDirect: true, extrasMounted: false }))

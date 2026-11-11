@@ -790,6 +790,14 @@ Original WebP and vector assets, live 3D, ranked aim-guide policy and
 pointer-lock recovery are retained. Operator model tools have no game menu
 entry; use `/?tools=models`. Do not deploy backend from this branch.
 
+## Profile history restored (2026-11-11)
+
+The player explicitly requested the old match history back in Profile. The
+existing authenticated API supplies up to 100 recent completed matches. The
+restored table shows date, opponent, mode, outcome and Elo change, uses the
+previous five-column grid and keeps 24px between Elo text and the scrollbar.
+Other player screens, match completion and ranking logic are unchanged.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

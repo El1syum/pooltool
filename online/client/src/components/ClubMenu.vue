@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { Room, User } from '../api'
+import { timestamp, type Room, type User } from '../api'
 import { isRoomCode, normalizeRoomCode } from '../roomCode'
 import { emptyProfileDetails, type ProfileDetails } from '../profileDetails'
 import ClubProfileFields from './ClubProfileFields.vue'
@@ -108,6 +108,12 @@ const bestWinStreak = computed(() => {
   }
   return best
 })
+function historyDate(item: Record<string, unknown>) {
+  const value = item.finishedAt || item.startedAt
+  const time = typeof value === 'string' || typeof value === 'number' ? timestamp(value) : 0
+  return Number.isFinite(time) && time ? new Date(time).toLocaleString('ru-RU') : '—'
+}
+function signedElo(value: unknown) { return Number(value) > 0 ? `+${value}` : String(value) }
 function goHome() { emit('navigate', 'menu'); subview.value = 'choices' }
 function goPlay(nextPage: 'choices' | 'friend') {
   if (props.view === 'lobby') leaveLobby(nextPage)
@@ -253,6 +259,17 @@ function exitKey(event: KeyboardEvent) {
             </div>
           </div>
           <div class="club-profile-actions"><div class="club-divider"></div><p class="club-small-note" role="status">{{ profileNote }}</p><div class="club-actions-inline"><button type="button" class="club-action club-action-back" @click="back"><img :src="asset('arrow-left')" alt="" /><span>Назад</span></button><button type="submit" class="club-action club-action-primary" :disabled="busy || !name.trim()"><img :src="asset('check-dark')" alt="" /><span>Сохранить профиль</span><img :src="asset('chevron-dark')" alt="" /></button></div></div>
+          <h2 class="club-history-title">История матчей</h2>
+          <p v-if="!history.length" class="club-small-note">Пока нет завершённых матчей.</p>
+          <ul v-else class="club-history" tabindex="0" aria-label="История матчей. Дата, соперник, режим, результат, изменение рейтинга">
+            <li v-for="item in history" :key="String(item.id || item.matchId)">
+              <time>{{ historyDate(item) }}</time>
+              <span>{{ item.opponentName ? `против ${item.opponentName}` : 'Партия' }}</span>
+              <span>{{ item.mode === 'ranked' || item.ranked ? 'Рейтинговый' : 'Обычный' }}</span>
+              <strong>{{ item.winnerId === user.id ? 'Победа' : item.winnerId ? 'Поражение' : 'Матч завершён' }}</strong>
+              <small class="club-history-elo" :aria-label="item.eloDelta != null ? `Изменение рейтинга: ${signedElo(item.eloDelta)}` : 'Без изменения рейтинга'">{{ item.eloDelta != null ? `Эло ${signedElo(item.eloDelta)}` : '—' }}</small>
+            </li>
+          </ul>
         </form>
       </div>
     </section>

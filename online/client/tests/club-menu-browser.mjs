@@ -108,8 +108,11 @@ try {
   assert.deepEqual(await page.evaluate(() => window.lastFixtureJoin), { spectate: true, code: 'XY12AB' })
   await page.getByRole('button', { name: 'В главное меню', exact: true }).click()
   await page.getByRole('button', { name: 'Профиль', exact: true }).click()
-  await figureSlot('.club-card', { x: 260, y: 263, width: 920, height: 534 }) // 96:15615
-  assert.equal(await page.getByText('История матчей', { exact: true }).count(), 0)
+  const profile = await page.locator('.club-profile-card').boundingBox()
+  assert.equal(profile.width, 920, 'The profile keeps its original width with the restored history')
+  assert.ok(profile.height > 534, 'History extends the card below the original profile fields')
+  await page.getByRole('heading', { name: 'История матчей', exact: true }).waitFor()
+  await page.getByText('Пока нет завершённых матчей.', { exact: true }).waitFor()
   await page.screenshot({ path: path.join(artifacts, 'profile-1440.png') })
   await page.getByRole('button', { name: 'Назад', exact: true }).click()
   await page.getByRole('button', { name: 'Выход', exact: true }).click()

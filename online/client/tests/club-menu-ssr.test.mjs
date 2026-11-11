@@ -79,12 +79,20 @@ test('lobby reflects actual users, readiness, invitation code and selected turn 
   assert.match(html, /Ожидаем подключения/)
   assert.doesNotMatch(html, /Отменить готовность|Комната ZXCV67|>Готов<\/span>/)
 })
-test('profile shows real fields and only Figma statistics, without invented rating targets or history UI', async () => {
-  const html = await render(Menu, menu({ view: 'profile', profileDetails: { fullName: 'Личное имя', city: 'Киев', about: 'Описание профиля' }, history: [{ id: 'm', startedAt: '2026-11-01T12:00:00Z', winnerId: user.id, opponentName: 'Друг', ranked: true, eloDelta: 12 }] }))
+test('profile shows real fields, stable match-history columns, and no invented rating targets', async () => {
+  const html = await render(Menu, menu({ view: 'profile', profileDetails: { fullName: 'Личное имя', city: 'Киев', about: 'Описание профиля' }, history: [
+    { id: 'm', startedAt: '2026-11-01T12:00:00Z', winnerId: user.id, opponentName: 'Друг', ranked: true, eloDelta: 12 },
+    { id: 'm2', finishedAt: '2026-10-31T12:00:00Z', winnerId: 'other', opponentName: 'Бот (средний)', ranked: false, eloDelta: null },
+    { id: 'm3', finishedAt: '2026-10-30T12:00:00Z', winnerId: null, ranked: true, eloDelta: -16 },
+  ] }))
   assert.match(html, /17/)
   assert.match(html, /52,9%/)
   assert.match(html, /—<\/strong><span>Лучшая серия/)
-  assert.doesNotMatch(html, /против Друг|Эло \+12|История матчей|Поражений/)
+  assert.match(html, /История матчей/)
+  assert.match(html, /против Друг<\/span><span>Рейтинговый<\/span><strong>Победа<\/strong>.*Эло \+12/)
+  assert.match(html, /против Бот \(средний\)<\/span><span>Обычный<\/span><strong>Поражение<\/strong>.*Без изменения рейтинга">—<\/small>/)
+  assert.match(html, /Матч завершён<\/strong>.*Эло -16/)
+  assert.doesNotMatch(html, /Поражений/)
   for (const value of ['Личное имя', 'Киев', 'Описание профиля', 'Сохранить профиль']) assert.ok(html.includes(value))
   assert.match(html, /Прогресс ранга недоступен/)
   assert.doesNotMatch(html, /role="meter"|Сезон|Золото|Профиль сохранён/)
