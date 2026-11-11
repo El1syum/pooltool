@@ -61,7 +61,7 @@ test('search time and Elo use actual provided values', async () => {
   assert.match(html, /1\s*167–1\s*367/)
   assert.match(html, /Отменить поиск/)
   assert.match(html, /Диапазон постепенно расширяется/)
-  assert.doesNotMatch(html, /Без изменения рейтинга|Золото II|1 240 RP/)
+  assert.doesNotMatch(html, /Без изменения рейтинга|Золото II|1 240 RP|Отмена вернёт вас в раздел/)
   const casual = await render(Menu, menu({ view: 'search', searchMode: 'casual' }))
   assert.match(casual, /Без изменения рейтинга/)
   assert.match(casual, /Отмена вернёт вас в раздел/)
