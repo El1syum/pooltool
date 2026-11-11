@@ -9,7 +9,7 @@ const moduleUrl = value => path.isAbsolute(value) ? pathToFileURL(value).href : 
 const playwright = await import(moduleUrl(process.env.PLAYWRIGHT_MODULE || 'playwright'))
 const { PNG } = await import(moduleUrl(process.env.PNG_MODULE || 'pngjs'))
 const engine = process.env.BROWSER || 'chromium'
-const artifacts = path.resolve('tests/artifacts/match-assist')
+const artifacts = process.env.ARTIFACT_DIR || path.resolve('tests/artifacts/match-assist')
 await mkdir(artifacts, { recursive: true })
 const server = await createServer({ logLevel: 'error', server: { host: '127.0.0.1', port: 4318, strictPort: true } })
 let browser
@@ -73,6 +73,13 @@ try {
       return { className: node.className, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }
     }))
     assert.ok(bounds.every(rect => rect.left >= 0 && rect.right <= viewport.width && rect.top >= 0 && rect.bottom <= viewport.height), `Assist panels must fit ${JSON.stringify(viewport)}: ${JSON.stringify(bounds)}`)
+    if (viewport.width === 1920) {
+      // Positions and sizes measured in the 1920×1080 source frame 102:17640.
+      const expected = [[40, 360, 220, 360], [42, 336, 466, 667], [1570, 1880, 280, 574], [1630, 1880, 650, 928]]
+      for (const [index, rect] of bounds.entries()) {
+        assert.ok([rect.left, rect.right, rect.top, rect.bottom].every((value, side) => Math.abs(value - expected[index][side]) <= 1), `Design box ${index}: ${JSON.stringify(rect)}`)
+      }
+    }
     const rangeWidths = await page.locator('.assist-range').evaluateAll(nodes => nodes.map(node => ({ actual: node.offsetWidth, expected: Number.parseFloat(node.style.width) })))
     assert.ok(rangeWidths.every(range => range.actual === range.expected), `Flex rules must not shrink the SVG track: ${JSON.stringify(rangeWidths)}`)
     const safeZone = await page.locator('.assist-safe-zone').evaluate(node => ({ width: node.offsetWidth, height: node.offsetHeight, source: [node.naturalWidth, node.naturalHeight] }))
@@ -105,42 +112,81 @@ try {
   await page.evaluate(() => { window.assistFixture.showAssist = false })
   assert.equal(await page.getByRole('meter').count(), 2, 'Releasing the assist toggle must leave the base power meters intact')
   await page.evaluate(() => { window.assistFixture.phase = 'overview'; window.assistFixture.user = { id: 'spectator' } })
-  const overview = await page.locator('.hud-player, .hud-clock, .hud-match-status').evaluateAll(nodes => nodes.map(node => {
+  const overview = await page.locator('.hud-player, .hud-clock').evaluateAll(nodes => nodes.map(node => {
     const rect = node.getBoundingClientRect()
     return { className: node.className, top: rect.top, bottom: rect.bottom }
   }))
   assert.ok(overview[2].top >= Math.max(overview[0].bottom, overview[1].bottom), `Overview clock must clear both player cards: ${JSON.stringify(overview)}`)
-  assert.ok(overview[3].top >= overview[2].bottom, `Spectator status must clear the overview clock: ${JSON.stringify(overview)}`)
+  assert.equal(await page.locator('.hud-match-status').count(), 0, 'Spectator state reuses the designed turn label, not a new status badge')
+  assert.equal(await page.locator('.hud-turn-label').innerText(), 'Ход: Alex Chen')
   const clockRows = await page.locator('.hud-clock > *').evaluateAll(nodes => nodes.map(node => {
     const rect = node.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom }
   }))
   assert.ok(clockRows[1].top >= clockRows[0].bottom && clockRows[2].top >= clockRows[1].bottom, `Mobile clock parts must form separate rows: ${JSON.stringify(clockRows)}`)
   await page.screenshot({ path: path.join(artifacts, `${engine}-390x844-overview.png`) })
-  // A recovered legacy snapshot must not re-introduce mandatory call UI.
-  // This is a component-only check; the authoritative no-call shot is covered
-  // separately by the real-engine match integration tests.
+  // Only the original overview/direction/contact/power layers are mounted.
+  // Native scene shots and optional calls are covered by match integration.
   await page.setViewportSize({ width: 1920, height: 1080 })
   await page.evaluate(() => {
     const state = window.assistFixture
     state.user = { id: 'a' }
     state.canShoot = true
-    state.calledBall = ''
-    state.calledPocket = ''
+    state.cameraMode = 'free'
+    state.showAssist = true
     state.match.snapshot.callShotRequired = true
     state.match.snapshot.balls = [{ id: '1', position: [0, 0, .03], pocketed: false }]
     state.match.snapshot.table.pockets = [{ id: 'lt', position: [0, 1.98, 0], radius: .062 }]
   })
-  await page.getByRole('button', { name: 'Параметры удара', exact: true }).click()
-  const calls = page.locator('.hud-call-title')
-  assert.deepEqual(await calls.allTextContents(), ['Заказ шара · необязательно', 'Заказ лузы · необязательно'])
-  assert.equal(await page.getByRole('button', { name: 'Удар', exact: true }).isEnabled(), true)
-  await page.getByRole('button', { name: 'Удар', exact: true }).click()
-  assert.equal(await page.evaluate(() => window.shotRequests), 1, 'No call selection is needed to request a shot')
-  await page.getByRole('button', { name: 'Шар 1', exact: true }).click()
-  await page.getByRole('button', { name: 'Луза 3', exact: true }).click()
-  assert.deepEqual(await page.evaluate(() => window.callSelections), [{ ball: '1' }, { pocket: 'lt' }], 'Optional target selectors remain available')
+  assert.equal(await page.getByRole('button', { name: 'Параметры удара', exact: true }).count(), 0, 'No extra shot parameters panel')
+  assert.equal(await page.getByRole('button', { name: 'Правила' }).count(), 0, 'Figma rules caption is not a new dialog trigger')
+  assert.equal(await page.getByText('Правила 8-ball', { exact: true }).count(), 1)
+  assert.equal(await page.getByTestId('alt-assist').count(), 0, 'Assist does not invent a separate overview/heading panel')
+  assert.equal(await page.locator('.hud-overview-instruction h2').innerText(), 'Ваш ход')
+  assert.equal(await page.locator('.hud-wordmark').innerText(), 'Pooltool\n8-BALL · СТОЛ ABC123')
+  assert.equal(await page.locator('.hud-footer-instruction').innerText(), 'Колесо мыши · приблизить биток')
+  await page.evaluate(() => { window.assistFixture.feedback = 'Соединение потеряно' })
+  assert.equal(await page.locator('.hud-footer-instruction[role=status]').innerText(), 'Соединение потеряно')
+  await page.evaluate(() => {
+    window.assistFixture.feedback = ''
+    window.assistFixture.cameraMode = 'cue'
+  })
+  await page.waitForFunction(() => [...document.querySelectorAll('.hud-direction-control img, .hud-direction-reticle, .hud-power-reticle')].length === 3
+    && [...document.querySelectorAll('.hud-direction-control img, .hud-direction-reticle, .hud-power-reticle')].every(img => img.complete && img.naturalWidth > 0))
+  assert.equal(await page.locator('.hud-direction-reticle').evaluate(img => img.naturalWidth), 56)
+  assert.equal(await page.locator('.hud-power-reticle').evaluate(img => img.naturalWidth), 264)
+  assert.equal(await page.locator('.hud-direction-control span').innerText(), 'Мышь ↔ · направление удара')
+  assert.equal(await page.getByTestId('alt-assist').count(), 0)
+  await page.evaluate(() => { window.assistFixture.phase = 'aim'; window.assistFixture.showAssist = false })
+  const reticle = page.locator('.hud-contact-reticle')
+  await reticle.click({ button: 'right' })
+  assert.equal(await page.evaluate(() => window.assistFixture.phase), 'overview', 'RMB works within as well as outside the contact reticle')
+  await page.evaluate(() => { window.assistFixture.phase = 'aim' })
+  await reticle.click()
+  assert.equal(await page.evaluate(() => window.assistFixture.phase), 'power')
+  await page.getByRole('button', { name: 'Меню матча' }).click()
+  const menu = page.getByRole('dialog', { name: 'Меню матча' })
+  const menuActions = menu.locator('.match-menu-action')
+  const menuBox = await menu.locator('.match-menu-card').boundingBox()
+  assert.deepEqual([menuBox.x, menuBox.y, menuBox.width], [690, 320, 540], 'Menu frame 102:17902')
+  assert.deepEqual(await menuActions.locator('span').allTextContents(), ['Продолжить игру', 'Настройки', 'Сдаться'])
+  assert.equal(await menu.locator('.match-overlay-state').innerText(), 'Матч продолжается · время хода не останавливается')
+  assert.equal(await page.getByRole('meter').count(), 0, 'The overlay hides the transient shot layers')
+  await menu.getByRole('button', { name: 'Сдаться' }).click()
+  const surrender = page.getByRole('dialog', { name: 'Сдаться?' })
+  const surrenderBox = await surrender.locator('.match-surrender-card').boundingBox()
+  assert.deepEqual([surrenderBox.x, surrenderBox.y, surrenderBox.width], [620, 340, 680], 'Surrender frame 102:19206')
+  assert.equal(await surrender.locator('.match-menu-title > div').innerText(), 'Вам будет засчитано поражение.\nMorgan Reed получит победу в этой партии.')
+  assert.deepEqual(await surrender.locator('.match-menu-action > span').allTextContents(), ['Сдаться', 'Продолжить игру'])
+  await page.keyboard.press('Escape')
+  await menu.waitFor()
+  await menu.getByRole('button', { name: 'Продолжить игру' }).click()
+  assert.equal(await page.getByRole('dialog').count(), 0)
+  await page.evaluate(() => { window.assistFixture.user = { id: 'spectator' }; window.assistFixture.overlay = true })
+  assert.deepEqual(await menuActions.locator('span').allTextContents(), ['Продолжить игру', 'Настройки', 'Выйти'])
+  await menu.getByRole('button', { name: 'Выйти', exact: true }).click()
+  assert.equal(await page.getByRole('dialog').count(), 0)
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ engine, geometry, fills, layouts, keyboardSliders: true, contactLocksDirection: true, optionalCalls: true, jsErrors: errors.length }))
+  console.log(JSON.stringify({ engine, geometry, fills, layouts, keyboardSliders: true, contactLocksDirection: true, strictStages: true, matchOverlays: true, jsErrors: errors.length }))
 } finally {
   await browser?.close()
   await server.close()

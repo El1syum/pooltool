@@ -11,9 +11,10 @@ node tests/club-menu-browser.mjs
 ```
 
 The browser fixture is isolated from the backend and is never production UI.
-It tests real Vue components, navigation events, code normalization, turn time,
-room readiness, settings events and ranked aim-line disabling. Responsive
-screenshots and horizontal-overflow checks cover 320, 390, 768 and 1440 px.
+It tests real Vue components, distinct ranked/quick search, direct bot start,
+code normalization, private rules, lobby status/copy, profile and exit.
+Responsive screenshots and horizontal-overflow checks cover 320, 390, 768 and
+1440 px. The 1440 × 900 panels are checked against Figma node coordinates.
 Artifacts are written under the existing ignored `tests/artifacts/club-menu`.
 This is component evidence, not an online-game or physics test; use the existing
 real-service smoke tests for gameplay after App.vue integration.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { clickHudAction } from './app-state.mjs'
+import { clickHudAction, waitForConnectedHome } from './app-state.mjs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -10,13 +10,13 @@ assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname), 
 const modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
 const playwright = await import(path.isAbsolute(modulePath) ? pathToFileURL(modulePath).href : modulePath)
 
-async function api(actor, endpoint, body, method = 'POST') {
+async function api(actor, endpoint, body, method = 'POST', allowed = [200]) {
   const response = await fetch(base + endpoint, {
     method, headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: `Bearer ${actor.token}` } : {}) },
     ...(method === 'GET' ? {} : { body: JSON.stringify(body ?? {}) }), signal: AbortSignal.timeout(30_000),
   })
   const result = await response.json()
-  assert.equal(response.status, 200, `${method} ${endpoint}: ${response.status} ${JSON.stringify(result.detail)}`)
+  assert.ok(allowed.includes(response.status), `${method} ${endpoint}: ${response.status} ${JSON.stringify(result.detail)}`)
   return result
 }
 async function graphics(page) {
@@ -30,18 +30,11 @@ async function graphics(page) {
     if (!await settings.getByRole('button', { name: 'Графика', exact: true }).count()) await settings.getByRole('button', { name: 'Назад', exact: true }).click()
     await settings.getByRole('button', { name: 'Графика', exact: true }).click()
   }
-  const advanced = settings.locator('details').filter({ hasText: 'Дополнительные параметры графики' })
-  if (await advanced.getAttribute('open') === null) await advanced.locator('summary').click()
-  const control = advanced.getByRole('switch', { name: 'Линия прицеливания', exact: true })
-  await control.waitFor()
-  return control
+  assert.equal(await settings.locator('details').count(), 0)
+  assert.equal(await settings.getByRole('switch', { name: 'Линия прицеливания', exact: true }).count(), 0)
 }
-async function assertPolicy(page, { locked, checked }) {
-  const control = await graphics(page)
-  assert.equal(await control.isDisabled(), locked)
-  assert.equal(await control.getAttribute('aria-checked'), String(checked))
-  if (locked) await page.getByRole('note').filter({ hasText: 'линия прицеливания отключена' }).waitFor()
-  return control
+async function assertPolicy(page, enabled) {
+  await page.locator(`.game-stage canvas[data-aim-guide-enabled="${enabled}"]`).waitFor()
 }
 async function waitScene(page) {
   await page.locator('.game-stage canvas').waitFor({ timeout: 30_000 })
@@ -91,7 +84,8 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
       pages.push(page)
       await page.goto(base)
       await waitScene(page)
-      await assertPolicy(page, { locked: true, checked: false })
+      await assertPolicy(page, false)
+      await graphics(page)
       const stored = await page.evaluate(id => JSON.parse(localStorage.getItem(`pooltool.settings.${id}`)), actor.user.id)
       assert.equal(stored.showAimGuide, true, 'Ranked presentation must not persist its forced false value')
     }
@@ -110,41 +104,32 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     assert.equal(saved.showAimGuide, true)
     assert.equal(saved.volume, 0.6)
     assert.equal(await canvas.evaluate(element => element === document.querySelector('.game-stage canvas')), true, 'Settings must not rebuild scene')
-    await assertPolicy(first, { locked: true, checked: false })
+    await assertPolicy(first, false)
     await first.reload()
     await waitScene(first)
-    await assertPolicy(first, { locked: true, checked: false })
+    await assertPolicy(first, false)
     // Real socket close -> reconnect -> same authoritative ranked lock.
     await first.evaluate(() => window.__policySockets.forEach(socket => socket.close()))
     await first.waitForFunction(() => window.__policySockets.length > 1 && window.__policySockets.at(-1).readyState === WebSocket.OPEN, null, { timeout: 15_000 })
-    const control = first.getByRole('switch', { name: 'Линия прицеливания', exact: true })
-    assert.equal(await control.isDisabled(), true)
-    assert.equal(await control.getAttribute('aria-checked'), 'false')
+    await assertPolicy(first, false)
     const current = (await api(actors[0], `/api/matches/${paired.match.id}`, undefined, 'GET')).match
-    // The visible player wins. An authoritative self-surrender now leaves the
-    // match instead of keeping its finished settings overlay open.
+    // The visible player wins. The finished match is left through the actual
+    // client flow; there is no invented result/settings screen after it ends.
     await api(actors[1], `/api/matches/${current.id}/commands`, { commandId: `policy-end-${engineName}-${Date.now()}`, expectedRevision: current.revision, type: 'surrender' })
-    for (const page of pages) {
-      await page.waitForFunction(() => { const element = document.querySelector('[aria-label="Линия прицеливания"]'); return element && !element.disabled && element.getAttribute('aria-checked') === 'true' })
-    }
-    // Leave the UI actor through its actual navigation so its lifecycle guards
-    // can reject delayed packets; don't remove a live UI participant behind it.
+    await waitForConnectedHome(first)
+    assert.equal((await api(actors[0], '/api/me/settings', undefined, 'GET')).settings.showAimGuide, true)
     await pages[1].close()
-    const settings = first.locator('.club-settings-shell')
-    await settings.getByRole('button', { name: 'Назад', exact: true }).click()
-    await settings.getByRole('heading', { name: 'Настройки', exact: true }).waitFor()
-    await settings.getByRole('button', { name: 'Назад к меню матча', exact: true }).click()
-    await first.getByRole('dialog').getByRole('button', { name: 'В главное меню', exact: true }).click()
-    await first.getByRole('heading', { name: 'Pooltool', exact: true }).waitFor()
-    for (const actor of actors.slice(1)) await api(actor, `/api/rooms/${room.code}/leave`)
+    // The observing client may already have left after the finish broadcast.
+    for (const actor of actors.slice(1)) await api(actor, `/api/rooms/${room.code}/leave`, {}, 'POST', [200, 403, 404])
     room = null
     const casual = await pair(actors[0], actors[1], 'casual')
     room = casual.room
     await first.reload()
     await waitScene(first)
-    await assertPolicy(first, { locked: false, checked: true })
+    await assertPolicy(first, true)
+    await graphics(first)
     assert.deepEqual(errors, [])
-    console.log(JSON.stringify({ engine: engineName, passed: 'ranked players+spectators locked OFF; saved casual pref preserved during settings changes; fresh scene/reload/real socket reconnect; finished+casual preference restored; stable canvas; no JS errors' }))
+    console.log(JSON.stringify({ engine: engineName, passed: 'ranked players+spectators locked OFF; saved casual pref preserved during settings changes; fresh scene/reload/real socket reconnect; casual rendering preference restored; stable canvas; no JS errors' }))
   } finally {
     keepalive?.close()
     if (room) for (const actor of actors) await api(actor, `/api/rooms/${room.code}/leave`).catch(() => {})

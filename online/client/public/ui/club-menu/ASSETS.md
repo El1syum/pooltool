@@ -7,8 +7,8 @@ quality 90 without resizing (68,442 bytes). It is not a composed-frame screensho
 SVGs are direct Figma exports, never screenshots or
 reconstructed paths. Runtime references use local files only.
 
-Main callsites: `ClubMenu.vue`, `ClubSettings.vue`. Text, Elo, player names,
-match history, room codes and connection states remain live application data.
+Main callsites: `ClubMenu.vue`, `ClubSettings.vue`. Elo, player names,
+statistics, room codes and connection states remain live application data.
 
 | Local asset | Source frame | Native dimensions |
 | --- | --- | --- |
@@ -40,8 +40,10 @@ range inputs with CSS tracks; they are not a screenshot of a fixed Figma value.
 
 All screen contexts were retrieved with screenshots and reviewed in high-fidelity
 mode. Frame `96:15392` (sound) and `96:15486` (controls) supply those settings layouts.
-The profile includes actual saved nickname, private name/city/about and progress
-toward the next 100 Elo milestone. `pencil-about.svg` is the exact 13×13 export
+The profile includes actual saved nickname, private name/city/about and match
+statistics. The best streak uses complete match history where available, without
+an extra history section. The rank progress slot remains neutral until real
+rank data exists. `pencil-about.svg` is the exact 13×13 export
 `2879e.svg` from `96:15592`. The other edit glyphs reuse the exact existing
 `pencil.svg` and `pencil-small.svg` exports.
 

@@ -21,10 +21,8 @@ function fixture(overrides = {}) {
       snapshot: { groups: [null, null], balls: Array.from({ length: 15 }, (_, index) => ({ id: String(index + 1), position: [0, 0, 0.03], pocketed: false })), table: { width: 1.27, length: 2.54, pockets: [] } },
     },
     user: { id: 'a' }, room: { code: 'ABC123' }, aim: { phi: 90, V0: 2.4, theta: 15, a: 0, b: 0 },
-    phase: 'overview', canShoot: true, canPlace: false, canReposition: false,
-    placingCue: false, connected: true, connection: 'Соединение установлено',
-    remaining: 24, elapsed: 725, statusText: 'Ваш ход', volume: 0.5,
-    topViewKey: 'KeyT', calledBall: '', calledPocket: '', cameraMode: 'free',
+    phase: 'overview', canShoot: true, canPlace: false,
+    remaining: 24, topViewKey: 'KeyT', overviewKey: 'KeyV', cameraMode: 'free',
     ...overrides,
   }
 }
@@ -45,8 +43,8 @@ test('an open table never assigns all 14 object balls to each player', async () 
   assert.equal(cards.length, 2)
   for (const card of cards) {
     assert.match(card.html, /data-group="open"/)
-    assert.match(card.html, /Открытый стол/)
-    assert.doesNotMatch(card.html, /осталось 14/)
+    assert.match(card.html, /<strong>0<\/strong><span>Из 7<\/span>/)
+    assert.doesNotMatch(card.html, /Открытый стол|Группы определятся после разбоя|осталось 14/)
   }
 })
 
@@ -74,13 +72,14 @@ test('moving the local player to the left preserves original group and turn indi
   assert.match(cards[1].html, /hud-player-active/)
 })
 
-test('timers, mapped key hint and the single match-menu action use current values', async () => {
-  const html = await render(fixture({ volume: 0, topViewKey: 'KeyF' }))
+test('the table code, turn timer and both mapped camera hints use real values', async () => {
+  const html = await render(fixture({ topViewKey: 'KeyF', overviewKey: 'KeyB' }))
   assert.match(html, /00:24/)
-  assert.match(html, /12:05/)
+  assert.match(html, /8-BALL.*СТОЛ ABC123/)
   assert.match(html, /F · вид сверху/)
+  assert.match(html, /B · обзор стола/)
   assert.match(html, /aria-label="Меню матча"/)
-  assert.doesNotMatch(html, /KeyF · вид сверху/)
+  assert.doesNotMatch(html, /МАТЧ \d\d:|KeyF · вид сверху|Параметры удара/)
 })
 
 test('power phase renders original vector gauges as live percent and speed, never elevation', async () => {
@@ -112,9 +111,7 @@ test('both fill levels follow the same current cue speed', async () => {
 
 test('contact phase preserves its original Figma reticle and locked-direction hint', async () => {
   const html = await render(fixture({ phase: 'aim', showAssist: true }))
-  // Open drawer controls are exercised in browser tests; this hint also makes
-  // the lock and its escape route explicit to a player using the contact HUD.
-  assert.match(html, /Направление сохранено/)
+  assert.match(html, /Направление удара не меняется/)
   assert.match(html, /contact-ring\.svg/)
   assert.match(html, /contact-reticle\.svg/)
 })
@@ -134,7 +131,7 @@ test('contact and heading states never show power gauges, with or without assist
     for (const showAssist of [false, true]) {
       const html = await render(fixture({ phase, cameraMode: 'cue', showAssist }))
       assert.doesNotMatch(html, /role="meter"/)
-      assert.equal(html.includes('data-testid="alt-assist"'), showAssist)
+      assert.equal(html.includes('data-testid="alt-assist"'), phase === 'aim' && showAssist)
     }
   }
 })
@@ -152,6 +149,8 @@ test('own cue heading uses the direction design without confirming contact', asy
     assert.match(html, /hud-heading/)
     assert.match(html, /data-shot-phase="overview"/)
     assert.match(html, /direction-arrow\.svg/)
+    assert.match(html, /direction-ring\.svg/)
+    assert.match(html, /direction-reticle\.svg/)
     assert.doesNotMatch(html, /hud-overview-instruction/)
     assert.doesNotMatch(html, /role="meter"/)
   }
@@ -179,4 +178,10 @@ test('assist hints and slider labels follow the configured keyboard binding', as
     assert.match(html, new RegExp(`aria-label="Наклон кия ${assistKeyLabel}"`))
     assert.doesNotMatch(html, /Удерживается Alt|Сила удара Alt|Наклон кия Alt/)
   }
+})
+
+test('match feedback uses the designed footer text instead of inventing a new surface', async () => {
+  const html = await render(fixture({ feedback: 'Соединение потеряно' }))
+  assert.match(html, /<span class="(?=[^"]*\bhud-footer-instruction\b)(?=[^"]*\bhud-footer-feedback\b)[^"]+" role="status">Соединение потеряно<\/span>/)
+  assert.doesNotMatch(html, /hud-match-status|hud-phase-hint|hud-controls|hud-alt-hint|hud-touch-assist/)
 })

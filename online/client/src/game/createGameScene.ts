@@ -12,7 +12,7 @@ import {
   type CameraMode, type SceneCallbacks, type SceneInteraction, type SceneSettings, type ShotPhase, type ShotTrajectory, type Vec3Tuple,
 } from './types'
 
-/** Pocket marker colours by pocket number 1..6; the HUD uses the same palette. */
+/** Pocket selection/aiming feedback colours by pocket number 1..6. */
 export const POCKET_COLORS = [0xf3ab43, 0x62cfc2, 0x669bf8, 0xf26a78, 0xaa80e7, 0xf0d667]
 export const BALL_COLORS = ['#fffdf4', '#edba1c', '#305db8', '#d3323b', '#803bac', '#e97727', '#239652', '#8e2637', '#191d22']
 const BASIS = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2)
@@ -106,6 +106,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   renderer.toneMappingExposure = 1.1
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   const canvas = renderer.domElement
+  canvas.dataset.inputSuspended = 'false'
   canvas.style.width = canvas.style.height = '100%'
   canvas.style.display = 'block'
   canvas.style.touchAction = 'none'
@@ -397,6 +398,9 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
 
   function refreshPocketSelection(): void {
     for (const [id, mesh] of pocketMeshes) {
+      // No permanent pocket decoration in the match design. Keep the same
+      // hit area and show a ring only as real aiming/selection feedback.
+      mesh.visible = settings.showPocketLabels || id === calledPocket || id === predictedPocket
       mesh.material.emissiveIntensity = id === calledPocket ? 1.5 : id === predictedPocket ? 0.8 : 0.1
       mesh.scale.setScalar(id === calledPocket ? 1.2 : id === predictedPocket ? 1.1 : 1)
     }
@@ -664,7 +668,11 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     lockCanReenter = false
     resumePointer = null
     controls.enabled = false
-    if (!inputSuspended) { inputSuspended = true; callbacks.onInputSuspendedChange?.(true) }
+    if (!inputSuspended) {
+      inputSuspended = true
+      canvas.dataset.inputSuspended = 'true'
+      callbacks.onInputSuspendedChange?.(true)
+    }
     releaseAimPointerLock(false)
   }
 
@@ -673,7 +681,11 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     isInputSuspended()
     cancelShotGesture()
     aimHoverX = null
-    if (inputSuspended) { inputSuspended = false; callbacks.onInputSuspendedChange?.(false) }
+    if (inputSuspended) {
+      inputSuspended = false
+      canvas.dataset.inputSuspended = 'false'
+      callbacks.onInputSuspendedChange?.(false)
+    }
     controls.enabled = cameraMode === 'free'
     if (capture) requestAimPointerLock()
   }
@@ -855,6 +867,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       volume: Math.max(0, Math.min(1, partial.volume ?? settings.volume)),
       bindings: { ...settings.bindings, ...partial.bindings },
     }
+    canvas.dataset.aimGuideEnabled = String(settings.showAimGuide)
     const ratio = renderPixelRatio(settings.quality, window.devicePixelRatio, presentation.renderScale)
     if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio)
     const shadowMode = presentation.shadowQuality === 'auto'
@@ -870,6 +883,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     controls.rotateSpeed = settings.sensitivity * (presentation.invertCamera ? -1 : 1)
     updateOrbitButtons()
     for (const label of pocketLabels) label.visible = settings.showPocketLabels
+    refreshPocketSelection()
     audio.setVolume(settings.volume * presentation.impactVolume)
     audio.setBackgroundPlayback(presentation.audioInBackground)
     resize()
@@ -1123,7 +1137,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       return
     }
     const position = pointOnTable(event)
-    const hits = raycaster.intersectObjects([...pocketLabels, ...pocketMeshes.values(), ...[...balls.values()].map(ball => ball.mesh)], false)
+    const hits = raycaster.intersectObjects([...(settings.showPocketLabels ? pocketLabels : []), ...pocketMeshes.values(), ...[...balls.values()].map(ball => ball.mesh)], false)
     const hit = hits[0]?.object
     if (hit?.userData.pocketId && interaction.canShoot) callbacks.onSelectPocket?.(String(hit.userData.pocketId))
     else {

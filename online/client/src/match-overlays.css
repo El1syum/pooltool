@@ -55,7 +55,7 @@
 .match-overlay-footer .match-overlay-path button { border:0; border-radius:0; padding:0; background:none; color:inherit; font:inherit; }
 .match-overlay-footer .match-overlay-path button:hover { color:#f1ede1; text-decoration:underline; }
 .match-overlay-state { display:flex; align-items:center; justify-content:center; gap:9px; color:#c7aa72; font-size:13px; text-align:center; }
-.match-overlay-offline { color:#e7b394; }
+.match-overlay-feedback { color:#e7b394; }
 .match-overlay-version { color:#728078; font-size:11px; letter-spacing:1px; white-space:nowrap; }
 
 @media (max-width:1200px) {

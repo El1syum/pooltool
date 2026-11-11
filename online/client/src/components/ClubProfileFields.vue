@@ -49,6 +49,6 @@ function update(field: 'nickname' | keyof ProfileDetails, event: Event) {
         <button type="button" class="club-profile-edit" aria-label="Изменить описание" :disabled="disabled" @click="focusField('club-profile-about')"><img :src="`${assetBase}pencil-about.svg`" alt="" /></button>
       </div>
     </div>
-    <p id="club-profile-visibility" class="club-profile-visibility">Только псевдоним виден соперникам.</p>
+    <p id="club-profile-visibility" hidden>Только псевдоним виден соперникам.</p>
   </div>
 </template>

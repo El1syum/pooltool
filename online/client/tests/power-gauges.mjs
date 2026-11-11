@@ -46,9 +46,8 @@ try {
         players: [{ id: 'a', displayName: 'Alex Chen' }, { id: 'b', displayName: 'Morgan Reed' }],
         snapshot: { groups: [null, null], balls: [], table: { width: 1.27, length: 2.54, pockets: [] } } },
       user: { id: 'a' }, room: { code: 'ABC123' }, aim: { phi: 90, V0: fraction * 8, theta: 15, a: 0, b: 0 },
-      phase: 'power', showAssist: false, canShoot: true, canPlace: false, canReposition: false, placingCue: false,
-      connected: true, connection: '', remaining: 24, elapsed: 0, statusText: 'Ваш ход',
-      volume: 0.5, topViewKey: 'KeyT', calledBall: '', calledPocket: '', cameraMode: 'cue',
+      phase: 'power', showAssist: false, canShoot: true, canPlace: false, remaining: 24,
+      topViewKey: 'KeyT', overviewKey: 'KeyV', cameraMode: 'cue',
     }
     const html = await renderToString(createSSRApp(Hud, props))
     await route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<!doctype html><html lang="ru"><head><meta charset="utf-8"><link rel="stylesheet" href="/src/style.css?direct"><link rel="stylesheet" href="/src/match-hud.css?direct"><link rel="stylesheet" href="/src/match-design.css?direct"></head><body style="margin:0;background:#102125"><main style="position:relative;width:100vw;height:100vh">${html}</main></body></html>` })

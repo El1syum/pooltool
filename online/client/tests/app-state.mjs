@@ -15,7 +15,8 @@ export async function clickHudAction(page, locator) {
   await page.waitForFunction(() => !document.querySelector('[aria-modal="true"]'))
   await page.keyboard.down('ControlLeft')
   try {
-    await page.locator('[data-testid="match-hud"].hud-assist-visible').waitFor()
+    // Ctrl releases pointer lock during heading too, where Figma has no
+    // additional panels to observe. Check the actual browser lock instead.
     await page.waitForFunction(() => !document.pointerLockElement)
     await locator.click()
   }

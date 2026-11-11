@@ -1,14 +1,27 @@
 # Browser smoke checks
 
+## Strict Figma · current player UI
+
+`strict-figma-flow.mjs` exercises the compiled app in Chromium and WebKit with
+a real Pooltool service: separate queues, private lobby/copy and restore,
+automatic start, spectator join, surrender/cancel, release of all memberships,
+persisted server results, direct bot play and no undesigned panels. The default
+is isolated `127.0.0.1:8791`; `STRICT_FIGMA_PUBLIC_SMOKE=1` explicitly opts into
+running only private-room and solo lanes on the public test deployment.
+`STRICT_FIGMA_SCREENSHOTS` optionally captures real screens. Use the club/HUD
+fixtures, settings audit and focused real server tests below for visual and
+control coverage. Earlier audit entries document their releases: expectations
+for a result panel, history UI, ready button or advanced drawers no longer
+describe the current interface.
+
 ## Surrender navigation
 
-`postgame-menu.mjs` checks the real room and match history: a confirmed
-surrender never mounts the losing result, the opponent still sees victory,
-ranked Elo is recorded, cancellation does not end the match, and genuine or
-lost leave failures use the existing recovery paths. A finished match with a
-different reason still shows its normal result. The optional
+`postgame-menu.mjs` checks the real room and match history: both players return
+to the home screen without a result panel, ranked Elo is recorded, cancellation
+does not end the match, and genuine or lost leave failures use the existing
+recovery paths. A normally finished match also returns to the home screen. The optional
 `POSTGAME_SOLO_LIMIT_SECONDS` must match the isolated service's
-`MAX_MATCH_SECONDS` to exercise replay after a natural bot-game expiry.
+`MAX_MATCH_SECONDS` to exercise starting another bot game after natural expiry.
 
 `surrender-recovery.mjs` starts a fresh browser with a server-committed surrender;
 `SURRENDER_DROP_ACK=1` additionally drops only the matching real WebSocket
@@ -30,9 +43,13 @@ Both tests require an isolated real loopback service (default 8791).
 
 `Применить` saves match settings and resumes the match; Back goes up one level.
 Use `Матч` in the match breadcrumb to resume without a server settings write.
-Open the genuine advanced graphics or bindings disclosure before testing the
-ranked aim-line lock, Ctrl, or the orbit binding. See the
-[QA resolution report](../../docs/QA_INTERFACE_20261111.md).
+The settings audit uses only the Figma rows. The former advanced disclosures
+are intentionally absent. `ranked-policy-integration.mjs` checks the canvas's
+effective aim-guide setting across actual ranked/casual sessions, reload and
+reconnect. `assist-binding-integration.mjs` exercises Ctrl and an existing
+server-saved hotkey in the real shot phases. `cursor-resume-app.mjs` checks
+that the trusted return click on the canvas restores input without aiming or
+shooting. All three use the isolated real loopback service.
 
 ## Full Figma frontend audit (2026-11-06)
 

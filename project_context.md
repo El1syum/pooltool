@@ -778,6 +778,18 @@ finished payloads preserved,103 after own smoke games, integrity ok. Backend
 PID1024133, catalogue v5, model bytes and private config unchanged. All local
 test servers and browser contexts stopped.
 
+## Strict Figma player interfaces (2026-11-11)
+
+Supersedes earlier QA extras and the previous opponent result panel. See
+`online/docs/FIGMA_STRICT_20261111.md` for the approved Demo nodes and the
+implementation boundaries. Main menus, settings, HUD and match overlays use
+the source design; the only extra gameplay menu action is direct bot play.
+Private rooms auto-start through the existing API, all completed matches
+return to the existing home, and history/Elo stay server-authoritative.
+Original WebP and vector assets, live 3D, ranked aim-guide policy and
+pointer-lock recovery are retained. Operator model tools have no game menu
+entry; use `/?tools=models`. Do not deploy backend from this branch.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

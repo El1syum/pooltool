@@ -8,7 +8,6 @@ import { DEFAULT_BINDINGS, type BindingAction, type GameScene, type GameSettings
 
 const query = new URLSearchParams(location.search)
 const inMatch = query.has('match')
-const aimGuideLocked = query.has('ranked')
 const withGame = query.has('renderer')
 const open = ref(false)
 const capture = ref<BindingAction | null>(null)
@@ -17,7 +16,7 @@ const goHome = ref(false)
 const settings = ref<GameSettings>({ ...DEFAULT_PRESENTATION_SETTINGS, quality: 'medium', volume: .5, sensitivity: 1,
   showAimGuide: true, showPocketLabels: true, bindings: { ...DEFAULT_BINDINGS } })
 const user = { id: 'tester', displayName: 'Игрок с длинным именем', elo: 1000 } as User
-const labels = Object.fromEntries(Object.keys(DEFAULT_BINDINGS).map(action => [action, ({ shoot: 'Удар', assist: 'Дополнительные приборы', orbit: 'Вращать камеру' } as Record<string, string>)[action] || action])) as Record<BindingAction, string>
+const labels = Object.fromEntries(Object.keys(DEFAULT_BINDINGS).map(action => [action, ({ topView: 'Вид сверху', cueView: 'Вид из-за кия' } as Record<string, string>)[action] || action])) as Record<BindingAction, string>
 const sceneRoot = ref<HTMLElement | null>(null)
 let scene: GameScene | undefined
 const chrome = computed(() => innerWidth <= 760 ? (innerHeight < 500 ? 126 : 172) : 176)
@@ -49,7 +48,7 @@ onBeforeUnmount(() => { scene?.destroy(); window.removeEventListener('keydown', 
       <output hidden data-settings>{{ JSON.stringify(settings) }}</output>
     </main>
     <ClubSettings v-if="open" :user="user" :settings="settings" :in-match="inMatch" :binding-capture="capture"
-      :aim-guide-locked="aimGuideLocked" :capture-labels="labels" :binding-conflicts="[]" client-version="qa"
+      :capture-labels="labels" :binding-conflicts="[]" :error="query.has('error') ? 'Не удалось сохранить настройки.' : undefined" client-version="qa"
       @update:settings="settings = $event" @capture="capture = $event" @save="save"
       @close="open = false" @home="goHome = true; open = false">
       <template #match-footer="{ tab, goToIndex }">

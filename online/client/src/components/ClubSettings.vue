@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { User } from '../api'
 import { DEFAULT_BINDINGS, type BindingAction, type GameSettings } from '../game/types'
-import { bindingLabel, normalizeAssistBinding } from '../game/assistBinding'
+import { bindingLabel } from '../game/assistBinding'
 import { currentGameAudioOutput, gameAudioOutputs, setGameAudioOutput, supportsGameAudioOutput } from '../game/audio'
 import { FRAME_RATE_LIMITS, presentationSettings, renderPixelRatio, RENDER_SCALES, SHADOW_QUALITIES } from '../game/settingsOptions'
 import ClubSettingRange from './ClubSettingRange.vue'
@@ -12,12 +12,12 @@ import '../club-settings-qa.css'
 
 const props = withDefaults(defineProps<{
   settings: GameSettings; bindingCapture: BindingAction | null
-  captureLabels: Record<BindingAction, string>; bindingConflicts: string[]; bindingCaptureError?: string
-  aimGuideLocked: boolean; inMatch: boolean; user?: User | null; clientVersion: string
+  captureLabels: Record<BindingAction, string>; bindingConflicts: string[]; bindingCaptureError?: string; error?: string
+  inMatch: boolean; user?: User | null; clientVersion: string
 }>(), { user: null })
 const emit = defineEmits<{
   'update:settings': [value: GameSettings]; capture: [action: BindingAction]
-  reset: []; save: []; close: []; home: []; models: []; appearance: []
+  save: []; close: []; home: []
 }>()
 type Tab = 'index' | 'graphics' | 'sound' | 'controls'
 const tab = ref<Tab>('index')
@@ -36,30 +36,33 @@ const base = import.meta.env.BASE_URL || '/'
 const asset = (name: string, ext = 'svg') => `${base}ui/club-menu/${name}.${ext}`
 const matchAsset = (name: string) => `${base}ui/figma-match-settings/${name}.svg`
 const numberFormat = new Intl.NumberFormat('ru-RU')
-const titles = { index: ['Настройки', 'Настройте атмосферу и почувствуйте игру.'], graphics: ['Графика', 'Каждый блик. Каждая деталь сукна.'], sound: ['Звук', 'Знакомый стук шаров.'], controls: ['Управление', 'Точность начинается с удобства.'] }
+const titles = { index: ['Настройки', 'Настройте атмосферу и почувствуйте игру.'], graphics: ['Графика', 'Каждый блик. Каждая деталь сукна.'], sound: ['Звук', 'Знакомый стук шаров. Тихая музыка клуба.'], controls: ['Управление', 'Точность начинается с удобства.'] }
 const title = computed(() => titles[tab.value])
 const graphicsSummary = computed(() => ({ low: 'Низкая', medium: 'Средняя', high: 'Высокая' }[props.settings.quality]))
 const initial = computed(() => (props.user?.displayName || 'Игрок').trim().split(/\s+/).slice(0, 2).map(x => [...x][0]).join('').toUpperCase())
 const graphicsQualities = { low: 'Низкое', medium: 'Среднее', high: 'Высокое' }
-const shadowTitles = { auto: 'По качеству графики', off: 'Выкл.', medium: 'Среднее · 1024 px', high: 'Высокое · 2048 px' }
+const shadowTitles = { auto: 'По качеству графики', off: 'Выкл.', medium: 'Среднее', high: 'Высокое' }
 const presentation = computed(() => presentationSettings(props.settings))
-const actions = computed(() => (Object.keys(props.captureLabels) as BindingAction[]).filter(action => !['shoot', 'topView', 'cueView'].includes(action)))
-const shortBinding = bindingLabel
-const assistLabel = computed(() => bindingLabel(normalizeAssistBinding(props.settings.bindings.assist)))
+const noAudioTrack = 'Аудиодорожка недоступна.'
+const sensitivityMin = 0.1
+const sensitivityMax = 3
+const sensitivityPercent = computed(() => Math.round(100 * (props.settings.sensitivity - sensitivityMin) / (sensitivityMax - sensitivityMin)))
 const actionNote = computed(() => tab.value === 'graphics' ? 'Новые параметры применяются без перезапуска.'
   : tab.value === 'sound' ? `Настройте громкость и ${props.inMatch ? 'примените' : 'сохраните'} изменения.`
     : 'Выберите назначение клавиши, чтобы изменить раскладку.')
+const actionError = computed(() => localError.value || props.bindingCaptureError
+  || props.bindingConflicts.map(conflict => `Конфликт: ${conflict}`).join(' · ') || props.error)
 const saveLabel = computed(() => props.inMatch || tab.value === 'graphics' ? 'Применить' : 'Сохранить')
 const canSelectOutput = computed(() => outputAvailable.value && (outputDevices.value.length > 0 || !!outputDevice.value))
 const audioOutputHint = computed(() => outputAvailable.value ? 'Браузер не предоставил другие устройства вывода.'
   : 'Выбор устройства доступен в поддерживаемом браузере при защищённом подключении.')
-type ControlRow = { label: string; value?: string; action?: BindingAction; gesture?: string }
+type ControlRow = { label: string; value: string } | { label: string; action: BindingAction }
 const controlRows = computed<ControlRow[]>(() => [
   { label: 'Прицеливание', value: props.inMatch ? 'Мышь ↔' : 'Мышь' },
-  { label: 'Сила и удар', action: 'shoot', gesture: 'ЛКМ · удержать' },
-  { label: props.inMatch ? 'Точка контакта / вращение' : 'Вращение битка', value: 'Мышь · точка контакта' },
+  { label: 'Сила и удар', value: 'ЛКМ · удержать' },
+  { label: props.inMatch ? 'Точка контакта / вращение' : 'Вращение битка', value: 'Мышь' },
   ...(props.inMatch ? [{ label: 'Наклон кия', value: 'Shift + колесо' }, { label: 'Приближение камеры', value: 'Колесо мыши' }] : []),
-  { label: 'Вид сверху', action: 'topView' }, { label: 'Вид стола / из-за кия', action: 'cueView' },
+  { label: 'Вид сверху', action: 'topView' }, { label: 'Обзор стола', action: 'cueView' },
   { label: props.inMatch ? 'Меню матча' : 'Меню паузы', value: 'Esc' },
 ])
 function update<K extends keyof GameSettings>(key: K, value: GameSettings[K]) { emit('update:settings', { ...props.settings, [key]: value, bindings: { ...props.settings.bindings } }) }
@@ -122,11 +125,9 @@ function onKey(event: KeyboardEvent) {
   if (!root || event.defaultPrevented || !isTopmostDialog()) return
   if (event.key === 'Escape' && !props.bindingCapture) { event.preventDefault(); event.stopPropagation(); close(); return }
   if (event.key !== 'Tab' || props.bindingCapture) return
-  const elements = [...root.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary, [tabindex]')].filter(x => {
-    const collapsed = x.closest('details:not([open])')
-    return x.tabIndex >= 0 && !x.matches(':disabled') && x.getClientRects().length && !x.closest('[inert]')
-      && getComputedStyle(x).visibility !== 'hidden' && (!collapsed || collapsed.querySelector(':scope > summary')?.contains(x))
-  })
+  const elements = [...root.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]')].filter(x =>
+    x.tabIndex >= 0 && !x.matches(':disabled') && x.getClientRects().length && !x.closest('[inert]')
+      && getComputedStyle(x).visibility !== 'hidden')
   const first = elements[0], last = elements.at(-1)
   if (!first || !last) { event.preventDefault(); root.focus({ preventScroll: true }); return }
   const active = document.activeElement
@@ -192,7 +193,6 @@ onBeforeUnmount(() => {
       <header class="club-header">
         <button class="club-brand" type="button" aria-label="Закрыть настройки" @click="close"><span class="club-seal">8</span><span class="club-wordmark"><strong>Pooltool</strong><span>БИЛЬЯРДНЫЙ КЛУБ</span></span></button>
         <div v-if="user" class="club-account"><img :src="asset('online-dot')" alt="" /><span class="club-account-text"><span>{{ user.displayName }}</span><small>Рейтинг · {{ numberFormat.format(user.elo) }} Эло</small></span><span class="club-avatar">{{ initial }}</span></div>
-        <button v-else class="club-text-button" type="button" @click="close">Закрыть</button>
       </header>
     </template>
     <section ref="scrollArea" class="club-content">
@@ -204,78 +204,53 @@ onBeforeUnmount(() => {
             <button class="club-action" aria-label="Звук" aria-describedby="club-volume-summary" @click="tab = 'sound'"><img :src="asset('volume')" alt="" /><span>Звук</span><small id="club-volume-summary" data-testid="volume-summary">{{ Math.round(settings.volume * 100) }}%</small></button>
             <button class="club-action" aria-label="Управление" aria-describedby="club-input-summary" @click="tab = 'controls'"><img :src="asset('mouse')" alt="" /><span>Управление</span><small id="club-input-summary">Мышь и клавиатура</small></button>
             <button class="club-action club-action-back" :class="{ 'club-action-compact': !inMatch }" type="button" @click="close"><img :src="inMatch ? matchAsset('back') : asset('arrow-left')" alt="" /><span>{{ inMatch ? 'Назад к меню матча' : 'Назад' }}</span></button>
-          </nav><p class="club-footnote">Параметры сохраняются для вашего профиля.</p>
-          <div class="club-settings-utilities club-settings-secondary">
-            <button class="club-text-button" type="button" @click="emit('appearance')">Оформление</button>
-            <button class="club-text-button" type="button" @click="emit('models')">Модели стола и окружения</button>
-          </div>
+          </nav><p class="club-footnote" :class="{ 'club-settings-warning': error }" :role="error ? 'alert' : undefined">{{ error || 'Параметры сохраняются для вашего профиля.' }}</p>
         </template>
         <template v-else>
           <section class="club-card">
           <div v-if="tab === 'graphics'" class="club-parameters">
             <label class="club-parameter"><span>Режим экрана</span><select aria-label="Режим экрана" :value="fullscreen ? 'fullscreen' : 'window'" :disabled="!fullscreenAvailable || displayModeBusy" @change="changeDisplayMode"><option value="window">В окне браузера</option><option value="fullscreen">Полноэкранный</option></select></label>
-            <label class="club-parameter"><span>Разрешение рендера</span><select aria-label="Разрешение рендера" :value="presentation.renderScale" @change="update('renderScale', Number(($event.target as HTMLSelectElement).value) as typeof RENDER_SCALES[number])"><option v-for="scale in RENDER_SCALES" :key="scale" :value="scale">{{ renderSizeLabel(scale) }}</option></select></label>
+            <label class="club-parameter"><span>Разрешение</span><select aria-label="Разрешение" :value="presentation.renderScale" @change="update('renderScale', Number(($event.target as HTMLSelectElement).value) as typeof RENDER_SCALES[number])"><option v-for="scale in RENDER_SCALES" :key="scale" :value="scale">{{ renderSizeLabel(scale) }}</option></select></label>
             <label class="club-parameter"><span>Качество графики</span><select :value="settings.quality" aria-label="Качество графики" @change="update('quality', ($event.target as HTMLSelectElement).value as GameSettings['quality'])"><option v-for="(label, quality) in graphicsQualities" :key="quality" :value="quality">{{ label }}</option></select></label>
             <label class="club-parameter"><span>Качество теней</span><select aria-label="Качество теней" :value="presentation.shadowQuality" @change="update('shadowQuality', ($event.target as HTMLSelectElement).value as typeof SHADOW_QUALITIES[number])"><option v-for="quality in SHADOW_QUALITIES" :key="quality" :value="quality">{{ shadowTitles[quality] }}</option></select></label>
-            <div class="club-parameter"><span>Сглаживание</span><span class="club-fixed-value" title="Режим сглаживания задаётся при создании WebGL-контекста">MSAA · WebGL</span></div>
-            <label class="club-parameter"><span>Частота кадров</span><select aria-label="Частота кадров" :value="presentation.frameRateLimit" @change="update('frameRateLimit', Number(($event.target as HTMLSelectElement).value) as typeof FRAME_RATE_LIMITS[number])"><option v-for="fps in FRAME_RATE_LIMITS" :key="fps" :value="fps">{{ fps ? `До ${fps} FPS` : 'По частоте экрана' }}</option></select></label>
-            <div class="club-parameter"><span>Вертикальная синхронизация</span><span class="club-muted">Управляется браузером</span></div>
+            <label class="club-parameter" title="Сглаживание запрашивается у WebGL при запуске игры"><span>Сглаживание</span><select aria-label="Сглаживание" disabled><option>MSAA</option></select></label>
+            <label class="club-parameter"><span>Частота кадров</span><select aria-label="Частота кадров" :value="presentation.frameRateLimit" @change="update('frameRateLimit', Number(($event.target as HTMLSelectElement).value) as typeof FRAME_RATE_LIMITS[number])"><option v-for="fps in FRAME_RATE_LIMITS" :key="fps" :value="fps">{{ fps ? `${fps} FPS` : 'По частоте экрана' }}</option></select></label>
+            <div class="club-parameter" title="Частота обновления управляется браузером"><span>Вертикальная синхронизация</span><ClubSettingSwitch label="Вертикальная синхронизация" :active="false" :in-match="inMatch" status="Авто" disabled /></div>
           </div>
           <div v-else-if="tab === 'sound'" class="club-parameters">
             <label class="club-parameter"><span>Устройство вывода</span><select aria-label="Устройство вывода" :title="!canSelectOutput ? audioOutputHint : undefined" :value="outputDevice" :disabled="!canSelectOutput || outputBusy" @change="changeAudioOutput"><option value="">По умолчанию</option><option v-if="outputDevice && !outputDevices.some(device => device.deviceId === outputDevice)" :value="outputDevice" disabled>Устройство недоступно</option><option v-for="(device, index) in outputDevices" :key="device.deviceId" :value="device.deviceId">{{ device.label || `Устройство ${index + 1}` }}</option></select></label>
             <label class="club-parameter"><span>Общая громкость</span><ClubSettingRange label="Общая громкость" :value="settings.volume" :output="`${Math.round(settings.volume * 100)}%`" @update:value="update('volume', $event)" /></label>
-            <div class="club-parameter"><span>Музыка клуба</span><span class="club-muted">Аудиодорожка не добавлена</span></div>
+            <label class="club-parameter" :title="noAudioTrack"><span>Музыка клуба</span><ClubSettingRange label="Музыка клуба" :value="0" output="—" disabled /></label>
             <label class="club-parameter"><span>Удары и шары</span><ClubSettingRange label="Удары и шары" :value="presentation.impactVolume" :output="`${Math.round(presentation.impactVolume * 100)}%`" @update:value="update('impactVolume', $event)" /></label>
-            <div class="club-parameter"><span>Атмосфера зала</span><span class="club-muted">Аудиодорожка не добавлена</span></div>
-            <div class="club-parameter"><span>Уведомления</span><span class="club-muted">Аудиодорожка не добавлена</span></div>
+            <label class="club-parameter" :title="noAudioTrack"><span>Атмосфера зала</span><ClubSettingRange label="Атмосфера зала" :value="0" output="—" disabled /></label>
+            <label class="club-parameter" :title="noAudioTrack"><span>Уведомления</span><ClubSettingRange label="Уведомления" :value="0" output="—" disabled /></label>
             <div class="club-parameter"><span>Звук в фоновом режиме</span><ClubSettingSwitch label="Звук в фоновом режиме" :active="presentation.audioInBackground" :in-match="inMatch" @toggle="update('audioInBackground', !presentation.audioInBackground)" /></div>
           </div>
           <template v-else-if="tab === 'controls'">
             <div class="club-control-columns">
               <div class="club-control-bindings"><p class="club-settings-kicker">МЫШЬ И КЛАВИАТУРА</p>
                 <div v-for="row in controlRows" :key="row.label" class="club-parameter"><span>{{ row.label }}</span>
-                  <button v-if="row.action" class="club-value-button club-binding-value" type="button" :class="{ 'club-binding-capture': bindingCapture === row.action }" :aria-label="`Назначение: ${captureLabels[row.action]}`" @click="emit('capture', row.action)"><span data-binding-key>{{ bindingCapture === row.action ? 'Нажмите клавишу…' : shortBinding(settings.bindings[row.action] || DEFAULT_BINDINGS[row.action]) }}</span><small v-if="row.gesture && bindingCapture !== row.action">{{ row.gesture }}</small></button>
+                  <button v-if="'action' in row" class="club-value-button club-binding-value" type="button" :class="{ 'club-binding-capture': bindingCapture === row.action }" :aria-label="`Назначение: ${captureLabels[row.action]}`" @click="emit('capture', row.action)"><span data-binding-key>{{ bindingCapture === row.action ? 'Нажмите клавишу…' : bindingLabel(settings.bindings[row.action] || DEFAULT_BINDINGS[row.action]) }}</span></button>
                   <span v-else class="club-fixed-value club-binding-value">{{ row.value }}</span>
                 </div>
               </div>
               <div class="club-control-mouse">
                 <p class="club-settings-kicker">ПАРАМЕТРЫ МЫШИ</p>
-                <label class="club-parameter club-sensitivity-row"><span>{{ inMatch ? 'Чувствительность мыши' : 'Чувствительность' }}</span><ClubSettingRange label="Чувствительность" :value="settings.sensitivity" :min="0.1" :max="3" :step="0.1" :output="`${settings.sensitivity.toFixed(1)}×`" @update:value="update('sensitivity', $event)" /></label>
+                <label class="club-parameter club-sensitivity-row"><span>{{ inMatch ? 'Чувствительность мыши' : 'Чувствительность' }}</span><ClubSettingRange :label="inMatch ? 'Чувствительность мыши' : 'Чувствительность'" :value="settings.sensitivity" :min="sensitivityMin" :max="sensitivityMax" :step="0.1" :output="`${sensitivityPercent}%`" @update:value="update('sensitivity', $event)" /></label>
                 <div class="club-parameter"><span>Инверсия камеры</span><ClubSettingSwitch label="Инверсия камеры" :active="presentation.invertCamera" :in-match="inMatch" @toggle="update('invertCamera', !presentation.invertCamera)" /></div>
                 <div class="club-parameter"><span>Плавное прицеливание</span><ClubSettingSwitch label="Плавное прицеливание" :active="presentation.smoothAim" :in-match="inMatch" @toggle="update('smoothAim', !presentation.smoothAim)" /></div>
-                <div class="club-control-hint"><strong>Почувствуйте силу удара</strong><p>Выберите направление до первого ЛКМ. Задайте точку контакта мышью и подтвердите ЛКМ. Удерживайте ЛКМ для выбора силы, отпустите для удара. Дополнительные приборы — {{ assistLabel }}.</p></div>
+                <div class="club-control-hint"><strong>Почувствуйте силу удара</strong><p v-if="inMatch">Мышью выберите направление и точку контакта, подтверждая каждый этап ЛКМ. Shift + колесо поднимает кий над сукном. Удерживайте ЛКМ для набора силы, отпустите для удара.</p><p v-else>Удерживайте левую кнопку мыши, чтобы набрать силу. Отпустите для удара. Задайте вращение битка мышью на этапе выбора точки контакта.</p></div>
               </div>
             </div>
           </template>
             <div class="club-settings-actions">
-              <p v-if="localError" class="club-settings-warning" role="alert">{{ localError }}</p>
-              <p v-if="bindingCaptureError" class="club-settings-warning" role="alert">{{ bindingCaptureError }}</p>
-              <p v-for="conflict in bindingConflicts" :key="conflict" class="club-settings-warning" role="alert">Конфликт: {{ conflict }}</p>
-              <div class="club-divider"></div><p class="club-small-note">{{ actionNote }}</p>
+              <div class="club-divider"></div><p class="club-small-note" :class="{ 'club-settings-warning': actionError }" :role="actionError ? 'alert' : undefined">{{ actionError || actionNote }}</p>
               <div class="club-actions-inline">
                 <button class="club-action club-action-back" type="button" @click="goToIndex"><img :src="inMatch ? matchAsset('back') : asset('arrow-left')" alt="" /><span>Назад</span></button>
                 <button class="club-action club-action-primary" type="button" :disabled="bindingConflicts.length > 0 || bindingCapture !== null || outputBusy || displayModeBusy" @click="emit('save')"><img :src="inMatch ? matchAsset('apply') : asset('check-dark')" alt="" /><span>{{ saveLabel }}</span><img v-if="!inMatch" :src="asset('chevron-dark')" alt="" /></button>
               </div>
             </div>
           </section>
-          <details v-if="tab === 'graphics'" class="club-extra-bindings club-settings-secondary">
-            <summary>Дополнительные параметры графики</summary>
-            <div class="club-parameters">
-              <div class="club-parameter"><span>Линия прицеливания</span><ClubSettingSwitch label="Линия прицеливания" :active="!aimGuideLocked && settings.showAimGuide" :in-match="inMatch" :disabled="aimGuideLocked" :status="aimGuideLocked ? 'Рейтинговый матч' : undefined" @toggle="update('showAimGuide', !settings.showAimGuide)" /></div>
-              <p v-if="aimGuideLocked" class="club-small-note club-locked-note" role="note">В рейтинговом матче линия прицеливания отключена и недоступна для изменения.</p>
-              <div class="club-parameter"><span>Номера луз</span><ClubSettingSwitch label="Номера луз" :active="settings.showPocketLabels" :in-match="inMatch" @toggle="update('showPocketLabels', !settings.showPocketLabels)" /></div>
-            </div>
-          </details>
-          <details v-if="tab === 'controls'" class="club-extra-bindings club-settings-secondary">
-            <summary>Дополнительные назначения</summary>
-            <p class="club-small-note">Нажмите назначение и затем клавишу или кнопку мыши. Для дополнительных приборов — только клавиатуру. Esc отменяет переназначение.</p>
-            <div class="club-extra-binding-grid"><div v-for="action in actions" :key="action" class="club-parameter"><span>{{ captureLabels[action] }}</span><button class="club-value-button club-binding-value" type="button" :class="{ 'club-binding-capture': bindingCapture === action }" :aria-label="`Назначение: ${captureLabels[action]}`" @click="emit('capture', action)">{{ bindingCapture === action ? 'Нажмите клавишу…' : shortBinding(settings.bindings[action] || DEFAULT_BINDINGS[action]) }}</button></div></div>
-          </details>
-          <p v-if="tab === 'sound' && !canSelectOutput" class="club-small-note club-settings-secondary">{{ audioOutputHint }}</p>
-          <div class="club-settings-utilities club-settings-secondary">
-            <button class="club-text-button" type="button" @click="emit('reset')">Сбросить настройки</button>
-            <button class="club-text-button" type="button" @click="close">Закрыть без сохранения на сервер</button>
-          </div>
         </template>
       </div>
     </section>

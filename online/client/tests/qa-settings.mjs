@@ -27,6 +27,13 @@ try {
   const readSettings = async () => JSON.parse(await page.locator('[data-settings]').textContent())
   const openTab = label => shell.getByRole('button', { name: label, exact: true }).click()
   const back = () => shell.getByRole('button', { name: 'Назад', exact: true }).click()
+  const parameterLabels = () => shell.locator('.club-parameter > span:first-child').allTextContents()
+  const verifyNoExtras = async () => {
+    assert.equal(await shell.locator('details').count(), 0)
+    for (const label of ['Оформление', 'Модели стола и окружения', 'Сбросить настройки', 'Закрыть без сохранения на сервер']) {
+      assert.equal(await shell.getByRole('button', { name: label, exact: true }).count(), 0)
+    }
+  }
   async function open(query = '') {
     await page.goto(base + query)
     await page.getByRole('button', { name: 'Открыть настройки' }).click()
@@ -81,12 +88,23 @@ try {
     }))
     for (const icon of img) assert.deepEqual(icon.rendered, icon.natural, JSON.stringify(icon))
   }
-  await open('?match&ranked&renderer')
+  await open('?match&renderer')
   await page.keyboard.press('Shift+Tab')
   assert.equal(await page.evaluate(() => document.activeElement.closest('[data-match-footer]') !== null), true)
   await page.keyboard.press('Tab')
   assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Графика')
   const frames = { index: [580, 285], graphics: [820, 230], sound: [820, 230], controls: [1180, 215] }
+  const clubFrames = { index: [480, 239.5], graphics: [680, 117, 566], sound: [680, 117, 566], controls: [960, 133, 534] }
+  function exactClub(info) {
+    const [width, y, cardHeight] = clubFrames[info.tab]
+    assert.equal(info.section.width, width)
+    assert.equal(info.section.x + info.section.width / 2, 720)
+    assert.ok(Math.abs(info.section.y - y) < 1.5, JSON.stringify(info.section))
+    if (info.card) {
+      assert.ok(Math.abs(info.card.y - (y + 130)) < 1.5, JSON.stringify(info.card))
+      assert.ok(Math.abs(info.card.height - cardHeight) < 1.5, JSON.stringify(info.card))
+    }
+  }
   const exact = async tab => {
     const info = await geometry(true, 1920, 1080)
     assert.equal(info.tab, tab)
@@ -102,27 +120,30 @@ try {
     await page.screenshot({ path: path.join(artifacts, `match-${tab}.png`) })
   }
   await exact('index')
+  await verifyNoExtras()
   await openTab('Графика')
   await exact('graphics')
+  assert.deepEqual(await parameterLabels(), ['Режим экрана', 'Разрешение', 'Качество графики', 'Качество теней', 'Сглаживание', 'Частота кадров', 'Вертикальная синхронизация'])
+  assert.equal(await shell.getByRole('combobox', { name: 'Сглаживание' }).isDisabled(), true)
+  assert.equal(await shell.getByRole('switch', { name: 'Вертикальная синхронизация' }).isDisabled(), true)
   await shell.getByRole('button', { name: 'Настройки матча', exact: true }).click()
   assert.equal(await shell.getAttribute('data-settings-tab'), 'index', 'match footer slot navigates to settings index')
   await openTab('Графика')
   const canvas = page.locator('[data-under-settings] canvas')
   assert.deepEqual(await canvas.evaluate(el => [el.width, el.height]), [640, 360])
-  await shell.getByRole('combobox', { name: 'Разрешение рендера' }).selectOption('0.5')
+  await shell.getByRole('combobox', { name: 'Разрешение' }).selectOption('0.5')
   await shell.getByRole('combobox', { name: 'Качество теней' }).selectOption('off')
   await shell.getByRole('combobox', { name: 'Частота кадров' }).selectOption('30')
   assert.deepEqual(await canvas.evaluate(el => [el.width, el.height]), [320, 180])
   const graphics = await readSettings()
   assert.equal(graphics.renderScale, .5); assert.equal(graphics.shadowQuality, 'off'); assert.equal(graphics.frameRateLimit, 30)
-  await shell.getByText('Дополнительные параметры графики', { exact: true }).click()
-  const aim = shell.getByRole('switch', { name: 'Линия прицеливания' })
-  assert.equal(await aim.isDisabled(), true)
-  assert.equal(await aim.getAttribute('aria-checked'), 'false')
-  assert.equal((await readSettings()).showAimGuide, true, 'ranked presentation does not change the saved preference')
+  await verifyNoExtras()
+  assert.equal((await readSettings()).showAimGuide, true, 'editing graphics does not change the saved aim-line preference')
   await back()
   await openTab('Звук')
   await exact('sound')
+  assert.deepEqual(await parameterLabels(), ['Устройство вывода', 'Общая громкость', 'Музыка клуба', 'Удары и шары', 'Атмосфера зала', 'Уведомления', 'Звук в фоновом режиме'])
+  for (const name of ['Музыка клуба', 'Атмосфера зала', 'Уведомления']) assert.equal(await shell.getByRole('slider', { name }).isDisabled(), true)
   assert.equal(await shell.getByRole('slider', { name: 'Общая громкость' }).evaluate(el => el.getBoundingClientRect().width), 200)
   await shell.getByRole('switch', { name: 'Звук в фоновом режиме' }).click()
   assert.equal((await readSettings()).audioInBackground, true)
@@ -132,31 +153,50 @@ try {
   await back()
   await openTab('Управление')
   await exact('controls')
+  assert.deepEqual(await parameterLabels(), ['Прицеливание', 'Сила и удар', 'Точка контакта / вращение', 'Наклон кия', 'Приближение камеры', 'Вид сверху', 'Обзор стола', 'Меню матча', 'Чувствительность мыши', 'Инверсия камеры', 'Плавное прицеливание'])
   await shell.getByRole('switch', { name: 'Инверсия камеры' }).click()
   await shell.getByRole('switch', { name: 'Плавное прицеливание' }).click()
   assert.equal((await readSettings()).invertCamera, true)
   assert.equal((await readSettings()).smoothAim, false)
-  await shell.getByText('Дополнительные назначения', { exact: true }).click()
-  await shell.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true }).click()
+  await verifyNoExtras()
+  await shell.getByRole('button', { name: 'Назначение: Вид сверху', exact: true }).click()
   await page.keyboard.press('KeyH')
-  assert.equal((await readSettings()).bindings.assist, 'KeyH')
+  assert.equal((await readSettings()).bindings.topView, 'KeyH')
   await shell.getByRole('button', { name: 'Применить', exact: true }).click()
   await shell.waitFor({ state: 'hidden' })
   assert.equal(await page.locator('[data-under-settings]').evaluate(el => el.inert), false)
   await page.waitForFunction(() => document.activeElement.classList.contains('hud-match-menu'))
   assert.equal(await page.locator('[data-saved]').textContent(), '1')
+  await open('?error')
+  assert.equal(await shell.getByRole('alert').innerText(), 'Не удалось сохранить настройки.')
+  await openTab('Графика')
+  assert.equal(await shell.getByRole('alert').innerText(), 'Не удалось сохранить настройки.')
+  await page.keyboard.press('Escape')
+  await shell.waitFor({ state: 'hidden' })
   for (const [width, height] of [[1440, 900], [1280, 720], [390, 844], [320, 568], [640, 320]]) {
     await page.setViewportSize({ width, height })
     for (const match of [false, true]) {
       await open(match ? '?match' : '')
       const start = await geometry(match, width, height)
-      if (!match) assert.match(await shell.locator('.club-account small').textContent(), /1\s000 Эло/)
+      if (!match) {
+        assert.match(await shell.locator('.club-account small').textContent(), /1\s000 Эло/)
+        if (width === 1440) {
+          exactClub(start)
+          await checkImages()
+          await page.screenshot({ path: path.join(artifacts, 'club-index.png') })
+        }
+      }
       for (const label of ['Графика', 'Звук', 'Управление']) {
         await openTab(label)
         const state = await geometry(match, width, height)
         assert.deepEqual(state.header, start.header)
         assert.deepEqual(state.footer, start.footer)
         assert.ok(await shell.getByRole('button', { name: match || label === 'Графика' ? 'Применить' : 'Сохранить', exact: true }).count())
+        if (!match && width === 1440) {
+          exactClub(state)
+          await checkImages()
+          await page.screenshot({ path: path.join(artifacts, `club-${state.tab}.png`) })
+        }
         await back()
         assert.equal(await content.evaluate(el => el.scrollTop), 0)
       }

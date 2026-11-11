@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { clickHudAction } from './app-state.mjs'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
 const playwright = await import(path.isAbsolute(modulePath) ? pathToFileURL(modulePath).href : modulePath)
@@ -25,12 +26,25 @@ async function api(actor, endpoint, body, method = 'POST', allowed = [200]) {
   return value
 }
 
-async function openAdvancedControls(page) {
+async function openControls(page) {
+  await clickHudAction(page, page.getByRole('button', { name: 'Меню матча', exact: true }))
   await page.getByRole('dialog').getByRole('button', { name: 'Настройки', exact: true }).click()
   const settings = page.locator('.club-settings-shell')
   await settings.getByRole('button', { name: 'Управление', exact: true }).click()
-  await settings.locator('summary').filter({ hasText: /^Дополнительные назначения$/ }).click()
+  assert.equal(await settings.locator('details').count(), 0)
+  assert.equal(await settings.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true }).count(), 0)
   return settings
+}
+
+async function enterPower(page) {
+  const hud = page.getByTestId('match-hud')
+  // A trusted canvas click may first resume input after backgrounding. Stop
+  // once power is selected: never click again and accidentally make a shot.
+  for (let i = 0; i < 4 && await hud.getAttribute('data-shot-phase') !== 'power'; i++) {
+    await page.mouse.click(42, 260)
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  }
+  await page.locator('[data-testid="match-hud"][data-shot-phase="power"]').waitFor()
 }
 
 for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
@@ -59,18 +73,15 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
       }
     }, { token: actor.token, userId: actor.user.id, legacy })
     await page.goto(base)
+    await page.bringToFront()
     await page.getByTestId('match-hud').waitFor()
     await page.locator('.game-stage canvas').waitFor()
-    assert.match(await page.locator('.hud-alt-hint').innerText(), /Ctrl/)
-    // The first-person heading uses native PointerLock. The configured assist
-    // hold intentionally releases it so a real cursor can reach HUD controls.
+    const assist = page.getByTestId('alt-assist')
+    await enterPower(page)
     await page.keyboard.down('ControlLeft')
-    await page.getByTestId('alt-assist').waitFor()
-    await page.getByRole('button', { name: 'Параметры удара', exact: true }).click()
+    await assist.waitFor()
+    assert.match(await assist.getAttribute('aria-label'), /Ctrl/)
     await page.keyboard.up('ControlLeft')
-    await page.getByRole('button', { name: 'Прицелиться', exact: true }).click()
-    await page.getByRole('button', { name: 'Точка удара по битку. Нажмите для выбора силы', exact: true }).click()
-    await page.locator('[data-testid="match-hud"][data-shot-phase="power"]').waitFor()
     assert.equal(await page.getByRole('meter').count(), 2)
     assert.equal(await page.getByTestId('alt-assist').count(), 0)
     await page.keyboard.down('AltLeft')
@@ -97,91 +108,49 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     assert.equal(await page.getByTestId('alt-assist').count(), 0, 'Closing a modal must not revive stale held-key state')
     await page.keyboard.up('ControlRight')
 
-    await page.keyboard.down('ControlLeft')
-    await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
-    await page.keyboard.up('ControlLeft')
-    const settings = await openAdvancedControls(page)
-    const assist = settings.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true })
+    const settings = await openControls(page)
+    const topView = settings.getByRole('button', { name: 'Назначение: Вид сверху', exact: true })
     const apply = settings.getByRole('button', { name: 'Применить', exact: true })
-    assert.equal(await assist.innerText(), 'Ctrl')
-    await assist.click()
-    const captureBox = await assist.boundingBox()
-    await page.mouse.click(captureBox.x + captureBox.width / 2, captureBox.y + captureBox.height / 2)
-    await page.getByText('Для дополнительных приборов выберите клавишу клавиатуры. Esc — отмена.', { exact: true }).waitFor()
-    assert.match(await assist.innerText(), /Нажмите клавишу/)
+    const originalTopView = await topView.innerText()
+    await topView.click()
+    assert.match(await topView.innerText(), /Нажмите клавишу/)
     await page.keyboard.press('Escape')
-    assert.equal(await assist.innerText(), 'Ctrl')
-    await assist.click()
-    await page.keyboard.press('KeyH')
-    assert.equal(await assist.innerText(), 'H')
-    await settings.locator('.club-control-hint').getByText(/Дополнительные приборы — H\./).waitFor()
-
-    // Family-aware conflicts cannot silently put assist and a shot on the two Ctrl keys.
-    await assist.click(); await page.keyboard.press('ControlLeft')
-    const shootBinding = page.getByRole('button', { name: 'Назначение: Удар', exact: true })
-    await shootBinding.click(); await page.keyboard.press('ControlRight')
+    assert.equal(await topView.innerText(), originalTopView)
+    // Existing hidden preferences must still be considered when editing a
+    // visible Figma binding. The two physical Ctrl keys are one family.
+    await topView.click(); await page.keyboard.press('ControlRight')
     await page.getByText(/Конфликт:.*Ctrl/).waitFor()
     assert.equal(await apply.isDisabled(), true)
-    await shootBinding.click(); await page.keyboard.press('Space')
-    // An invalid unsaved overlap applies immediately, but assist must win over
-    // shoot even before the player resolves the conflict and can save.
-    await assist.click(); await page.keyboard.press('Space')
-    assert.equal(await apply.isDisabled(), true)
-    await settings.getByRole('navigation', { name: 'Навигация матча' }).getByRole('button', { name: 'Матч', exact: true }).click()
+    await topView.click(); await page.keyboard.press('KeyT')
+    await apply.click()
     await settings.waitFor({ state: 'hidden' })
+    async function loadStoredBinding(binding, additional = {}) {
+      await api(actor, '/api/me/settings', { ...legacy, bindings: { ...legacy.bindings, ...additional, assist: binding } }, 'PUT')
+      assert.equal((await api(actor, '/api/me/settings', undefined, 'GET')).settings.bindings.assist, binding)
+      await page.evaluate(id => localStorage.removeItem(`pooltool.settings.${id}`), actor.user.id)
+      await page.reload()
+      await page.getByTestId('match-hud').waitFor()
+      await page.locator('.game-stage canvas').waitFor()
+    }
+    // Players may have saved a different binding before the UI was aligned
+    // to Figma. The same persisted preference must keep working.
+    await loadStoredBinding('KeyH')
+    await enterPower(page)
+    await page.keyboard.press('ControlLeft')
+    assert.equal(await assist.count(), 0)
+    await page.keyboard.down('KeyH')
+    await assist.waitFor()
+    assert.match(await assist.getAttribute('aria-label'), /H/)
+    await page.keyboard.up('KeyH')
+    await assist.waitFor({ state: 'hidden' })
+    await loadStoredBinding('Space')
+    await enterPower(page)
     await page.keyboard.down('Space')
-    await page.getByTestId('alt-assist').waitFor()
-    assert.deepEqual(shots, [], 'An unsaved assist/shoot conflict must not fire a shot')
-    await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
+    await assist.waitFor()
     await page.keyboard.up('Space')
-    await openAdvancedControls(page)
-    await assist.click(); await page.keyboard.press('KeyH')
-    const saved = page.waitForResponse(response => response.url().endsWith('/api/me/settings') && response.request().method() === 'PUT' && response.request().postDataJSON()?.bindings?.assist === 'KeyH' && response.ok())
-    await apply.click()
-    await saved
-    await page.getByRole('dialog').waitFor({ state: 'hidden' })
-    assert.equal((await api(actor, '/api/me/settings', undefined, 'GET')).settings.bindings.assist, 'KeyH')
-    assert.match(await page.locator('.hud-alt-hint').innerText(), /H/)
-    await page.keyboard.down('ControlLeft')
-    assert.equal(await page.getByTestId('alt-assist').count(), 0)
-    await page.keyboard.up('ControlLeft')
-    await page.keyboard.down('KeyH')
-    await page.getByTestId('alt-assist').waitFor()
-    assert.match(await page.getByTestId('alt-assist').getAttribute('aria-label'), /H/)
-    await page.keyboard.up('KeyH')
-    await page.getByTestId('alt-assist').waitFor({ state: 'hidden' })
-    await page.keyboard.down('KeyH')
-    await page.getByTestId('alt-assist').waitFor()
-    await page.getByRole('button', { name: 'Параметры удара', exact: true }).click()
-    await page.keyboard.up('KeyH')
-    await page.getByRole('slider', { name: 'Направление удара', exact: true }).focus()
-    await page.keyboard.press('KeyH')
-    assert.equal(await page.getByTestId('alt-assist').count(), 0, 'Editing a field must not activate the assist hold binding')
-    await page.getByRole('button', { name: 'Закрыть параметры удара', exact: true }).click()
-
-    // Remove the local preference, proving the persisted API value restores the key.
-    await page.evaluate(id => localStorage.removeItem(`pooltool.settings.${id}`), actor.user.id)
-    await page.reload()
-    await page.getByTestId('match-hud').waitFor()
-    assert.match(await page.locator('.hud-alt-hint').innerText(), /H/)
-    await page.keyboard.down('KeyH')
-    await page.getByTestId('alt-assist').waitFor()
-    await page.keyboard.up('KeyH')
-    await page.getByTestId('alt-assist').waitFor({ state: 'hidden' })
-    // A normal letter can be assigned after freeing its old action. Native
-    // Ctrl+C must then remain a browser chord, not activate assist or reset.
-    await page.keyboard.down('KeyH')
-    await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
-    await page.keyboard.up('KeyH')
-    await openAdvancedControls(page)
-    await page.getByRole('button', { name: 'Назначение: Сброс камеры', exact: true }).click()
-    await page.keyboard.press('KeyJ')
-    await page.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true }).click()
-    await page.keyboard.press('KeyC')
-    const savedC = page.waitForResponse(response => response.url().endsWith('/api/me/settings') && response.request().method() === 'PUT' && response.request().postDataJSON()?.bindings?.assist === 'KeyC' && response.ok())
-    await apply.click()
-    await savedC
-    await page.getByRole('dialog').waitFor({ state: 'hidden' })
+    assert.deepEqual(shots, [], 'A stored assist/shoot conflict must not fire a shot')
+    await loadStoredBinding('KeyC', { resetCamera: 'KeyJ' })
+    await enterPower(page)
     await page.evaluate(() => {
       window.assistCopyChord = []
       document.addEventListener('keydown', event => { if (event.ctrlKey && event.code === 'KeyC') window.assistCopyChord.push({ prevented: event.defaultPrevented }) })
@@ -195,8 +164,8 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     await page.getByTestId('alt-assist').waitFor({ state: 'hidden' })
     assert.deepEqual(shots, [], 'Displaying/remapping assist must never submit a shot')
     assert.deepEqual(errors, [])
-    await page.screenshot({ path: path.join(artifacts, `${engine}-remapped-H.png`) })
-    console.log(JSON.stringify({ engine, actualApp: true, realSettingsApi: true, defaultCtrlFamily: true, oldAltInactive: true, keyboardOnlyCapture: true, escapeCancels: true, familyConflict: true, unsavedConflictSafe: true, remappedH: true, serverReload: true, nativeCopyChordSafe: true, keyupBlurModalSafe: true, shotCommands: shots.length, jsErrors: errors.length }))
+    await page.screenshot({ path: path.join(artifacts, `${engine}-assist.png`) })
+    console.log(JSON.stringify({ engine, actualApp: true, realSettingsApi: true, defaultCtrlFamily: true, oldAltInactive: true, noExtraControls: true, escapeCancels: true, familyConflict: true, storedConflictSafe: true, legacyPreferenceRetained: true, nativeCopyChordSafe: true, keyupBlurModalSafe: true, shotCommands: shots.length, jsErrors: errors.length }))
   } catch (error) {
     await page.screenshot({ path: path.join(artifacts, `${engine}-failure.png`), fullPage: true }).catch(() => {})
     throw error

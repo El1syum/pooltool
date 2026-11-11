@@ -22,6 +22,9 @@
 .club-settings-shell:not(.club-settings-in-match) .club-section { margin-block: auto; }
 .club-settings-shell .club-settings-index-actions { grid-auto-rows: auto; }
 .club-settings-shell:not(.club-settings-in-match) .club-settings-index-actions > .club-action-back { min-height: 48px; }
+.club-settings-shell .club-action,
+.club-settings-shell .club-section-title > p { line-height: normal; }
+.club-settings-shell .club-section-title > p { text-shadow: none; }
 .club-settings-shell .club-settings-actions { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .club-settings-shell .club-settings-actions > .club-small-note { font-size: 11px; line-height: normal; }
 .club-settings-shell .club-settings-actions .club-action-primary { color: #1a201b; }
@@ -29,21 +32,17 @@
   border: 0;
   box-shadow: inset 0 0 0 1px var(--club-line), 0 18px 64px rgba(0, 0, 0, .33);
 }
-.club-settings-shell .club-settings-utilities { justify-content: center; }
-.club-settings-shell .club-settings-secondary { margin: -12px 0 0; }
-.club-settings-shell .club-extra-bindings[open] > .club-parameters,
-.club-settings-shell .club-extra-bindings[open] > .club-small-note { margin-top: 12px; }
 .club-settings-shell .club-parameter select { background-position: right 16px center; color-scheme: dark; }
 .club-settings-shell .club-parameter select:disabled { opacity: 1; cursor: not-allowed; color: var(--club-muted); }
-.club-settings-shell .club-parameter > .club-muted { max-width: 50%; text-align: right; }
 .club-settings-shell .club-toggle img { width: auto; height: auto; max-width: none; flex: none; }
 .club-settings-shell .club-toggle:disabled { opacity: .8; }
 .club-settings-shell .club-binding-value { justify-content: flex-start; }
-.club-settings-shell .club-binding-value small { color: var(--club-muted); font-size: 10px; margin-left: auto; }
 .club-settings-shell .club-binding-value > span { min-width: 0; overflow-wrap: anywhere; }
 .club-settings-shell .club-control-hint strong { font-weight: 400; }
 .club-settings-shell .club-settings-kicker { line-height: normal; }
 .club-settings-shell .club-range-value input[type=range] { max-width: none; flex: 1 1 0; }
+.club-settings-shell .club-range-unavailable input[type=range] { opacity: .7; cursor: not-allowed; }
+.club-settings-shell .club-range-unavailable output { color: var(--club-muted); }
 .club-settings-shell .club-control-mouse {
   position: relative;
   border-left: 0;
@@ -116,8 +115,7 @@
 .club-settings-in-match .club-range-value input[type=range]::-webkit-slider-thumb { width: 12px; height: 12px; border-radius: 50%; }
 .club-settings-in-match .club-range-value input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; }
 .club-settings-in-match .club-control-bindings { flex-basis: 560px; width: 560px; gap: 6px; }
-.club-settings-in-match .club-control-bindings .club-binding-value,
-.club-settings-in-match .club-extra-binding-grid .club-binding-value { width: 220px; }
+.club-settings-in-match .club-control-bindings .club-binding-value { width: 220px; }
 .club-settings-in-match .club-settings-kicker { font-size: 11px; line-height: 13px; }
 .club-settings-in-match .club-control-mouse { gap: 20px; }
 .club-settings-in-match .club-control-mouse::before { height: min(100%, 450px); }

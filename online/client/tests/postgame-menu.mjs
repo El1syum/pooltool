@@ -13,7 +13,7 @@ const base = (process.env.POOLTOOL_URL || 'http://127.0.0.1:8791').replace(/\/$/
 assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname), 'Use an isolated loopback test server')
 const artifacts = process.env.ARTIFACT_DIR || path.resolve('tests/artifacts/postgame-menu')
 // Optional second lane against a separate service with the same MAX_MATCH_SECONDS.
-// A real non-surrender bot result must still offer replay.
+// A real non-surrender bot finish must return home and allow a fresh start.
 const soloLimit = Number(process.env.POSTGAME_SOLO_LIMIT_SECONDS || 0)
 assert.ok(Number.isInteger(soloLimit) && soloLimit >= 0 && soloLimit <= 60)
 await mkdir(artifacts, { recursive: true })
@@ -60,7 +60,7 @@ async function equalAppActions(page, name, selector, expectedCount) {
     await page.setViewportSize(viewport)
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     const metrics = await page.locator(selector).evaluate(group => {
-      const rect = group.getBoundingClientRect(), panel = group.closest('.match-menu-overlay, .result-panel'), bounds = panel.getBoundingClientRect()
+      const rect = group.getBoundingClientRect(), panel = group.closest('.match-menu-overlay'), bounds = panel.getBoundingClientRect()
       return { viewport: { width: innerWidth, height: innerHeight }, pageWidth: document.documentElement.scrollWidth,
         panel: { top: bounds.top, bottom: bounds.bottom, left: bounds.left, right: bounds.right },
         group: { width: rect.width }, buttons: [...group.querySelectorAll('button')].map(button => {
@@ -103,10 +103,6 @@ async function activeMatch(page, actor, previousId) {
 async function startSolo(page, actor) {
   await mainMenu(page)
   await page.getByRole('navigation', { name: 'Главное меню', exact: true }).getByRole('button', { name: 'Играть', exact: true }).click()
-  await page.getByRole('button', { name: 'Тренировка с ботом', exact: true }).click()
-  const botOptions = page.locator('[data-club-view="bot"] select')
-  await botOptions.nth(0).selectOption('easy')
-  await botOptions.nth(1).selectOption('180')
   await page.getByRole('button', { name: 'Играть с ботом', exact: true }).click()
   const state = await activeMatch(page, actor)
   assert.equal(state.room.settings.solo, true)
@@ -128,26 +124,12 @@ async function modalFocus(page, selector, { initial = false } = {}) {
   assert.equal(await page.locator('[data-testid="match-hud"]').evaluate(element => Boolean(element.closest('[inert]'))), true, 'Background HUD is inert while a match dialog is open')
 }
 async function confirmSurrender(page, actor, matchId) {
-  await page.bringToFront()
-  // Hold the actual help key even if a newly created scene's native lock grant
-  // is still pending; checking pointerLockElement once races that browser event.
-  await page.keyboard.down('ControlLeft')
-  await page.locator('[data-testid="match-hud"].hud-assist-visible').waitFor()
-  await page.waitForFunction(() => !document.pointerLockElement)
-  try { await page.getByRole('button', { name: 'Меню матча', exact: true }).click() }
-  finally { await page.keyboard.up('ControlLeft') }
+  const menu = page.getByRole('button', { name: 'Меню матча', exact: true })
+  await clickHudAction(page, menu)
   await modalFocus(page, '.match-menu-overlay', { initial: true })
   await equalAppActions(page, 'match-menu', '.match-menu-actions', 3)
   await page.getByRole('button', { name: 'Продолжить игру', exact: true }).click()
-  await clickHudAction(page, page.getByRole('button', { name: 'Правила', exact: true }))
-  await modalFocus(page, '.hud-rules-dialog', { initial: true })
-  await page.keyboard.press('Escape')
-  await page.locator('.hud-rules-dialog').waitFor({ state: 'detached' })
-  assert.equal(await page.locator('.hud-rules').evaluate(element => document.activeElement === element), true, 'Rules restore the actual HUD trigger')
-  await page.keyboard.down('ControlLeft')
-  await page.waitForFunction(() => !document.pointerLockElement)
-  try { await page.getByRole('button', { name: 'Меню матча', exact: true }).click() }
-  finally { await page.keyboard.up('ControlLeft') }
+  await clickHudAction(page, menu)
   await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
   await modalFocus(page, '.match-menu-overlay')
   await page.keyboard.press('Escape')
@@ -158,7 +140,7 @@ async function confirmSurrender(page, actor, matchId) {
   assert.equal(afterCancel.match.status, 'active', 'Cancel must neither finish nor leave the real match')
   await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
   await equalAppActions(page, 'surrender', '.match-menu-actions', 2)
-  const before = await page.evaluate(() => ({ panels: window.qaResultPanels, document: performance.timeOrigin }))
+  const before = await documentState(page)
   await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
   return before
 }
@@ -170,20 +152,20 @@ async function assertLeftRoom(page, actor) {
   const cached = await page.evaluate(() => ['pooltool.token', 'pooltool.room', 'pooltool.match', 'pooltool.pendingCommand'].map(key => localStorage.getItem(key)))
   assert.deepEqual(cached, [actor.token, null, null, null], 'Leave must retain identity and clear room, match and pending-command bookmarks')
 }
-async function assertSurrenderHome(page, actor, matchId, before) {
+const documentState = page => page.evaluate(() => ({ panels: window.qaResultPanels, document: performance.timeOrigin }))
+async function assertFinishedHome(page, actor, matchId, before, reason) {
   await assertLeftRoom(page, actor)
   assert.equal(await page.locator('.result-panel').count(), 0)
-  assert.deepEqual(await page.evaluate(() => ({ panels: window.qaResultPanels, document: performance.timeOrigin })), before,
-    'Own surrender must not mount a result panel or reload the page')
+  assert.deepEqual(await documentState(page), before, 'A completed match must not mount a result panel or reload the page')
   const finished = (await api(actor, '/api/me/history', undefined, 'GET')).matches.find(item => item.id === matchId)
   assert.equal(finished?.status, 'finished', 'The result must still be in real match history after leaving')
-  assert.equal(finished.reason, 'surrender')
-  assert.ok(finished.winnerId && finished.winnerId !== actor.user.id)
+  assert.equal(finished.reason, reason)
   return finished
 }
-async function returnToMenu(page, actor) {
-  await page.locator('.result-panel').getByRole('button', { name: 'В главное меню', exact: true }).click()
-  await assertLeftRoom(page, actor)
+async function assertSurrenderHome(page, actor, matchId, before) {
+  const finished = await assertFinishedHome(page, actor, matchId, before, 'surrender')
+  assert.ok(finished.winnerId && finished.winnerId !== actor.user.id)
+  return finished
 }
 async function createLobby(page, actor) {
   await mainMenu(page)
@@ -212,13 +194,16 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     })
   }
   onPage(page)
-  await page.addInitScript(() => {
+  const watchPanels = () => {
     window.qaResultPanels = 0
     new MutationObserver(records => {
       for (const record of records) for (const node of record.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE && (node.matches('.result-panel') || node.querySelector('.result-panel'))) window.qaResultPanels++
       }
     }).observe(document, { subtree: true, childList: true })
+  }
+  await page.addInitScript(watchPanels)
+  await page.addInitScript(() => {
     window.dialogFocusTrace = []
     for (const type of ['keydown', 'keyup']) window.addEventListener(type, event => {
       if (!/^(Control|Escape|Tab)/.test(event.code)) return
@@ -238,26 +223,18 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     actors.push(actor)
 
     if (soloLimit) {
-      async function assertOrdinarySoloEnd(matchId) {
-        // Wait for the real WebSocket/DOM finish, then confirm it via one API
-        // read. Polling through the entire lifetime would hit the rate limit.
-        await page.locator('.result-panel').getByRole('heading', { name: 'Матч прерван', exact: true }).waitFor({ timeout: (soloLimit + 10) * 1000 })
-        const { match } = await current(actor)
-        assert.equal(match?.id, matchId)
-        assert.equal(match.status, 'finished')
-        assert.equal(match.reason, 'maximumDuration')
+      async function playUntilExpiry() {
+        const before = await documentState(page)
+        const { match } = await startSolo(page, actor)
+        await page.locator('[data-club-view="menu"]').waitFor({ timeout: (soloLimit + 15) * 1000 })
+        await assertFinishedHome(page, actor, match.id, before, 'maximumDuration')
+        return match.id
       }
-      const first = await startSolo(page, actor)
-      await assertOrdinarySoloEnd(first.match.id)
-      await equalAppActions(page, 'ordinary-solo-result', '.result-actions', 3)
-      await page.locator('.result-panel').getByRole('button', { name: 'Сыграть ещё', exact: true }).click()
-      const second = await activeMatch(page, actor, first.match.id)
-      assert.equal(second.room.settings.solo, true)
-      await assertOrdinarySoloEnd(second.match.id)
-      await returnToMenu(page, actor)
+      const first = await playUntilExpiry()
+      assert.notEqual(await playUntilExpiry(), first)
       assert.deepEqual(errors, [])
       assert.deepEqual(failedAssets, [])
-      console.log(JSON.stringify({ browser: engineName, ordinarySoloReplay: true, realDurationExpiry: true, uncaughtErrors: errors.length }))
+      console.log(JSON.stringify({ browser: engineName, freshSoloAfterExpiry: true, realDurationExpiry: true, uncaughtErrors: errors.length }))
       continue
     }
 
@@ -272,8 +249,7 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     await mainMenu(page)
     await page.getByRole('button', { name: 'Профиль', exact: true }).click()
     await page.getByRole('heading', { name: 'Ваш профиль', exact: true }).waitFor()
-    const soloHistory = page.locator('.club-history li').filter({ hasText: /против Бот/ })
-    await soloHistory.getByText('Поражение', { exact: true }).waitFor()
+    assert.equal(await page.locator('.club-history').count(), 0, 'Profile does not add a history panel absent in Figma')
     await page.getByRole('button', { name: 'Назад', exact: true }).click()
     await mainMenu(page)
     await page.getByRole('button', { name: 'Выход', exact: true }).click()
@@ -282,7 +258,7 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     await mainMenu(page)
 
     await createLobby(page, actor)
-    await page.getByRole('button', { name: 'Выйти из комнаты', exact: true }).click()
+    await page.getByRole('button', { name: 'Закрыть комнату и назад', exact: true }).click()
     await page.locator('[data-club-view="friend"]').waitFor()
     assert.equal((await current(actor)).room, null)
     await page.getByRole('button', { name: 'Назад', exact: true }).click()
@@ -294,8 +270,7 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     await page.getByRole('button', { name: 'Назад', exact: true }).click()
     await mainMenu(page)
 
-    // Two real browsers in a rated match: only the player who surrenders
-    // returns automatically. The winner sees victory and retains normal exit.
+    // Two real browsers in a rated match: both return home automatically.
     const opponent = await api(null, '/api/auth/guest', { displayName: `Postgame ${engineName} opponent`, clientVersion: 'postgame-menu-qa' })
     actors.push(opponent)
     const originalElo = (await api(actor, '/api/me', undefined, 'GET')).user.elo
@@ -310,45 +285,31 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
       await winnerContext.addInitScript(token => localStorage.setItem('pooltool.token', token), opponent.token)
       const winner = await winnerContext.newPage()
       onPage(winner)
+      await winner.addInitScript(watchPanels)
       await winner.goto(base)
       assert.equal((await activeMatch(winner, opponent)).match.id, ranked.match.id)
+      const winnerBefore = await documentState(winner)
       const finished = await assertSurrenderHome(page, actor, ranked.match.id, await confirmSurrender(page, actor, ranked.match.id))
       completed.push(ranked.match.id)
       assert.equal(finished.winnerId, opponent.user.id)
       assert.ok(finished.eloDelta < 0)
       assert.equal((await api(actor, '/api/me', undefined, 'GET')).user.elo, originalElo + finished.eloDelta)
       assert.equal((await api(opponent, '/api/me', undefined, 'GET')).user.elo, opponentElo - finished.eloDelta)
-      const victory = winner.locator('.result-panel')
-      await victory.getByRole('heading', { name: 'Вы победили', exact: true }).waitFor()
-      await victory.getByText(`${actor.user.displayName} сдался`, { exact: true }).waitFor()
-      assert.equal((await current(opponent)).match.id, ranked.match.id, 'Winner remains in the finished match until choosing to leave')
-      await returnToMenu(winner, opponent)
-      await page.bringToFront()
-      await page.getByRole('button', { name: 'Профиль', exact: true }).click()
-      const row = page.locator('.club-history li').filter({ hasText: `против ${opponent.user.displayName}` })
-      await row.getByText('Рейтинговый', { exact: true }).waitFor()
-      await row.getByText('Поражение', { exact: true }).waitFor()
-      await row.getByText(`Эло ${finished.eloDelta}`, { exact: true }).waitFor()
-      await page.getByRole('button', { name: 'Назад', exact: true }).click()
-      await mainMenu(page)
+      const winnerRecord = await assertFinishedHome(winner, opponent, ranked.match.id, winnerBefore, 'surrender')
+      assert.equal(winnerRecord.winnerId, opponent.user.id)
+      assert.equal(winnerRecord.eloDelta, -finished.eloDelta)
     } finally { await winnerContext.close() }
 
-    // An ordinary non-surrender result must still allow manual postgame exit.
+    // An ordinary non-surrender finish also attempts automatic exit, and the
+    // existing Match Menu provides manual retry if it fails.
     const humanRoom = await createLobby(page, actor)
     await api(opponent, `/api/rooms/${humanRoom.code}/join`)
-    await page.getByRole('button', { name: 'Готов', exact: true }).click()
     await until(async () => (await current(actor)).room.players.find(player => player.id === actor.user.id)?.ready, 'Host readiness was not saved')
     await api(opponent, `/api/rooms/${humanRoom.code}/ready`, { ready: true })
     const human = await activeMatch(page, actor)
     assert.ok(!human.room.settings.solo)
-    await api(opponent, `/api/rooms/${humanRoom.code}/leave`)
-    await page.locator('.result-panel').getByRole('heading', { name: 'Вы победили', exact: true }).waitFor()
-    assert.equal((await current(actor)).match.reason, 'left')
-    await equalAppActions(page, 'ordinary-result', '.result-actions', 2)
-    completed.push(human.match.id)
-
-    // Hold exactly one failed leave response to check both in-flight ownership
-    // (button disabled) and recovery (error visible, retry enabled).
+    // Hold exactly one failed automatic leave response to check busy state
+    // and recovery (footer error visible, Match Menu retry enabled).
     let releaseLeave, intercepted = false
     const leaveHeld = new Promise(resolve => { releaseLeave = resolve })
     const leaveUrl = `${base}/api/rooms/${humanRoom.code}/leave`
@@ -357,27 +318,35 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
       await leaveHeld
       await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Тестовая ошибка выхода' }) })
     }, { times: 1 })
-    const exit = page.locator('.result-panel').getByRole('button', { name: 'В главное меню', exact: true })
-    await exit.click()
-    await until(() => intercepted, 'The explicit leave failure was not reached')
+    const beforeHumanExit = await documentState(page)
+    await api(opponent, `/api/rooms/${humanRoom.code}/leave`)
+    await until(() => intercepted, 'The automatic leave request was not reached')
+    await clickHudAction(page, page.getByRole('button', { name: 'Меню матча', exact: true }))
+    const menu = page.locator('.match-menu-overlay')
+    const exit = menu.getByRole('button', { name: 'Выйти', exact: true })
+    await exit.waitFor()
     assert.equal(await exit.isDisabled(), true, 'The active leave operation must own busy state')
     releaseLeave()
-    await page.getByRole('alert').filter({ hasText: 'Тестовая ошибка выхода' }).waitFor()
+    await menu.getByRole('status').filter({ hasText: 'Тестовая ошибка выхода' }).waitFor()
     await until(() => exit.isEnabled(), 'A failed leave must release its own busy state')
-    assert.equal((await current(actor)).match.id, human.match.id, 'Failed leave must preserve the real current match')
-    await page.getByRole('button', { name: 'Закрыть ошибку', exact: true }).click()
-    await returnToMenu(page, actor)
+    const afterFailedExit = await current(actor)
+    assert.equal(afterFailedExit.match.id, human.match.id, 'Failed leave must preserve the real current match')
+    assert.equal(afterFailedExit.match.reason, 'left')
+    await exit.click()
+    const humanRecord = await assertFinishedHome(page, actor, human.match.id, beforeHumanExit, 'left')
+    assert.equal(humanRecord.winnerId, actor.user.id)
+    completed.push(human.match.id)
 
     const solo3 = await startSolo(page, actor)
     await page.route(`${base}/api/rooms/${solo3.room.code}/leave`, route => route.fulfill({
       status: 503, json: { detail: 'Тестовая ошибка автоматического выхода' },
     }), { times: 1 })
     const beforeRetry = await confirmSurrender(page, actor, solo3.match.id)
-    await page.getByRole('alert').filter({ hasText: 'Тестовая ошибка автоматического выхода' }).waitFor()
+    await page.getByRole('status').filter({ hasText: 'Тестовая ошибка автоматического выхода' }).waitFor()
     assert.equal((await current(actor)).match.reason, 'surrender', 'The surrender is recorded even if room leave fails')
     assert.equal(await page.locator('.result-panel').count(), 0)
     await clickHudAction(page, page.getByRole('button', { name: 'Меню матча', exact: true }))
-    await page.getByRole('dialog').getByRole('button', { name: 'В главное меню', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Выйти', exact: true }).click()
     await assertSurrenderHome(page, actor, solo3.match.id, beforeRetry)
     completed.push(solo3.match.id)
 
@@ -403,7 +372,7 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     assert.deepEqual(errors, [], 'No uncaught App errors')
     assert.deepEqual(failedAssets, [], 'No failed static assets')
     await page.screenshot({ path: path.join(artifacts, `${engineName}-menu-after-five-matches.png`), fullPage: true })
-    console.log(JSON.stringify({ browser: engineName, completedMatches: completed.length, ownSurrenderSkipsResult: true, canceledConfirmation: true, winnerResult: true, savedHistoryAndElo: true, mainMenuActions: 4, createAndLeave: true, searchAndCancel: true, failedLeaveRecovered: true, failedAutoLeaveRecovered: true, lostLeaveResponseRecovered: true, uncaughtErrors: errors.length }))
+    console.log(JSON.stringify({ browser: engineName, completedMatches: completed.length, bothPlayersReturnWithoutResult: true, canceledConfirmation: true, savedHistoryAndElo: true, mainMenuActions: 4, createAndLeave: true, searchAndCancel: true, failedLeaveRecovered: true, failedAutoLeaveRecovered: true, lostLeaveResponseRecovered: true, uncaughtErrors: errors.length }))
   } catch (error) {
     await page.screenshot({ path: path.join(artifacts, `${engineName}-failure.png`), fullPage: true }).catch(() => {})
     const diagnostics = await page.evaluate(() => ({ trace: window.dialogFocusTrace, focused: document.hasFocus(), visibility: document.visibilityState,
