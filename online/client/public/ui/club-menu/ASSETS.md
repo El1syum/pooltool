@@ -40,7 +40,12 @@ range inputs with CSS tracks; they are not a screenshot of a fixed Figma value.
 
 All screen contexts were retrieved with screenshots and reviewed in high-fidelity
 mode. Frame `96:15392` (sound) and `96:15486` (controls) supply those settings layouts.
+The profile includes actual saved nickname, private name/city/about and progress
+toward the next 100 Elo milestone. `pencil-about.svg` is the exact 13×13 export
+`2879e.svg` from `96:15592`. The other edit glyphs reuse the exact existing
+`pencil.svg` and `pencil-small.svg` exports.
+
 Unsupported sample values are not represented as operational controls: season,
-city/about, club music, ambience, TAA, vsync, best-of-three and selectable 3D table
-rules do not currently exist in the product model. The UI exposes actual Elo,
-current browser behavior, implemented quality/audio/bindings and private-room rules.
+club music, ambience, TAA, browser/OS VSync, best-of-three and alternate physical
+table rules are not implemented. The UI exposes actual Elo, render scale, shadow
+quality, paint FPS limit, audio/bindings and current private-room rules.

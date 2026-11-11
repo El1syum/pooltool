@@ -713,6 +713,38 @@ admin credentials already stopped/removed.
 Backend/physics/EPYC migration remain HELD. Never deploy backend from this
 frontend task or include the unrelated user docs3D_MODELS_WEB/GRAPHICS_ENGINE_WEB.
 
+## QA interface follow-up (2026-11-11)
+
+Read `online/docs/QA_INTERFACE_20261111.md`. QA PDF PQU original is inaccessible
+to the connector; the agreed YPQR copy contains identical referenced menu node
+IDs and the separate `103:4490` current-match overlay section. Implemented
+all six affected overlays using the actual Three canvas/scoreboard and the
+original exported vectors. Verified desktop slots and mobile controls, including
+both surrender decisions visible at320×568. No paused server timer or scene reset.
+
+4.12 stays «Ожидаем второго игрока». 4.14 quick/ranked search have distinct
+layouts with actual server Elo range. Breadcrumbs cancel authoritative queue,
+recover after failed post-cancel state read, and reject stale snapshots after
+room/match assignment. Lobby Back returns to friend, Ready remains necessary.
+Standalone Back/Cancel/Leave48; paired actions retain equal source sizes.
+
+Profile fullName/city/about are persisted via authenticated existing settings
+JSON, separate from public nickname/local renderer cache. Rejected PUT retains
+draft, unrelated stale-tab settings save merges latest profile first; legacy
+replace endpoint has no atomic CAS. Real settings for render scale, shadows,
+paint FPS, camera and audio, with explicit browser restrictions and ranked aim
+policy preserved. No physics timeline/backend/API schema changes.
+
+Final candidate index-BYALLak6.js / index-DGybUydt.css, typecheck/build PASS.
+103 pure/SSR, 200 menu visits/1810 slots, 340 menu regressions, 396 button,
+50 home/16 history, 88 settings, 1098 HUD + 84 original, 96 real overlay cases.
+Profile persistence/retry/reset/stale-tab and ranked/assist/browser-smoke both
+engines PASS, actual three-client shots, reconnect, bindings/permissions.
+Final match-hud/postgame-menu both engines PASS on same build,8 completed
+postgame matches and zero errors. Frontend-only staged archive has13 exact
+files (HTML,3 chunks,9 SVGs); public gate pending. Do not deploy backend from
+this branch.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

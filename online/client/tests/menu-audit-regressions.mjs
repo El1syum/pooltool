@@ -90,7 +90,7 @@ async function backGeometry(surface) {
   return page.locator(surface).locator('.club-action-back').evaluateAll(buttons => buttons.map(button => {
     const style = getComputedStyle(button), box = button.getBoundingClientRect()
     const peer = button.closest('.club-actions, .club-actions-inline')?.querySelector('.club-action:not(.club-action-back)')
-    return { fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, minHeight: parseFloat(style.minHeight), height: box.height, peerHeight: peer?.getBoundingClientRect().height ?? null }
+    return { fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, minHeight: parseFloat(style.minHeight), height: box.height, compact: button.classList.contains('club-action-compact'), peerHeight: peer?.getBoundingClientRect().height ?? null }
   }))
 }
 
@@ -99,9 +99,10 @@ function assertBackFigma(buttons, width) {
     assert.equal(button.fontSize, '14px')
     assert.equal(button.fontWeight, '500')
     assert.equal(button.lineHeight, 'normal')
-    assert.equal(button.minHeight, width <= 480 ? 56 : 62)
+    assert.equal(button.minHeight, button.compact ? 48 : width <= 480 ? 56 : 62)
     assert.ok(button.height >= button.minHeight - .5, JSON.stringify(button))
-    if (button.peerHeight !== null) assert.ok(Math.abs(button.height - button.peerHeight) < .5, JSON.stringify(button))
+    if (button.compact) assert.ok(Math.abs(button.height - 48) < .5, JSON.stringify(button))
+    else if (button.peerHeight !== null) assert.ok(Math.abs(button.height - button.peerHeight) < .5, JSON.stringify(button))
   }
 }
 
@@ -157,7 +158,7 @@ try {
   // Exercise the fixture's public name-editing flow rather than mutating Vue internals.
   await page.getByRole('button', { name: 'Профиль', exact: true }).click()
   await page.getByLabel('Имя игрока', { exact: true }).fill('W'.repeat(32))
-  await page.getByRole('button', { name: 'Сохранить имя', exact: true }).click()
+  await page.getByRole('button', { name: 'Сохранить профиль', exact: true }).click()
   await page.getByRole('button', { name: 'Назад', exact: true }).click()
 
   for (const width of [320, 390, 480, 481, 500, 600, 760, 768, 900, 1440, 1920]) {

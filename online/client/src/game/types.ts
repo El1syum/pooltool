@@ -1,5 +1,6 @@
 import type { VisualAssetLoadReport, VisualAssetProfile } from '../models/types'
 import { DEFAULT_ASSIST_BINDING } from './assistBinding'
+import type { PresentationSettings } from './settingsOptions'
 
 export type Vec3Tuple = [number, number, number]
 export type QuaternionTuple = [number, number, number, number]
@@ -85,7 +86,7 @@ export type CameraMode = 'free' | 'cue'
 /** Match UI workflow; null on GameScene keeps the original unrestricted controls. */
 export type ShotPhase = 'overview' | 'aim' | 'power'
 
-export interface SceneSettings {
+export interface SceneSettings extends Partial<PresentationSettings> {
   quality: 'low' | 'medium' | 'high'
   volume: number
   sensitivity: number

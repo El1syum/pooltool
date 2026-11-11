@@ -1,5 +1,24 @@
 # Browser smoke checks
 
+## 11 November QA report
+
+- `qa-club-navigation.mjs`: real ClubMenu at five sizes, independent ranked/casual
+  rows, normalized invite field, stable chrome, compact actions and original SVGs.
+- `qa-settings.mjs`: both settings contexts and actual WebGL render-buffer scale.
+- `qa-profile-browser.mjs` / `qa-profile-persistence.mjs`: editable profile,
+  real authenticated persistence/retry/reset/stale-tab protection, no PII in the
+  renderer settings cache.
+- `qa-match-overlays.mjs`: compiled App plus an isolated real service on 8791.
+  All six match overlays, eight viewport sizes, exact 1920px slots and native
+  icons; actual matchmaking cancellation, injected failed state read after
+  successful DELETE, friend-lobby return, uninterrupted deadline/stable canvas.
+
+`Применить` saves match settings and resumes the match; Back goes up one level.
+Use `Матч` in the match breadcrumb to resume without a server settings write.
+Open the genuine advanced graphics or bindings disclosure before testing the
+ranked aim-line lock, Ctrl, or the orbit binding. See the
+[QA resolution report](../../docs/QA_INTERFACE_20261111.md).
+
 ## Full Figma frontend audit (2026-11-06)
 
 `menu-audit-regressions.mjs` checks long names in every menu/settings header,

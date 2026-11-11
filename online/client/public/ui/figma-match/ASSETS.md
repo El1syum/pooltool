@@ -35,3 +35,17 @@ SHA256: `c7fedebe7cfe8a33976efad8f319665cc5e0ba84f8bb806b75dde6900f8f283d`.
 The Figma `image 1` layers are references for future 3D artwork. They are deliberately not shipped as the game background: the actual interactive Three.js canvas remains in their place until the new models are supplied.
 
 Inter and Lora are self-hosted from the official Google Fonts repository. Their license files are included beside the font files in `public/fonts`.
+
+Current-match overlays (`103:4490`, frames `102:17902` / `102:19206`):
+
+| Asset | Original export | Native slot |
+| --- | --- | --- |
+| `match-resume.svg` | `d5bf6.svg` | 20 × 20 |
+| `match-surrender.svg` | `4d6c3.svg` | 20 × 20 |
+| `match-surrender-symbol.svg` | `76858.svg` | 24 × 24 |
+| `match-running.svg` | `05936.svg` | 5 × 5 |
+| `../club-menu/settings.svg` | byte-identical `a6fef.svg` | 20 × 20 |
+
+`MatchMenu.vue` and `MatchOverlayFooter.vue` use these unchanged SVGs. The
+existing HUD, clock, players and Three.js canvas remain the live match; the
+Figma static scene export is not a runtime asset.

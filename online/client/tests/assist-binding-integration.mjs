@@ -25,6 +25,14 @@ async function api(actor, endpoint, body, method = 'POST', allowed = [200]) {
   return value
 }
 
+async function openAdvancedControls(page) {
+  await page.getByRole('dialog').getByRole('button', { name: 'Настройки', exact: true }).click()
+  const settings = page.locator('.club-settings-shell')
+  await settings.getByRole('button', { name: 'Управление', exact: true }).click()
+  await settings.locator('summary').filter({ hasText: /^Дополнительные назначения$/ }).click()
+  return settings
+}
+
 for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
   const browser = await playwright[engine].launch({ headless: true,
     ...(engine === 'chromium' ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}),
@@ -85,16 +93,16 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     await page.getByTestId('alt-assist').waitFor()
     await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
     await page.getByTestId('alt-assist').waitFor({ state: 'hidden' })
-    await page.getByRole('button', { name: 'Вернуться в игру', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Продолжить игру', exact: true }).click()
     assert.equal(await page.getByTestId('alt-assist').count(), 0, 'Closing a modal must not revive stale held-key state')
     await page.keyboard.up('ControlRight')
 
     await page.keyboard.down('ControlLeft')
     await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
     await page.keyboard.up('ControlLeft')
-    await page.getByRole('button', { name: 'Настройки', exact: true }).click()
-    await page.getByRole('button', { name: 'Управление', exact: true }).click()
-    const assist = page.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true })
+    const settings = await openAdvancedControls(page)
+    const assist = settings.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true })
+    const apply = settings.getByRole('button', { name: 'Применить', exact: true })
     assert.equal(await assist.innerText(), 'Ctrl')
     await assist.click()
     const captureBox = await assist.boundingBox()
@@ -106,30 +114,30 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     await assist.click()
     await page.keyboard.press('KeyH')
     assert.equal(await assist.innerText(), 'H')
-    await page.getByText(/Удерживайте H для дополнительных подсказок/).waitFor()
+    await settings.locator('.club-control-hint').getByText(/Дополнительные приборы — H\./).waitFor()
 
     // Family-aware conflicts cannot silently put assist and a shot on the two Ctrl keys.
     await assist.click(); await page.keyboard.press('ControlLeft')
     const shootBinding = page.getByRole('button', { name: 'Назначение: Удар', exact: true })
     await shootBinding.click(); await page.keyboard.press('ControlRight')
     await page.getByText(/Конфликт:.*Ctrl/).waitFor()
-    assert.equal(await page.getByRole('button', { name: 'Сохранить', exact: true }).isDisabled(), true)
+    assert.equal(await apply.isDisabled(), true)
     await shootBinding.click(); await page.keyboard.press('Space')
     // An invalid unsaved overlap applies immediately, but assist must win over
     // shoot even before the player resolves the conflict and can save.
     await assist.click(); await page.keyboard.press('Space')
-    assert.equal(await page.getByRole('button', { name: 'Сохранить', exact: true }).isDisabled(), true)
-    await page.getByRole('button', { name: 'Закрыть без сохранения на сервер', exact: true }).click()
+    assert.equal(await apply.isDisabled(), true)
+    await settings.getByRole('navigation', { name: 'Навигация матча' }).getByRole('button', { name: 'Матч', exact: true }).click()
+    await settings.waitFor({ state: 'hidden' })
     await page.keyboard.down('Space')
     await page.getByTestId('alt-assist').waitFor()
     assert.deepEqual(shots, [], 'An unsaved assist/shoot conflict must not fire a shot')
     await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
     await page.keyboard.up('Space')
-    await page.getByRole('button', { name: 'Настройки', exact: true }).click()
-    await page.getByRole('button', { name: 'Управление', exact: true }).click()
+    await openAdvancedControls(page)
     await assist.click(); await page.keyboard.press('KeyH')
     const saved = page.waitForResponse(response => response.url().endsWith('/api/me/settings') && response.request().method() === 'PUT' && response.request().postDataJSON()?.bindings?.assist === 'KeyH' && response.ok())
-    await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+    await apply.click()
     await saved
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
     assert.equal((await api(actor, '/api/me/settings', undefined, 'GET')).settings.bindings.assist, 'KeyH')
@@ -165,15 +173,13 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     await page.keyboard.down('KeyH')
     await page.getByRole('button', { name: 'Меню матча', exact: true }).click()
     await page.keyboard.up('KeyH')
-    await page.getByRole('button', { name: 'Настройки', exact: true }).click()
-    await page.getByRole('button', { name: 'Управление', exact: true }).click()
-    await page.getByText('Дополнительные назначения', { exact: true }).click()
+    await openAdvancedControls(page)
     await page.getByRole('button', { name: 'Назначение: Сброс камеры', exact: true }).click()
     await page.keyboard.press('KeyJ')
     await page.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true }).click()
     await page.keyboard.press('KeyC')
     const savedC = page.waitForResponse(response => response.url().endsWith('/api/me/settings') && response.request().method() === 'PUT' && response.request().postDataJSON()?.bindings?.assist === 'KeyC' && response.ok())
-    await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+    await apply.click()
     await savedC
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
     await page.evaluate(() => {

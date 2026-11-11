@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { GameAudio } from './audio.ts'
+import { currentGameAudioOutput, GameAudio, gameAudioOutputs, setGameAudioOutput, supportsGameAudioOutput } from './audio.ts'
 
 class FakeAudioContext {
   static instances = []
@@ -63,3 +63,71 @@ test('audio graph has a hard voice bound, completed nodes are released and destr
   assert.ok(context.sources.every(source => source.disconnected))
   audio.unlock(); audio.impact('ball'); assert.equal(context.sources.length, 25)
 }))
+
+test('background preference mutes hidden-document impacts and restores gain', () => withAudio(() => {
+  const previousDocument = globalThis.document
+  globalThis.document = { visibilityState: 'visible' }
+  const audio = new GameAudio()
+  try {
+    audio.setVolume(.4); audio.unlock()
+    const context = FakeAudioContext.instances.at(-1)
+    assert.equal(context.gains[0].gain.value, .4)
+    globalThis.document.visibilityState = 'hidden'
+    audio.refreshPlaybackVolume(); audio.impact('ball')
+    assert.equal(context.gains[0].gain.value, 0)
+    assert.equal(context.sources.length, 0)
+    audio.setBackgroundPlayback(true); audio.impact('ball')
+    assert.equal(context.gains[0].gain.value, .4)
+    assert.equal(context.sources.length, 1)
+    audio.setBackgroundPlayback(false)
+    globalThis.document.visibilityState = 'visible'
+    audio.refreshPlaybackVolume()
+    assert.equal(context.gains[0].gain.value, .4)
+  } finally { audio.destroy(); globalThis.document = previousDocument }
+}))
+
+test('device routing uses only permitted outputs; failed output changes roll back', async () => {
+  const previousWindow = globalThis.window
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  class RoutableContext extends FakeAudioContext {
+    sinkId = ''
+    async setSinkId(id) {
+      if (id === 'lost-device') throw new Error('NotReadableError')
+      this.sinkId = id
+    }
+  }
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: {
+    async enumerateDevices() {
+      return [
+        { kind: 'audiooutput', deviceId: 'default' },
+        { kind: 'audioinput', deviceId: 'mic' },
+        { kind: 'audiooutput', deviceId: 'speaker' },
+        { kind: 'audiooutput', deviceId: 'speaker' },
+        { kind: 'audiooutput', deviceId: 'lost-device' },
+      ]
+    },
+  } } })
+  globalThis.window = { AudioContext: RoutableContext, isSecureContext: false }
+  const audio = new GameAudio()
+  try {
+    assert.equal(supportsGameAudioOutput(), false)
+    assert.deepEqual(await gameAudioOutputs(), [])
+    globalThis.window.isSecureContext = true
+    assert.equal(supportsGameAudioOutput(), true)
+    assert.deepEqual((await gameAudioOutputs()).map(device => device.deviceId), ['speaker', 'lost-device'])
+    audio.unlock()
+    const context = FakeAudioContext.instances.at(-1)
+    await setGameAudioOutput('speaker')
+    assert.equal(context.sinkId, 'speaker')
+    await assert.rejects(setGameAudioOutput('mic'), /больше не доступно/)
+    await assert.rejects(setGameAudioOutput('lost-device'), /Не удалось переключить/)
+    assert.equal(context.sinkId, 'speaker')
+    assert.equal(currentGameAudioOutput(), 'speaker')
+    await setGameAudioOutput('')
+    assert.equal(context.sinkId, '')
+  } finally {
+    audio.destroy(); globalThis.window = previousWindow
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+  }
+})

@@ -2,15 +2,15 @@
 
 ## Source of truth
 
-- Status: Active. Last refreshed: 2026-11-06.
+- Status: Active. Last refreshed: 2026-11-11.
 - Primary surfaces: web game, club menu/settings, personal appearance, admin workshop.
 - Evidence reviewed: `project_context.md`, `online/docs/FIGMA_MATCH_INTERFACE.md`,
   `online/docs/MODEL_ASSET_PIPELINE.md`, `ClubMenu.vue`, `ClubSettings.vue`,
   `ModelWorkshop.vue`, `club-menu.css`, `match-design.css`, `VisualAssetManager.ts`.
 - Button consistency evidence: user profile screenshot (2026-11-06), all
   ClubMenu/ClubSettings action variants, workshop toolbars and match dialogs.
-- Active visual reference: Figma `YPQR5qd4bL3LUjSRBzTuQH`, sections `94:73` and
-  `105:4604`. The new appearance screen extends existing components; no separate
+- Active visual reference: Figma `YPQR5qd4bL3LUjSRBzTuQH`, sections `94:73`,
+  `105:4604` and `103:4490` (current-match overlays). The appearance screen extends existing components; no separate
   appearance frame was supplied. This is an explicit implementation assumption.
 
 ## Brand
@@ -60,13 +60,13 @@
 - New personal appearance component; pure ID-only selection policy module.
 - Draft/selected, loading, disabled, error and fallback states must be explicit.
 - Keep personal storage separate from ModelWorkshop drafts and administrator session.
-- Full club actions share a 62px minimum height (56px at ≤480px) and padding.
-  Back/cancel keeps Figma's 14px medium label, while main actions use 18px;
-  this intentional typography variant does not reduce the equal button height.
-  Paired actions use equal-width/equal-height tracks; stacked groups also keep
-  consistent tracks. Let multiline text grow without clipping.
-- Match result/menu action groups use full-width, equal-height tracks with a
-  48px minimum. Workshop toolbars share compact line-height/minimum height.
+- Full club actions use a 62px minimum (56px at ≤480px); standalone Back,
+  Cancel and Leave variants from the QA frames are 48px. Paired form actions
+  remain equal-width and equal-height. Back uses the 14px medium label;
+  multiline text can grow without clipping.
+- The current-match menu and settings use Figma's 66px desktop actions and
+  the live HUD. Result actions retain the 48px minimum. Workshop toolbars
+  share compact line-height/minimum height.
   Header close icons, text links, switches, value fields, ball/pocket selectors
   and camera icon widths are intentional variants, not full-action buttons.
 - The final text column of scrollable match history reserves 24px on its right,

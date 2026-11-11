@@ -167,8 +167,8 @@ try {
       await page.evaluate(() => { Object.assign(window.clubFixture, { connected: true, matchAvailable: false, room: null, view: 'profile' }) })
       await check(page, `${engine}-profile-remains-scrollable`, async () => {
         await page.setViewportSize({ width: 390, height: 568 }); await settle(page)
-        assert.equal(await page.locator('.club-shell').evaluate(node => node.scrollHeight > node.clientHeight + 10), true)
-        const save = page.getByRole('button', { name: 'Сохранить имя', exact: true })
+        assert.equal(await page.locator('.club-shell .club-content').evaluate(node => node.scrollHeight > node.clientHeight + 10), true)
+        const save = page.getByRole('button', { name: 'Сохранить профиль', exact: true })
         await save.scrollIntoViewIfNeeded(); const box = await save.boundingBox()
         assert.ok(box.y >= 0 && box.y + box.height <= 568 + .5)
         await page.getByLabel('Имя игрока', { exact: true }).fill('ИгрокСОченьДлиннымИменем1234567890'.slice(0, 32))

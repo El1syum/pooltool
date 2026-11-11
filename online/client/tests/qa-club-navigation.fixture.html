@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Club navigation QA</title></head>
+<body><div id="fixture"></div><script type="module">
+import { createApp, defineComponent, h, reactive } from 'vue'
+import ClubMenu from '/src/components/ClubMenu.vue'
+import { emptyProfileDetails } from '/src/profileDetails.ts'
+import '/src/style.css'
+import '/src/match-hud.css'
+
+const user = reactive({ id: 'fixture-player', displayName: 'Тест Игрока', elo: 1267, games: 17, wins: 9, losses: 8, settings: {} })
+const state = reactive({ view: 'menu', code: '', name: user.displayName, turnSeconds: 120, botDifficulty: 'medium', searchMode: 'casual', busy: false, connected: true, clientVersion: 'test', room: null, profileDetails: emptyProfileDetails(), profileChanged: false, profileSaved: false })
+window.clubFixture = state
+createApp(defineComponent({ setup() {
+  return () => h(ClubMenu, {
+    ...state, user,
+    onNavigate: value => { state.view = value },
+    onSearch: mode => { state.searchMode = mode; state.view = 'search' },
+    onCancelSearch: () => { state.view = 'play' },
+    onCreateRoom: () => {
+      state.view = 'lobby'
+      state.room = { id: 'fixture-room', code: 'ABC123', hostId: user.id, players: [{ id: user.id, displayName: user.displayName, ready: false }], spectators: [], status: 'waiting', settings: { turnSeconds: state.turnSeconds, ranked: false } }
+    },
+    onLeave: () => { state.room = null; state.view = 'play' },
+    onReady: () => { state.room.players[0].ready = !state.room.players[0].ready },
+    onJoinRoom: spectate => { window.lastFixtureJoin = { spectate, code: state.code } },
+    onSaveName: () => { user.displayName = state.name; state.profileSaved = true; state.profileChanged = false },
+    'onUpdate:code': value => { state.code = value },
+    'onUpdate:name': value => { state.name = value },
+    'onUpdate:profileDetails': value => { state.profileDetails = value; state.profileChanged = true },
+    'onUpdate:turnSeconds': value => { state.turnSeconds = value },
+  })
+} })).mount('#fixture')
+</script></body>
+</html>

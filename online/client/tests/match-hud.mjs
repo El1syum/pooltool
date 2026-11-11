@@ -63,7 +63,7 @@ async function clickNamed(page, names) {
 
 async function closeDialog(page) {
   const dialog = page.getByRole('dialog').last()
-  await clickNamed(dialog, ['Закрыть правила', 'Закрыть настройки', 'Закрыть', 'Понятно', 'Вернуться в игру', 'Сохранить и закрыть'])
+  await clickNamed(dialog, ['Закрыть правила', 'Матч', 'Продолжить игру', 'Закрыть'])
   await dialog.waitFor({ state: 'hidden' })
 }
 
@@ -319,10 +319,15 @@ for (const engineName of engines) {
     }
 
     await clickNamed(current, ['Меню матча'])
-    await clickNamed(current, ['Выключить звук', 'Звук'])
+    await clickNamed(current, ['Настройки'])
+    await clickNamed(current, ['Звук'])
+    const volume = current.getByRole('slider', { name: 'Общая громкость', exact: true })
+    await volume.focus()
+    await current.keyboard.press('Home')
     const storedVolume = await current.evaluate(id => JSON.parse(localStorage.getItem(`pooltool.settings.${id}`) || '{}').volume, currentActor.user.id)
     assert.equal(storedVolume, 0, 'Mute must use the actual persisted game volume')
-    await clickNamed(current, ['Включить звук', 'Звук'])
+    await current.keyboard.press('End')
+    assert.equal(await current.evaluate(id => JSON.parse(localStorage.getItem(`pooltool.settings.${id}`) || '{}').volume, currentActor.user.id), 1)
     await closeDialog(current)
     await assertStableCanvas()
 

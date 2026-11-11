@@ -25,13 +25,19 @@ function uniform(boxes, label, { minimum = 0, widths = false, sameRow = false } 
   if (sameRow) assert.ok(Math.max(...boxes.map(box => box.y)) - Math.min(...boxes.map(box => box.y)) <= .6,
     `${label}: actions do not share a top edge: ${JSON.stringify(boxes)}`)
 }
+function clubStack(boxes, label, minimum) {
+  const full = boxes.filter(box => !box.compact)
+  if (full.length >= 2) uniform(full, label, { minimum, widths: true })
+  if (boxes.length >= 2) assert.ok(Math.max(...boxes.map(box => box.width)) - Math.min(...boxes.map(box => box.width)) <= 1,
+    `${label}: unequal stack widths: ${JSON.stringify(boxes)}`)
+}
 async function settle(page) {
   await page.evaluate(async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))) })
 }
 async function rects(page, selector) {
   return page.locator(selector).evaluateAll(nodes => nodes.filter(node => node.getClientRects().length).map(node => {
     const r = node.getBoundingClientRect()
-    return { text: node.textContent.trim().replace(/\s+/g, ' '), x: r.x, y: r.y, width: r.width, height: r.height, disabled: node.matches(':disabled') }
+    return { text: node.textContent.trim().replace(/\s+/g, ' '), x: r.x, y: r.y, width: r.width, height: r.height, disabled: node.matches(':disabled'), compact: node.classList.contains('club-action-compact') }
   }))
 }
 async function check(page, name, action) {
@@ -62,15 +68,24 @@ async function bounds(page, label, selector = 'button, .model-file-button') {
 async function clubGroups(page, label, width) {
   await settle(page)
   const all = await rects(page, '.club-action')
+  const minimum = width <= 480 ? 56 : 62
   assert.ok(all.length > 0, `${label}: actual club actions must render`)
-  assert.ok(all.every(box => box.height >= (width <= 480 ? 56 : 62) - .5), `${label}: action below the shared minimum: ${JSON.stringify(all)}`)
+  for (const box of all) {
+    if (box.compact) {
+      assert.match(box.text, /^(Назад|Отмена|Выйти из комнаты|Вернуться в клуб)$/)
+      assert.ok(Math.abs(box.height - 48) < .5, `${label}: standalone compact action must be 48px: ${JSON.stringify(box)}`)
+    } else assert.ok(box.height >= minimum - .5, `${label}: action below the shared minimum: ${JSON.stringify(box)}`)
+  }
   const inline = await rects(page, '.club-actions-inline > .club-action')
-  if (inline.length) uniform(inline, `${label} inline`, { minimum: width <= 480 ? 56 : 62, widths: true, sameRow: width > 480 })
+  if (inline.length) {
+    assert.ok(inline.every(box => !box.compact), `${label}: paired Save/Back actions must not use the standalone variant`)
+    uniform(inline, `${label} inline`, { minimum, widths: true, sameRow: width > 480 })
+  }
   for (const [index, group] of (await page.locator('.club-actions').all()).entries()) {
     const boxes = await group.locator(':scope > .club-action').evaluateAll(nodes => nodes.map(node => {
-      const r = node.getBoundingClientRect(); return { text: node.textContent.trim(), x: r.x, y: r.y, width: r.width, height: r.height }
+      const r = node.getBoundingClientRect(); return { text: node.textContent.trim(), x: r.x, y: r.y, width: r.width, height: r.height, compact: node.classList.contains('club-action-compact') }
     }))
-    if (boxes.length >= 2) uniform(boxes, `${label} stack ${index}`, { minimum: width <= 480 ? 56 : 62, widths: true })
+    clubStack(boxes, `${label} stack ${index}`, minimum)
   }
   // A field, explanation or room summary separates action groups. Compare
   // adjacent sibling actions, not unrelated actions elsewhere in the card.
@@ -78,22 +93,22 @@ async function clubGroups(page, label, width) {
     const groups = []; let current = []
     for (const child of card.children) {
       if (child.matches('.club-action')) {
-        const r = child.getBoundingClientRect(); current.push({ text: child.textContent.trim(), x: r.x, y: r.y, width: r.width, height: r.height })
+        const r = child.getBoundingClientRect(); current.push({ text: child.textContent.trim(), x: r.x, y: r.y, width: r.width, height: r.height, compact: child.classList.contains('club-action-compact') })
       } else { if (current.length >= 2) groups.push(current); current = [] }
     }
     if (current.length >= 2) groups.push(current)
     return groups
   }))
-  directGroups.forEach((group, index) => uniform(group, `${label} adjacent ${index}`, { minimum: width <= 480 ? 56 : 62, widths: true }))
+  directGroups.forEach((group, index) => clubStack(group, `${label} adjacent ${index}`, minimum))
   const direct = await rects(page, '.club-card > .club-action')
-  if (direct.length >= 2) uniform(direct, `${label} actual direct actions`, { minimum: width <= 480 ? 56 : 62, widths: true })
+  clubStack(direct, `${label} actual direct actions`, minimum)
   // Retain the broad card contract after buttons move into layout wrappers:
   // an independent copy-code control must not silently become a different size.
   for (const [index, card] of (await page.locator('.club-card').all()).entries()) {
     const boxes = await card.locator('.club-action').evaluateAll(nodes => nodes.map(node => {
-      const r = node.getBoundingClientRect(); return { text: node.textContent.trim(), x: r.x, y: r.y, width: r.width, height: r.height }
+      const r = node.getBoundingClientRect(); return { text: node.textContent.trim(), x: r.x, y: r.y, width: r.width, height: r.height, compact: node.classList.contains('club-action-compact') }
     }))
-    if (boxes.length >= 2) uniform(boxes, `${label} complete card ${index}`, { minimum: width <= 480 ? 56 : 62, widths: true })
+    clubStack(boxes, `${label} complete card ${index}`, minimum)
   }
   await bounds(page, label, '.club-action')
   return { inline, controls: await page.locator('.club-action').count() }
@@ -135,6 +150,8 @@ try {
       await page.getByRole('button', { name: 'Готов', exact: true }).click()
       await check(page, `${id}-lobby-ready`, () => clubGroups(page, id + ' lobby ready', width))
       await page.getByRole('button', { name: 'Выйти из комнаты', exact: true }).click()
+      await page.locator('[data-club-view="friend"]').waitFor()
+      await page.locator('.club-content').getByRole('button', { name: 'Назад', exact: true }).click()
       await page.getByRole('button', { name: 'Тренировка с ботом', exact: true }).click()
       await check(page, `${id}-bot`, () => clubGroups(page, id + ' bot', width))
       await page.getByRole('button', { name: 'Назад', exact: true }).click()

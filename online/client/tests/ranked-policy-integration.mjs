@@ -25,11 +25,16 @@ async function graphics(page) {
     await clickHudAction(page, page.getByRole('button', { name: 'Меню матча', exact: true }))
     await page.getByRole('button', { name: 'Настройки', exact: true }).click()
   }
+  await settings.waitFor()
   if (!await settings.getByRole('heading', { name: 'Графика', exact: true }).count()) {
     if (!await settings.getByRole('button', { name: 'Графика', exact: true }).count()) await settings.getByRole('button', { name: 'Назад', exact: true }).click()
     await settings.getByRole('button', { name: 'Графика', exact: true }).click()
   }
-  return page.getByRole('switch', { name: 'Линия прицеливания', exact: true })
+  const advanced = settings.locator('details').filter({ hasText: 'Дополнительные параметры графики' })
+  if (await advanced.getAttribute('open') === null) await advanced.locator('summary').click()
+  const control = advanced.getByRole('switch', { name: 'Линия прицеливания', exact: true })
+  await control.waitFor()
+  return control
 }
 async function assertPolicy(page, { locked, checked }) {
   const control = await graphics(page)
@@ -94,12 +99,12 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     const canvas = await first.locator('.game-stage canvas').elementHandle()
     // Changing another preference while locked must not leak the derived false
     // value into the server's saved casual settings through update:settings.
-    await first.getByRole('button', { name: 'Закрыть без сохранения на сервер', exact: true }).click()
+    await first.getByRole('navigation', { name: 'Навигация матча' }).getByRole('button', { name: 'Матч', exact: true }).click()
     await clickHudAction(first, first.getByRole('button', { name: 'Меню матча', exact: true }))
     await first.getByRole('button', { name: 'Настройки', exact: true }).click()
     await first.getByRole('button', { name: 'Звук', exact: true }).click()
     await first.getByLabel('Общая громкость', { exact: true }).evaluate(input => { input.value = '0.6'; input.dispatchEvent(new Event('input', { bubbles: true })) })
-    await first.getByRole('button', { name: 'Сохранить', exact: true }).click()
+    await first.getByRole('button', { name: 'Применить', exact: true }).click()
     await first.locator('.club-settings-shell').waitFor({ state: 'hidden' })
     const saved = (await api(actors[0], '/api/me/settings', undefined, 'GET')).settings
     assert.equal(saved.showAimGuide, true)
@@ -123,8 +128,11 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     // Leave the UI actor through its actual navigation so its lifecycle guards
     // can reject delayed packets; don't remove a live UI participant behind it.
     await pages[1].close()
-    await first.getByRole('button', { name: 'Закрыть без сохранения на сервер', exact: true }).click()
-    await first.getByRole('button', { name: 'В главное меню', exact: true }).click()
+    const settings = first.locator('.club-settings-shell')
+    await settings.getByRole('button', { name: 'Назад', exact: true }).click()
+    await settings.getByRole('heading', { name: 'Настройки', exact: true }).waitFor()
+    await settings.getByRole('button', { name: 'Назад к меню матча', exact: true }).click()
+    await first.getByRole('dialog').getByRole('button', { name: 'В главное меню', exact: true }).click()
     await first.getByRole('heading', { name: 'Pooltool', exact: true }).waitFor()
     for (const actor of actors.slice(1)) await api(actor, `/api/rooms/${room.code}/leave`)
     room = null

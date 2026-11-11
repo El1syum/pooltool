@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { clickHudAction } from './app-state.mjs'
 
 const modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
 const playwright = await import(path.isAbsolute(modulePath) ? pathToFileURL(modulePath).href : modulePath)
@@ -55,7 +56,7 @@ async function equalAppActions(page, name, selector, expectedCount) {
     await page.setViewportSize(viewport)
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     const metrics = await page.locator(selector).evaluate(group => {
-      const rect = group.getBoundingClientRect(), panel = group.closest('.club-match-dialog, .result-panel'), bounds = panel.getBoundingClientRect()
+      const rect = group.getBoundingClientRect(), panel = group.closest('.match-menu-overlay, .result-panel'), bounds = panel.getBoundingClientRect()
       return { viewport: { width: innerWidth, height: innerHeight }, pageWidth: document.documentElement.scrollWidth,
         panel: { top: bounds.top, bottom: bounds.bottom, left: bounds.left, right: bounds.right },
         group: { width: rect.width }, buttons: [...group.querySelectorAll('button')].map(button => {
@@ -130,25 +131,26 @@ async function surrender(page, actor, matchId) {
   await page.waitForFunction(() => !document.pointerLockElement)
   try { await page.getByRole('button', { name: 'Меню матча', exact: true }).click() }
   finally { await page.keyboard.up('ControlLeft') }
-  await modalFocus(page, '.club-match-dialog', { initial: true })
-  await equalAppActions(page, 'match-menu', '.club-dialog-actions', 5)
-  await page.getByRole('button', { name: 'Правила игры', exact: true }).click()
+  await modalFocus(page, '.match-menu-overlay', { initial: true })
+  await equalAppActions(page, 'match-menu', '.match-menu-actions', 3)
+  await page.getByRole('button', { name: 'Продолжить игру', exact: true }).click()
+  await clickHudAction(page, page.getByRole('button', { name: 'Правила', exact: true }))
   await modalFocus(page, '.hud-rules-dialog', { initial: true })
   await page.keyboard.press('Escape')
   await page.locator('.hud-rules-dialog').waitFor({ state: 'detached' })
-  assert.equal(await page.locator('.hud-rules').evaluate(element => document.activeElement === element), true, 'Rules restore the actual HUD trigger after a menu transition')
+  assert.equal(await page.locator('.hud-rules').evaluate(element => document.activeElement === element), true, 'Rules restore the actual HUD trigger')
   await page.keyboard.down('ControlLeft')
   await page.waitForFunction(() => !document.pointerLockElement)
   try { await page.getByRole('button', { name: 'Меню матча', exact: true }).click() }
   finally { await page.keyboard.up('ControlLeft') }
   await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
-  await modalFocus(page, '.club-match-dialog')
+  await modalFocus(page, '.match-menu-overlay')
   await page.keyboard.press('Escape')
   await page.getByRole('heading', { name: 'Меню матча', exact: true }).waitFor()
   assert.equal(await page.getByRole('heading', { name: 'Сдаться?', exact: true }).count(), 0, 'Escape cancels only surrender confirmation, not the entire match menu')
   await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
-  await equalAppActions(page, 'surrender', '.club-dialog-actions', 2)
-  await page.getByRole('button', { name: 'Да, сдаться', exact: true }).click()
+  await equalAppActions(page, 'surrender', '.match-menu-actions', 2)
+  await page.getByRole('button', { name: 'Сдаться', exact: true }).click()
   await page.locator('.result-panel').waitFor()
   await equalAppActions(page, 'result', '.result-actions', await page.locator('.result-actions button').count())
   const finished = await until(async () => {
@@ -234,9 +236,10 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
 
     await createLobby(page, actor)
     await page.getByRole('button', { name: 'Выйти из комнаты', exact: true }).click()
-    await mainMenu(page)
+    await page.locator('[data-club-view="friend"]').waitFor()
     assert.equal((await current(actor)).room, null)
-    await page.getByRole('button', { name: 'Играть', exact: true }).click()
+    await page.getByRole('button', { name: 'Назад', exact: true }).click()
+    await page.locator('[data-club-view="choices"]').waitFor()
     await page.getByRole('button', { name: 'Случайный противник', exact: true }).click()
     await page.locator('[data-club-view="search"]').waitFor()
     await page.getByRole('button', { name: 'Отменить поиск', exact: true }).click()

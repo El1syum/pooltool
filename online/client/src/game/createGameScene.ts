@@ -5,6 +5,7 @@ import { VisualAssetManager } from '../models/VisualAssetManager'
 import { createPlaybackClock, createTrajectorySampler, isLegalCuePlacement, normalizeAim, numberForPocket } from './playback'
 import { applyShotPhaseLocks, isMeaningfulPowerDrag, powerDragAim, previousShotPhase } from './shotWorkflow'
 import { matchesAssistBinding } from './assistBinding'
+import { DEFAULT_PRESENTATION_SETTINGS, nextRenderDeadline, presentationSettings, renderPixelRatio } from './settingsOptions'
 import {
   DEFAULT_BINDINGS,
   type AimParameters, type BallState, type BindingAction, type GameScene, type GameSnapshot,
@@ -18,6 +19,7 @@ const BASIS = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0)
 const BASIS_INVERSE = BASIS.clone().invert()
 const UP = new THREE.Vector3(0, 1, 0)
 const DEFAULT_SETTINGS: SceneSettings = {
+  ...DEFAULT_PRESENTATION_SETTINGS,
   quality: 'medium', volume: 0.5, sensitivity: 1, bindings: { ...DEFAULT_BINDINGS },
   showAimGuide: true, showPocketLabels: true,
 }
@@ -691,7 +693,10 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     edgeTurn = direction
   }
 
-  function visibilityChanged(): void { if (document.visibilityState === 'hidden') suspendInput() }
+  function visibilityChanged(): void {
+    audio.refreshPlaybackVolume()
+    if (document.visibilityState === 'hidden') suspendInput()
+  }
 
   function applyCameraMode(mode: CameraMode): void {
     if (mode === cameraMode) return
@@ -781,7 +786,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     const desired = position.clone().addScaledVector(direction, -cueDistance).addScaledVector(UP, 0.18 + cueDistance * 0.3)
     const centered = shotPhase === 'aim' || shotPhase === 'power' || (shotPhase === 'overview' && defaultAimCamera === 'cue')
     const target = centered ? position : position.clone().addScaledVector(direction, 0.35 + cueDistance * 0.4)
-    const alpha = 1 - Math.exp(-delta * 9)
+    const alpha = settings.smoothAim === false ? 1 : 1 - Math.exp(-delta * 9)
     camera.position.lerp(desired, alpha)
     // The HUD reticle is centered in the viewport. Keep the actual cue-ball
     // centre underneath it throughout the camera transition, not just at rest.
@@ -840,26 +845,33 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     controls.update()
   }
 
+  let nextPaintAt = 0
   function setSettings(partial: Partial<SceneSettings>): void {
+    const presentation = presentationSettings({ ...settings, ...partial })
+    if (presentation.frameRateLimit !== settings.frameRateLimit) nextPaintAt = 0
     settings = {
-      ...settings, ...partial,
+      ...settings, ...partial, ...presentation,
       sensitivity: Math.max(0.1, Math.min(3, partial.sensitivity ?? settings.sensitivity)),
       volume: Math.max(0, Math.min(1, partial.volume ?? settings.volume)),
       bindings: { ...settings.bindings, ...partial.bindings },
     }
-    const ratio = settings.quality === 'low' ? 1 : settings.quality === 'high' ? 2 : 1.5
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ratio))
-    renderer.shadowMap.enabled = settings.quality !== 'low'
-    const shadowSize = settings.quality === 'high' ? 2048 : 1024
+    const ratio = renderPixelRatio(settings.quality, window.devicePixelRatio, presentation.renderScale)
+    if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio)
+    const shadowMode = presentation.shadowQuality === 'auto'
+      ? settings.quality === 'low' ? 'off' : settings.quality
+      : presentation.shadowQuality
+    renderer.shadowMap.enabled = shadowMode !== 'off'
+    const shadowSize = shadowMode === 'high' ? 2048 : 1024
     if (overhead.shadow.mapSize.x !== shadowSize) {
       overhead.shadow.map?.dispose()
       overhead.shadow.map = null
       overhead.shadow.mapSize.set(shadowSize, shadowSize)
     }
-    controls.rotateSpeed = settings.sensitivity
+    controls.rotateSpeed = settings.sensitivity * (presentation.invertCamera ? -1 : 1)
     updateOrbitButtons()
     for (const label of pocketLabels) label.visible = settings.showPocketLabels
-    audio.setVolume(settings.volume)
+    audio.setVolume(settings.volume * presentation.impactVolume)
+    audio.setBackgroundPlayback(presentation.audioInBackground)
     resize()
     updateAimGuide()
   }
@@ -1245,8 +1257,12 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     }
     followCue(delta)
     if (cameraMode === 'free') controls.update()
-    renderer.render(scene, camera)
-    measuredFrames++
+    const paint = nextRenderDeadline(now, nextPaintAt, settings.frameRateLimit ?? 0)
+    if (paint !== null) {
+      nextPaintAt = paint
+      renderer.render(scene, camera)
+      measuredFrames++
+    }
     if (now - measuredAt >= 5000) {
       callbacks.onPerformance?.({ fps: measuredFrames * 1000 / (now - measuredAt), drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles })
       measuredAt = now

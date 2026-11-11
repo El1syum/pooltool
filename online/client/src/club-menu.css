@@ -30,7 +30,7 @@
 .club-game-title > div { display:flex; gap:16px; align-items:center; color:var(--club-gold); font-size:11px; letter-spacing:3px; }
 .club-game-title i { width:64px; height:1px; background:#776647; }
 .club-actions { width:100%; display:grid; grid-auto-rows:1fr; gap:12px; }
-.club-actions-with-note { grid-template-rows:1fr auto 1fr; }
+.club-actions-with-back { grid-auto-rows:auto; }
 .club-shell .club-action, .club-settings-shell .club-action { width:100%; display:flex; flex-shrink:0; align-items:center; gap:14px; min-height:var(--club-action-min-height); height:auto; padding:6px 22px; border:1px solid var(--club-line); border-radius:5px; background:rgba(28,40,37,.91); color:var(--club-cream); font-size:18px; line-height:1.3; font-weight:500; text-align:left; white-space:normal; }
 .club-action > img { max-width:none; flex:0 0 auto; }
 .club-action > .club-bot-icon { width:20px; height:20px; object-fit:scale-down; }
@@ -40,6 +40,7 @@
 .club-shell .club-action-primary, .club-settings-shell .club-action-primary { color:#1a201b; background:var(--club-gold); border-color:var(--club-gold); font-weight:600; }
 .club-shell .club-action-primary:hover:not(:disabled), .club-settings-shell .club-action-primary:hover:not(:disabled) { background:#d4bb8c; }
 .club-shell .club-action-back, .club-settings-shell .club-action-back { color:var(--club-muted); text-align:center; font-size:14px; font-weight:500; line-height:normal; }
+.club-shell .club-action-compact { min-height:48px; }
 .club-action-back > span { padding-right:30px; }
 .club-footnote { width:100%; margin:0; font-size:12px; line-height:1.6; text-align:center; color:var(--club-muted); }
 .club-shell .club-text-button, .club-settings-shell .club-text-button { background:none; border:0; padding:0; color:var(--club-gold); font-size:12px; line-height:1.6; }
@@ -50,6 +51,9 @@
 .club-section-profile { width:920px; gap:24px; }
 .club-section-title { display:flex; flex-direction:column; align-items:center; gap:12px; width:100%; text-align:center; }
 .club-section-title > p { margin:0; color:var(--club-gold); font-size:10px; line-height:normal; letter-spacing:3px; font-weight:600; }
+/* Retain the Figma gold, but separate the small letters from the light fixture
+   behind them at different aspect ratios and browser zoom levels. */
+.club-game-title > p, .club-section-title > p { text-shadow:1px 0 #08110e,-1px 0 #08110e,0 1px #08110e,0 -1px #08110e,0 0 8px #08110e; }
 .club-section-title h1 { margin:0; font:40px/1.2 'Pooltool Lora',serif; color:var(--club-cream); }
 .club-section-title > span { font-size:14px; line-height:1.6; color:var(--club-muted); }
 .club-card { width:100%; padding:32px; background:rgba(17,27,25,.92); border:1px solid var(--club-line); border-radius:12px; box-shadow:0 18px 64px #0005; display:flex; flex-direction:column; gap:20px; }
@@ -72,23 +76,27 @@
 .club-actions-inline { width:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:1fr; gap:12px; }
 .club-actions-inline > .club-action { min-width:0; }
 .club-code-label { display:flex; flex-direction:column; align-items:stretch !important; gap:12px; font-size:12px; color:var(--club-muted); }
+.club-code-form .club-code-field { width:100%; display:flex; flex-direction:column; gap:12px; }
+.club-code-field .club-small-note { line-height:normal; }
 .club-shell input.club-code-input:not([type=range]):not([type=checkbox]) { display:block; width:100%; height:80px; border-color:var(--club-gold); text-align:center; font-size:30px; letter-spacing:8px; padding:0 16px; text-transform:uppercase; }
 .club-observer-note { display:flex; gap:12px; align-items:center; font-size:12px; color:var(--club-muted); line-height:1.6; }
 .club-observer-note img { flex:0 0 auto; }
 .club-search { display:flex; flex-direction:column; align-items:center; gap:14px; }
-.club-search-ring { position:relative; display:flex; align-items:center; justify-content:center; border:1px solid #776647; border-radius:50%; width:88px; height:88px; color:var(--club-gold); font:42px 'Pooltool Lora',serif; }
+.club-search-ring { position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid #776647; border-radius:50%; width:88px; height:88px; color:var(--club-gold); font:42px 'Pooltool Lora',serif; }
 .club-search-arc { position:absolute; width:90px; height:90px; left:-2px; top:-2px; animation:club-search-spin 2s linear infinite; }
 .club-search-arc img { position:absolute; left:22.5px; top:0; max-width:none; }
 @keyframes club-search-spin { to { transform:rotate(360deg); } }
-.club-search > strong { font-size:32px; letter-spacing:3px; font-weight:400; }
-.club-rating-data { display:flex; justify-content:space-between; gap:20px; }
+.club-search > strong { font-size:32px; line-height:normal; letter-spacing:3px; font-weight:400; font-variant-numeric:tabular-nums; }
+.club-search > .club-small-note { line-height:normal; }
+.club-rating-data { display:flex; justify-content:space-between; gap:20px; line-height:normal; }
 .club-rating-data > div { display:flex; flex-direction:column; gap:8px; }
 .club-rating-data > div:last-child { text-align:right; }
 .club-rating-data small { font-size:11px; color:var(--club-muted); }
 .club-rating-data strong { font-size:24px; font-weight:400; }
 .club-rating-data > div:first-child strong { color:var(--club-gold); }
-.club-split-note { display:flex; justify-content:space-between; gap:20px; font-size:12px; color:var(--club-muted); line-height:1.5; }
-.club-split-note > span:first-child { color:var(--club-cream); }
+.club-split-note { display:flex; justify-content:space-between; gap:20px; font-size:12px; color:var(--club-muted); line-height:normal; }
+.club-split-note > span:first-child { color:var(--club-cream); font-size:13px; }
+.club-split-note > span:last-child { text-align:right; }
 .club-invitation { display:flex; flex-direction:column; gap:14px; align-items:center; }
 .club-invitation > span { font-size:11px; letter-spacing:2px; color:var(--club-muted); }
 .club-invitation h2 { position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%); }
@@ -109,16 +117,19 @@
 .club-profile-person > div { display:flex; flex-direction:column; gap:6px; min-width:0; }
 .club-profile-person strong { font-size:18px; font-weight:400; overflow-wrap:anywhere; }
 .club-profile-person small { font-size:11px; color:var(--club-muted); overflow-wrap:anywhere; }
-.club-profile-person > img { margin-left:auto; }
+.club-shell .club-profile-pencil { flex:0 0 auto; display:flex; padding:0; background:none; border:0; }
+.club-shell .club-profile-pencil:hover:not(:disabled) { background:none; }
 .club-profile-statistics { flex:1; min-width:0; border-left:1px solid var(--club-line); padding-left:32px; display:flex; flex-direction:column; gap:16px; }
 .club-profile-rating { display:flex; align-items:center; gap:14px; }
 .club-profile-rating > div { display:flex; flex-direction:column; gap:6px; }
 .club-profile-rating strong { font-size:19px; color:var(--club-gold); font-weight:400; }
 .club-profile-rating span { font-size:12px; color:var(--club-muted); }
-.club-stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.club-stat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 12px; }
 .club-stat-grid > div { padding:16px; background:rgba(11,19,18,.85); border-radius:5px; display:flex; flex-direction:column; gap:8px; }
 .club-stat-grid strong { font-size:28px; font-weight:400; }
 .club-stat-grid span { font-size:11px; color:var(--club-muted); line-height:1.5; }
+.club-profile-actions { display:flex; flex-direction:column; width:100%; gap:12px; }
+.club-profile-actions > .club-small-note { font-size:11px; line-height:normal; }
 .club-history-title { font:22px 'Pooltool Lora',serif; margin:4px 0 0; }
 .club-history { width:100%; max-width:100%; min-width:0; list-style:none; padding:0; margin:0; max-height:250px; overflow:auto; overscroll-behavior:contain; }
 .club-history li { display:grid; grid-template-columns:160px minmax(180px,1fr) 112px 120px 88px; min-width:700px; gap:10px; padding:12px 0; border-bottom:1px solid var(--club-line); font-size:11px; color:var(--club-muted); }
@@ -128,6 +139,9 @@
 .club-history-elo { padding-inline-end:24px; text-align:right; white-space:nowrap; font-size:inherit; font-variant-numeric:tabular-nums; }
 .club-footer { position:relative; flex:0 0 82px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 48px; color:var(--club-muted); font-size:11px; }
 .club-footer > span:nth-child(2) { color:#728078; letter-spacing:1px; white-space:nowrap; }
+.club-breadcrumbs { min-width:0; line-height:1.5; overflow-wrap:anywhere; text-align:left; }
+.club-shell .club-breadcrumbs button { display:inline; padding:0; min-height:0; border:0; background:none; font:inherit; color:inherit; text-align:left; }
+.club-shell .club-breadcrumbs button:hover:not(:disabled) { background:none; color:var(--club-gold); text-decoration:underline; }
 .club-connection { position:absolute; left:48px; bottom:8px; margin:0; font-size:9px; color:#728078; max-width:calc(100% - 96px); }
 .club-connection-offline { color:#e5b38d; }
 .club-settings-shell { z-index:30; }
@@ -288,3 +302,26 @@
   .club-shell[data-club-view="menu"] .club-actions { gap:12px; }
 }
 @media (prefers-reduced-motion:reduce) { .club-search-arc { animation:none; } }
+
+/* The version and account belong to the viewport chrome, not to the
+   scrolling form. Keep a native scroll lane for tall profile/lobby content. */
+.club-shell[data-club-view]:not([data-club-view="menu"]) { overflow:hidden; }
+.club-shell[data-club-view]:not([data-club-view="menu"]) > .club-header { flex-basis:clamp(56px,10dvh,112px); }
+.club-shell[data-club-view]:not([data-club-view="menu"]) > .club-content { flex:1 1 0; min-height:0; flex-direction:column; justify-content:flex-start; overflow:auto; overscroll-behavior:contain; }
+.club-shell[data-club-view]:not([data-club-view="menu"]) > .club-content > * { flex-shrink:0; margin-block:auto; }
+.club-shell[data-club-view]:not([data-club-view="menu"]) > .club-footer { flex-basis:clamp(36px,6dvh,64px); display:grid; grid-template-columns:minmax(0,1fr) auto; align-content:center; gap:4px 16px; }
+.club-shell[data-club-view]:not([data-club-view="menu"]) > .club-footer > .club-connection { position:static; grid-column:1 / -1; max-width:100%; line-height:12px; }
+.club-shell .club-code-form { gap:20px; }
+@media (max-height:620px) {
+  .club-shell[data-club-view]:not([data-club-view="menu"]) > .club-header { flex-basis:48px; }
+  .club-shell[data-club-view]:not([data-club-view="menu"]) > .club-footer { flex-basis:40px; }
+}
+@media (min-width:761px) and (min-height:900px) {
+  .club-shell[data-club-view]:not([data-club-view="menu"]) > .club-header { flex-basis:112px; }
+  .club-shell[data-club-view]:not([data-club-view="menu"]) > .club-content { padding-block:0; }
+  .club-shell[data-club-view]:not([data-club-view="menu"]) > .club-footer { flex-basis:82px; }
+}
+@media (min-width:1001px) {
+  .club-profile-columns { align-items:stretch; }
+  .club-profile-statistics { min-height:350px; }
+}

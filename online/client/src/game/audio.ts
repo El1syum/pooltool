@@ -3,11 +3,52 @@ const IMPACT_KINDS: ImpactKind[] = ['cue', 'ball', 'cushion', 'pocket']
 const MAX_VOICES = 24
 const MIN_KIND_INTERVAL = 0.008
 
+type RoutableAudioContext = AudioContext & { setSinkId: (deviceId: string) => Promise<void> }
+const outputContexts = new Set<RoutableAudioContext>()
+// Output IDs are per-origin hardware choices, not account settings. Keep
+// them in the current page; never ask for microphone access or sync to server.
+let selectedOutput = ''
+
+export function supportsGameAudioOutput(): boolean {
+  return typeof window !== 'undefined' && window.isSecureContext
+    && typeof window.AudioContext?.prototype === 'object'
+    && 'setSinkId' in window.AudioContext.prototype
+    && Boolean(navigator.mediaDevices?.enumerateDevices)
+}
+
+export async function gameAudioOutputs(): Promise<MediaDeviceInfo[]> {
+  if (!supportsGameAudioOutput()) return []
+  const seen = new Set(['', 'default'])
+  return (await navigator.mediaDevices.enumerateDevices()).filter(device => {
+    if (device.kind !== 'audiooutput' || seen.has(device.deviceId)) return false
+    seen.add(device.deviceId)
+    return true
+  })
+}
+
+export function currentGameAudioOutput(): string { return selectedOutput }
+
+export async function setGameAudioOutput(deviceId: string): Promise<void> {
+  if (!supportsGameAudioOutput()) throw new Error('Браузер не позволяет выбрать устройство вывода')
+  // The list contains only devices already permitted by the browser.
+  if (deviceId && !(await gameAudioOutputs()).some(device => device.deviceId === deviceId)) {
+    throw new Error('Устройство вывода больше не доступно')
+  }
+  const contexts = [...outputContexts]
+  const results = await Promise.allSettled(contexts.map(context => context.setSinkId(deviceId)))
+  if (results.some((result, index) => result.status === 'rejected' && outputContexts.has(contexts[index]!))) {
+    await Promise.allSettled(contexts.map(context => context.setSinkId(selectedOutput)))
+    throw new Error('Не удалось переключить звук на выбранное устройство')
+  }
+  selectedOutput = deviceId
+}
+
 /** Short cached procedural impacts; collision bursts cannot flood the audio graph. */
 export class GameAudio {
   private context: AudioContext | null = null
   private gain: GainNode | null = null
   private volume = 0.7
+  private backgroundPlayback = false
   private destroyed = false
   private buffers = new Map<ImpactKind, AudioBuffer>()
   private lastImpact = new Map<ImpactKind, number>()
@@ -36,8 +77,17 @@ export class GameAudio {
       if (!this.context) {
         this.context = new AudioContextClass()
         this.gain = this.context.createGain()
-        this.gain.gain.value = this.volume
+        this.gain.gain.value = this.playbackVolume()
         this.gain.connect(this.context.destination)
+        if (supportsGameAudioOutput() && 'setSinkId' in this.context) {
+          const context = this.context as RoutableAudioContext
+          outputContexts.add(context)
+          const device = selectedOutput
+          if (device) void context.setSinkId(device).catch(() => {
+            // A device/permission may disappear between menu and match.
+            if (selectedOutput === device) selectedOutput = ''
+          })
+        }
         // Prepare outside the collision/render loop, once per audio context.
         this.prepareBuffers(this.context)
       }
@@ -47,12 +97,25 @@ export class GameAudio {
 
   setVolume(volume: number): void {
     this.volume = Math.max(0, Math.min(1, volume))
-    if (this.gain && this.context) this.gain.gain.setTargetAtTime(this.volume, this.context.currentTime, 0.02)
+    this.refreshPlaybackVolume()
+  }
+
+  setBackgroundPlayback(allowed: boolean): void {
+    this.backgroundPlayback = allowed
+    this.refreshPlaybackVolume()
+  }
+
+  private playbackVolume(): number {
+    return !this.backgroundPlayback && typeof document !== 'undefined' && document.visibilityState === 'hidden' ? 0 : this.volume
+  }
+
+  refreshPlaybackVolume(): void {
+    if (this.gain && this.context) this.gain.gain.setTargetAtTime(this.playbackVolume(), this.context.currentTime, 0.02)
   }
 
   impact(kind: ImpactKind = 'ball', strength = 1): void {
     const context = this.context
-    if (!context || !this.gain || context.state !== 'running' || this.volume <= 0) return
+    if (!context || !this.gain || context.state !== 'running' || this.playbackVolume() <= 0) return
     // Simultaneous contacts remain in the physical trajectory. Their identical
     // overlapping sound voices are inaudible separately and need not be spawned.
     const now = context.currentTime
@@ -80,7 +143,10 @@ export class GameAudio {
       source.disconnect(); gain.disconnect()
     }
     this.voices.clear(); this.buffers.clear(); this.lastImpact.clear()
-    if (this.context) void this.context.close().catch(() => undefined)
+    if (this.context) {
+      outputContexts.delete(this.context as RoutableAudioContext)
+      void this.context.close().catch(() => undefined)
+    }
     this.context = null
     this.gain = null
   }

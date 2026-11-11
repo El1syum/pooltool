@@ -70,14 +70,16 @@ test('lobby reflects actual users, readiness, invitation code and selected turn 
   assert.match(html, /Отменить готовность/)
   assert.match(html, /Ожидаем подключения/)
 })
-test('profile shows only actual profile fields and actual match history', async () => {
-  const html = await render(Menu, menu({ view: 'profile', history: [{ id: 'm', startedAt: '2026-11-01T12:00:00Z', winnerId: user.id, opponentName: 'Друг', ranked: true, eloDelta: 12 }] }))
+test('profile shows real profile fields, numeric Elo progress and actual match history', async () => {
+  const html = await render(Menu, menu({ view: 'profile', profileDetails: { fullName: 'Личное имя', city: 'Киев', about: 'Описание профиля' }, history: [{ id: 'm', startedAt: '2026-11-01T12:00:00Z', winnerId: user.id, opponentName: 'Друг', ranked: true, eloDelta: 12 }] }))
   assert.match(html, /17/)
   assert.match(html, /52,9%/)
   assert.match(html, /против Друг/)
   assert.match(html, /Победа/)
   assert.match(html, /Эло \+12/)
-  assert.doesNotMatch(html, /Город|О себе|Сезон|Золото/)
+  for (const value of ['Личное имя', 'Киев', 'Описание профиля', 'Сохранить профиль']) assert.ok(html.includes(value))
+  assert.match(html, /role="meter"[^>]*aria-valuenow="1267"/)
+  assert.doesNotMatch(html, /Сезон|Золото|Профиль сохранён/)
 })
 test('settings is an accessible real-settings component with safe server render', async () => {
   const settings = { quality: 'medium', volume: .5, sensitivity: 1, bindings, showAimGuide: true, showPocketLabels: true }
@@ -102,7 +104,7 @@ test('settings index uses Figma summary slots with current values instead of sam
 })
 
 test('all referenced original SVG assets have valid standalone SVG metadata', async () => {
-  const assets = ['online-dot', 'play', 'chevron-dark', 'chevron-gold', 'settings', 'user', 'exit', 'shuffle', 'trophy', 'users', 'eye', 'bot', 'arrow-left', 'circle-dot', 'sliders', 'plus', 'key', 'log-in', 'eye-muted', 'eye-dark', 'copy', 'wait-dot', 'search-arc', 'x', 'pencil', 'profile-trophy', 'check-dark', 'monitor', 'volume', 'mouse', 'exit-large', 'exit-dark', 'chevron-down', 'toggle-on', 'toggle-off']
+  const assets = ['online-dot', 'play', 'chevron-dark', 'chevron-gold', 'settings', 'user', 'exit', 'shuffle', 'trophy', 'users', 'eye', 'bot', 'arrow-left', 'circle-dot', 'sliders', 'plus', 'key', 'log-in', 'eye-muted', 'eye-dark', 'copy', 'wait-dot', 'search-arc', 'x', 'pencil', 'pencil-small', 'pencil-about', 'profile-trophy', 'check-dark', 'monitor', 'volume', 'mouse', 'exit-large', 'exit-dark', 'chevron-down', 'toggle-on', 'toggle-off']
   for (const asset of assets) {
     const svg = await readFile(new URL(`../public/ui/club-menu/${asset}.svg`, import.meta.url), 'utf8')
     assert.match(svg, /^<svg\b/)

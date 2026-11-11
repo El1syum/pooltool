@@ -12,10 +12,10 @@ const props = defineProps<{
   canShoot: boolean; canPlace: boolean; canReposition: boolean; placingCue: boolean
   connected: boolean; connection: string; remaining: number; elapsed: number
   statusText: string; volume: number; topViewKey: string; calledBall: string
-  calledPocket: string; cameraMode: CameraMode; showAssist?: boolean; assistKeyLabel?: string
+  calledPocket: string; cameraMode: CameraMode; showAssist?: boolean; assistKeyLabel?: string; overlay?: boolean
 }>()
 const emit = defineEmits<{
-  settings: []; menu: []; mute: []; rules: []; camera: [action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' | 'out']
+  menu: []; rules: []; camera: [action: 'top' | 'free' | 'cue' | 'left' | 'right' | 'in' | 'out']
   aim: [value: AimState]; shoot: []; phase: [value: ShotPhase]; selectBall: [id: string]
   selectPocket: [id: string]; placeCue: []; copyCode: []; panelOpen: [value: boolean]; toggleAssist: []
 }>()
@@ -24,10 +24,11 @@ const asset = (name: string) => `${base}ui/figma-match/${name}.svg`
 const assistAsset = (name: string) => `${base}ui/figma-assist/${name}.svg`
 const controlsOpen = ref(false)
 watch(controlsOpen, value => emit('panelOpen', value))
+watch(() => props.overlay, value => { if (value) controlsOpen.value = false })
 onBeforeUnmount(() => { if (controlsOpen.value) emit('panelOpen', false) })
 const localTurn = computed(() => props.match.status === 'active' && props.match.players[props.match.currentPlayer]?.id === props.user.id)
-const headingView = computed(() => props.phase === 'overview' && props.cameraMode === 'cue' && localTurn.value && !props.canPlace)
-const compact = computed(() => props.phase !== 'overview' || headingView.value)
+const headingView = computed(() => !props.overlay && props.phase === 'overview' && props.cameraMode === 'cue' && localTurn.value && !props.canPlace)
+const compact = computed(() => !props.overlay && (props.phase !== 'overview' || headingView.value))
 const showOverviewInstruction = computed(() => !compact.value && localTurn.value && !props.canPlace)
 const contactDescription = computed(() => {
   const horizontal = Math.abs(props.aim.a) < 0.025 ? '' : props.aim.a > 0 ? 'справа' : 'слева'
@@ -77,7 +78,7 @@ defineExpose({ closeControls })
 </script>
 
 <template>
-  <section class="hud-root hud-modern" :class="{ 'hud-compact': compact, 'hud-heading': headingView, 'hud-offline': !connected, 'hud-assist-visible': showAssist }" :data-shot-phase="phase" :data-aim-direction="aim.phi" :data-camera-mode="cameraMode" data-testid="match-hud" aria-label="Интерфейс матча">
+  <section class="hud-root hud-modern" :class="{ 'hud-compact': compact, 'hud-heading': headingView, 'hud-offline': !connected, 'hud-assist-visible': showAssist, 'hud-overlay': overlay }" :data-shot-phase="phase" :data-aim-direction="aim.phi" :data-camera-mode="cameraMode" data-testid="match-hud" aria-label="Интерфейс матча">
     <div class="hud-identity" aria-label="Pooltool">
       <div class="hud-seal">8</div>
       <div class="hud-wordmark"><strong>Pooltool</strong><span>8-BALL · МАТЧ {{ formatTime(elapsed) }}</span></div>
@@ -105,6 +106,7 @@ defineExpose({ closeControls })
 
     <button class="hud-match-menu" type="button" aria-label="Меню матча" @click="emit('menu')"><img :src="assistAsset('menu')" alt="" /><span>Меню</span><kbd>Esc</kbd></button>
 
+    <template v-if="!overlay">
     <div class="hud-match-status match-status" role="status" :class="{ 'hud-status-attention': canPlace || !connected, 'hud-status-quiet': !showStatus }">{{ !connected ? connection : statusText }}</div>
 
     <aside v-if="showOverviewInstruction" class="hud-stage-instruction hud-overview-instruction"><span>01 / 04 · ОБЗОР</span><h2>Ваш ход</h2><p>Оцените стол и оставшиеся шары. Затем выберите направление удара.</p></aside>
@@ -151,5 +153,6 @@ defineExpose({ closeControls })
       <button v-if="canReposition" type="button" @click="placeCue">{{ placingCue ? 'Отменить перестановку' : 'Переставить биток' }}</button>
       <p class="hud-controls-help">ЛКМ — подтвердить этап, ПКМ — вернуться. В режиме силы оттяните кий и отпустите кнопку для удара. Таймер матча продолжает идти.</p>
     </section>
+    </template>
   </section>
 </template>
