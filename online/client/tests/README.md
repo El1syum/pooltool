@@ -1,5 +1,20 @@
 # Browser smoke checks
 
+## Surrender navigation
+
+`postgame-menu.mjs` checks the real room and match history: a confirmed
+surrender never mounts the losing result, the opponent still sees victory,
+ranked Elo is recorded, cancellation does not end the match, and genuine or
+lost leave failures use the existing recovery paths. A finished match with a
+different reason still shows its normal result. The optional
+`POSTGAME_SOLO_LIMIT_SECONDS` must match the isolated service's
+`MAX_MATCH_SECONDS` to exercise replay after a natural bot-game expiry.
+
+`surrender-recovery.mjs` starts a fresh browser with a server-committed surrender;
+`SURRENDER_DROP_ACK=1` additionally drops only the matching real WebSocket
+`commandResult` and checks that the authoritative match broadcast suffices.
+Both tests require an isolated real loopback service (default 8791).
+
 ## 11 November QA report
 
 - `qa-club-navigation.mjs`: real ClubMenu at five sizes, independent ranked/casual

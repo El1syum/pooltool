@@ -521,10 +521,11 @@ for (const engineName of engines) {
     const build = await first.locator('script[type="module"][src]').first().getAttribute('src')
     // Finish this disposable real match, then exercise the deployed postgame
     // navigation without a reload. No existing users/rooms are changed.
-    await api(currentActor, `/api/matches/${match.id}/commands`, {
+    await api(actors[1 - currentIndex], `/api/matches/${match.id}/commands`, {
       commandId: `hud-finish-${engineName}-${Date.now()}`, expectedRevision: match.revision,
       type: 'surrender', payload: {},
     })
+    await current.locator('.result-panel').getByRole('heading', { name: 'Вы победили', exact: true }).waitFor()
     await current.locator('.result-panel').getByRole('button', { name: 'В главное меню', exact: true }).click()
     await current.locator('[data-club-view="menu"]').waitFor()
     const menu = current.getByRole('navigation', { name: 'Главное меню', exact: true })

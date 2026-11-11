@@ -273,8 +273,10 @@ for (const engineName of engines) {
     const mobileSize = await spectator.evaluate(() => ({ viewport: innerWidth, body: document.documentElement.scrollWidth, canvas: document.querySelector('canvas')?.getBoundingClientRect().toJSON() }))
     assert.ok(mobileSize.body <= mobileSize.viewport + 1, `Mobile page overflows horizontally: ${JSON.stringify(mobileSize)}`)
     assert.deepEqual(errors, [], `Unexpected JavaScript errors: ${errors.join('; ')}`)
-    const surrendering = currentMatch.players[currentMatch.currentPlayer].id === firstUser.id ? first : second
-    const surrendered = await api(surrendering, `/api/matches/${currentMatch.id}/commands`, {
+    // The first player keeps the victory panel and history shortcut; the
+    // conceding second player automatically leaves the completed match.
+    const secondLeave = second.waitForResponse(response => response.url().endsWith(`/api/rooms/${code}/leave`) && response.request().method() === 'POST')
+    const surrendered = await api(second, `/api/matches/${currentMatch.id}/commands`, {
       commandId: `finish-${Date.now()}`, expectedRevision: currentMatch.revision, type: 'surrender', payload: {},
     })
     assert.equal(surrendered.status, 200)
@@ -289,9 +291,8 @@ for (const engineName of engines) {
     await first.getByRole('button', { name: 'Вернуться в матч', exact: true }).click()
     await first.getByRole('button', { name: 'В главное меню', exact: true }).click()
     assert.equal((await firstLeave).status(), 200)
-    const secondLeave = second.waitForResponse(response => response.url().endsWith(`/api/rooms/${code}/leave`) && response.request().method() === 'POST')
-    await second.getByRole('button', { name: 'В главное меню', exact: true }).click()
     assert.equal((await secondLeave).status(), 200)
+    await waitForConnectedHome(second)
     assert.equal((await api(first, '/api/me/current', undefined, 'GET')).data.room, null)
     assert.equal((await api(second, '/api/me/current', undefined, 'GET')).data.room, null)
     for (const player of [first, second]) await player.getByRole('button', { name: 'Играть', exact: true }).click()
@@ -304,6 +305,9 @@ for (const engineName of engines) {
     assert.ok(queuedFirst.id !== currentMatch.id, 'Matchmaking must create a new match')
     assert.equal(queuedFirst.id, queuedSecond.id)
     await api(first, `/api/matches/${queuedFirst.id}/commands`, { commandId: `queue-finish-${Date.now()}`, expectedRevision: queuedFirst.revision, type: 'surrender', payload: {} })
+    await waitForConnectedHome(first)
+    await second.locator('.result-panel').getByRole('button', { name: 'В главное меню', exact: true }).click()
+    await waitForConnectedHome(second)
     assert.deepEqual(errors, [], `Unexpected JavaScript errors in profile/matchmaking: ${errors.join('; ')}`)
     console.log(JSON.stringify({ engine: engineName, room: code, tests: 'two-player actual shot, spectator permission, reconnect, saved remapping/quality, synchronized final state, profile history, matchmaking, textures, desktop/mobile canvas', trajectoryFrames: result.result.trajectory.frames.length, duration: result.result.duration, textures: textures.size, jsErrors: errors.length, geometrySamples: performanceSamples.length, networkDelayMs: networkDelay }))
   } catch (error) {

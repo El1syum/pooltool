@@ -750,6 +750,27 @@ own tests, integrity ok. PID1024133, catalogue v5/GLBs/private config unchanged.
 Local isolated service and browsers stopped. Do not deploy backend from this
 branch.
 
+## Confirmed surrender returns to home (2026-11-11)
+
+No visual screens/elements were added or restyled. App suppresses only the
+loser's own authoritative `finished/surrender` panel and uses the existing
+room leave and home route; the opponent and all other result reasons retain
+the existing result UI. History and ranked Elo are committed by the same server
+command. Canceled/rejected surrender does not navigate.
+
+The auto-leave waits for the command owner and matching room; a lost command
+ack can use the matching authoritative broadcast. Fresh restore works without
+cached intent. Failed leave is reconciled only by actual empty membership;
+otherwise existing error and menu exit remain. Generation/room/match checks
+keep delayed replies from clearing newer state. No new backend change.
+
+Typecheck/build +103 pure/SSR PASS. Final Chromium/WebKit:10 real postgame
+finishes including ranked winner/loser, no transient panel/reload, history/Elo,
+cancel, failed leave/manual retry and lost successful response. Fresh restore
+and actual dropped WS ack PASS both engines. Candidate index-BVeBYGqJ.js /
+GLTFLoader-rTOfuB11.js; CSS index-DGybUydt.css byte-identical to QA release.
+Public verification pending; backend/physics deployment remains out of scope.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

@@ -127,6 +127,7 @@ let hydratingSettings = false
 let settingsRevision = 0
 let settingsDialogRevision = 0
 let settingsSync: Promise<boolean> | null = null
+let attemptedSurrenderDeparture: string | null = null
 type CommandResponse = { match: Match; result?: ShotResult }
 type QueueState = { queued?: boolean; mode?: 'casual' | 'ranked'; ratingWindow?: number; matchId?: string; room?: Room }
 class SocketUnavailable extends Error {}
@@ -164,6 +165,14 @@ function mergeSettings(value: unknown): GameSettings {
   return { ...defaults(), ...s, bindings: { ...DEFAULT_BINDINGS, ...(s.bindings || {}), assist: normalizeAssistBinding(s.bindings?.assist) } }
 }
 const isPlayer = computed(() => Boolean(match.value?.players.some((p) => p.id === user.value?.id)))
+const ownSurrenderedMatchId = computed(() => {
+  const current = match.value, userId = user.value?.id
+  if (!current || !userId || current.status !== 'finished' || current.reason !== 'surrender'
+    || !current.winnerId || current.winnerId === userId || !isPlayer.value) return null
+  // An explicit return as an observer is not a second surrender.
+  const spectators = room.value?.id === current.roomId ? room.value.spectators : null
+  return Array.isArray(spectators) && spectators.includes(userId) ? null : current.id
+})
 const ownTurn = computed(() => match.value?.players[match.value.currentPlayer]?.id === user.value?.id)
 const turnReady = computed(() => Boolean(view.value === 'match' && connected.value && ownTurn.value && match.value?.status === 'active' && timestamp(match.value.playbackUntil) <= now.value + serverClockOffset.value && !busy.value && !playbackBusy.value && !settingsOpen.value && !gameMenuOpen.value && !rulesOpen.value && !appearanceOpen.value && !modelNavigationBusy.value))
 const canShoot = computed(() => turnReady.value && !match.value?.snapshot.needsPlacement && !placingCue.value)
@@ -312,6 +321,7 @@ function resetPlatformIdentity() {
   lifecycleGeneration++; modelSceneGeneration++; searchGeneration++
   cancellingSearch = false; searchExitTarget = null; ratingWindow.value = null
   activeOperation = null
+  attemptedSurrenderDeparture = null
   clearTimeout(reconnectTimer); clearInterval(heartbeat); clearInterval(polling)
   const previous = socket; socket = null; previous?.close()
   for (const pending of socketCommands.values()) { clearTimeout(pending.timer); pending.reject(new ApiError('Учётная запись изменилась.', 409, 'identity_changed')) }
@@ -477,7 +487,19 @@ function receiveMatch(value: Match, result?: ShotResult) {
   receiveServerView('match')
   if (view.value === 'match' && !modelNavigationBusy.value) applyMatchPlayback(value, result)
   updateInteraction()
-  if (value.status === 'finished') { gameMenuOpen.value = false; surrenderConfirmation.value = false; void refreshUser().catch(reportBackgroundError) }
+  if (value.status === 'finished') {
+    gameMenuOpen.value = false; surrenderConfirmation.value = false
+    if (ownSurrenderedMatchId.value === value.id) {
+      // The authoritative broadcast is also confirmation if the separate
+      // commandResult is delayed or lost. Release the original operation.
+      const pending = pendingCommand()
+      if (pending?.matchId === value.id && pending.command?.type === 'surrender') {
+        const id = String(pending.command.commandId), waiting = socketCommands.get(id)
+        if (waiting) { clearTimeout(waiting.timer); socketCommands.delete(id); waiting.resolve({ match: value }) }
+      }
+    }
+    void refreshUser().catch(reportBackgroundError)
+  }
 }
 function applyMatchPlayback(value: Match, result?: ShotResult) {
   const last = value.lastShot
@@ -612,6 +634,16 @@ watch(settings, () => {
 }, { deep: true, flush: 'sync' })
 watch([name, profileDetails], () => { profileSaved.value = false }, { deep: true })
 watch(settingsOpen, () => { settingsDialogRevision++ }, { flush: 'sync' })
+watch([ownSurrenderedMatchId, () => room.value?.id, busy, connected, view, modelNavigationBusy, appearanceOpen],
+  ([matchId, roomId, working, online, currentView, openingModels, changingAppearance], previous) => {
+    if (online && !previous[3]) attemptedSurrenderDeparture = null
+    // Surrender is committed before leaving the room. Wait for the command's
+    // busy owner to finish, and never leave a room belonging to another match.
+    if (!matchId || working || currentView !== 'match' || openingModels || changingAppearance
+      || !roomId || roomId !== match.value?.roomId || attemptedSurrenderDeparture === matchId) return
+    attemptedSurrenderDeparture = matchId
+    void leave()
+  })
 watch(view, value => { if (value !== 'match') { releaseAssist(); assistPinned.value = false } })
 watch(() => settings.value.bindings.assist, () => { releaseAssist(); assistPinned.value = false })
 watch(bindingCapture, () => { bindingCaptureError.value = ''; releaseAssist() })
@@ -668,12 +700,15 @@ async function sendCommand(type: string, payload: Record<string, unknown>) {
 async function resumePendingCommand() {
   const pending = pendingCommand()
   if (!pending) return
+  const generation = lifecycleGeneration
+  const stillCurrent = () => generation === lifecycleGeneration && pendingCommand()?.command?.commandId === pending.command.commandId
   try {
     const response = await post<{ match: Match; result?: ShotResult }>(`/api/matches/${pending.matchId}/commands`, pending.command)
+    if (!stillCurrent()) return
     rememberPending(null)
     receiveMatch(response.match, response.result)
   } catch (e) {
-    if (e instanceof ApiError && e.status < 500 && e.code !== 'identity_changed') rememberPending(null)
+    if (stillCurrent() && e instanceof ApiError && e.status < 500 && e.code !== 'identity_changed') rememberPending(null)
   }
 }
 async function shoot(value = scene?.getAim() ?? aim.value) {
@@ -786,11 +821,26 @@ async function leave(returnView: 'menu' | 'play' = 'menu') {
   await perform(async () => {
     const previousRoom = room.value?.code
     const previousMatch = match.value?.id
-    lifecycleGeneration++
+    const afterSurrender = Boolean(previousMatch && ownSurrenderedMatchId.value === previousMatch)
+    const generation = ++lifecycleGeneration
+    const stillLeaving = () => generation === lifecycleGeneration && room.value?.code === previousRoom && match.value?.id === previousMatch
     if (previousRoom) departedRooms.add(previousRoom)
     if (previousMatch) departedMatches.add(previousMatch)
     try { if (previousRoom) await post(`/api/rooms/${previousRoom}/leave`) }
-    catch (error) { if (previousRoom) departedRooms.delete(previousRoom); if (previousMatch) departedMatches.delete(previousMatch); throw error }
+    catch (error) {
+      if (!stillLeaving()) return
+      // A lost response or a second tab can already have completed this leave.
+      // Only an authoritative empty membership confirms that; a 503 alone does not.
+      const state = afterSurrender && !(error instanceof ApiError && error.code === 'identity_changed')
+        ? await request<{ room: Room | null; match: Match | null }>('/api/me/current').catch(() => null) : null
+      if (!stillLeaving()) return
+      if (!state || state.room || state.match) {
+        if (previousRoom) departedRooms.delete(previousRoom)
+        if (previousMatch) departedMatches.delete(previousMatch)
+        throw error
+      }
+    }
+    if (!stillLeaving()) return
     clearGameBookmarks(); rememberPending(null)
     room.value = null; match.value = null; lastPlayedShot = ''; latestPlayback = null; resumeMatchOverlay(); rulesOpen.value = false; hudPanelOpen.value = false; placingCue.value = false; shotPhase.value = 'overview'; view.value = returnView
   })
@@ -1073,7 +1123,7 @@ onBeforeUnmount(() => { disposed = true; vkPlayEntry?.dispose(); clearInterval(c
         @toggle-assist="assistPinned = !assistPinned"
       />
       <div v-for="player in (matchOverlayOpen ? [] : offlinePlayers)" :key="player.name" class="offline-banner" role="alert">{{ isPlayer ? 'Соперник' : player.name }} отключился. Ждём переподключения: {{ player.seconds }} с, затем {{ isPlayer ? 'вам будет засчитана победа' : 'ему будет засчитано поражение' }}.</div>
-      <div v-if="match.status === 'finished' && !matchOverlayOpen" class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><div class="result-actions"><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave()">В главное меню</button><button @click="showProfile">История и рейтинг</button></div></div>
+      <div v-if="match.status === 'finished' && !ownSurrenderedMatchId && !matchOverlayOpen" class="result-panel"><h1>{{ !match.winnerId ? 'Матч прерван' : match.winnerId === user.id ? 'Вы победили' : isPlayer ? 'Вы проиграли' : `Победитель: ${winnerName}` }}</h1><p>{{ resultReason }}</p><p v-if="ratingChange">Рейтинг: {{ ratingChange.before }} → {{ ratingChange.after }} ({{ ratingChange.delta > 0 ? '+' : '' }}{{ ratingChange.delta }})</p><div class="result-actions"><button v-if="isSolo && isPlayer" :disabled="busy" @click="playBotAgain">Сыграть ещё</button><button :disabled="busy" @click="leave()">В главное меню</button><button @click="showProfile">История и рейтинг</button></div></div>
     </main>
     <MatchMenu v-if="gameMenuOpen && view === 'match' && match && user" :match="match" :room="room" :user-id="user.id" :confirmation="surrenderConfirmation" :busy="busy" :connected="connected" :version="CLIENT_VERSION" @resume="resumeMatchOverlay" @settings="openMatchSettings" @confirm="surrenderConfirmation = true" @cancel="surrenderConfirmation = false" @surrender="surrender" @leave="leave()" />
     <AccessibleDialog v-if="rulesOpen" title-id="rules-title" dialog-class="settings-dialog hud-rules-dialog" return-focus-selector=".hud-rules" @close="rulesOpen = false">

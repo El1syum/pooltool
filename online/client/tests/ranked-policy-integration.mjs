@@ -121,7 +121,9 @@ for (const engineName of (process.env.BROWSERS || 'chromium,webkit').split(','))
     assert.equal(await control.isDisabled(), true)
     assert.equal(await control.getAttribute('aria-checked'), 'false')
     const current = (await api(actors[0], `/api/matches/${paired.match.id}`, undefined, 'GET')).match
-    await api(actors[0], `/api/matches/${current.id}/commands`, { commandId: `policy-end-${engineName}-${Date.now()}`, expectedRevision: current.revision, type: 'surrender' })
+    // The visible player wins. An authoritative self-surrender now leaves the
+    // match instead of keeping its finished settings overlay open.
+    await api(actors[1], `/api/matches/${current.id}/commands`, { commandId: `policy-end-${engineName}-${Date.now()}`, expectedRevision: current.revision, type: 'surrender' })
     for (const page of pages) {
       await page.waitForFunction(() => { const element = document.querySelector('[aria-label="Линия прицеливания"]'); return element && !element.disabled && element.getAttribute('aria-checked') === 'true' })
     }
