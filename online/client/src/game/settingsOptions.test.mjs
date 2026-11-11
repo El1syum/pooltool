@@ -5,11 +5,16 @@ import { DEFAULT_PRESENTATION_SETTINGS, nextRenderDeadline, presentationSettings
 test('existing profiles fall back to supported, unchanged visual defaults', () => {
   assert.deepEqual(presentationSettings({}), DEFAULT_PRESENTATION_SETTINGS)
   assert.deepEqual(presentationSettings({
-    renderScale: -1, shadowQuality: 'ultra', frameRateLimit: 500, invertCamera: 1,
+    renderScale: -1, antialiasMode: 'unknown', shadowQuality: 'ultra', frameRateLimit: 500, invertCamera: 1,
     smoothAim: null, impactVolume: NaN, audioInBackground: 'true',
   }), DEFAULT_PRESENTATION_SETTINGS)
   assert.equal(presentationSettings({ impactVolume: 5 }).impactVolume, 1)
   assert.equal(presentationSettings({ impactVolume: -5 }).impactVolume, 0)
+})
+
+test('only actual selectable anti-aliasing modes are accepted', () => {
+  for (const antialiasMode of ['auto', 'fxaa', 'smaa']) assert.equal(presentationSettings({ antialiasMode }).antialiasMode, antialiasMode)
+  for (const antialiasMode of ['taa', 'msaa', '', null]) assert.equal(presentationSettings({ antialiasMode }).antialiasMode, 'auto')
 })
 
 test('render scale applies after quality and display-DPR caps', () => {

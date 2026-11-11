@@ -28,6 +28,8 @@ try {
   const openTab = label => shell.getByRole('button', { name: label, exact: true }).click()
   const back = () => shell.getByRole('button', { name: 'Назад', exact: true }).click()
   const parameterLabels = () => shell.locator('.club-parameter > span:first-child').allTextContents()
+  const antialiasSelect = () => shell.getByRole('combobox', { name: 'Сглаживание', exact: true })
+  const assistBinding = () => shell.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true })
   async function checkLockedSelect(name) {
     const select = shell.getByRole('combobox', { name, exact: true })
     assert.ok(await select.isDisabled(), name)
@@ -121,7 +123,7 @@ try {
   await page.keyboard.press('Tab')
   assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Графика')
   const frames = { index: [580, 285], graphics: [820, 230], sound: [820, 230], controls: [1180, 215] }
-  const clubFrames = { index: [480, 239.5], graphics: [680, 117, 566], sound: [680, 117, 566], controls: [960, 133, 534] }
+  const clubFrames = { index: [480, 239.5], graphics: [680, 117, 566], sound: [680, 117, 566], controls: [960, 112, 576] }
   function exactClub(info) {
     const [width, y, cardHeight] = clubFrames[info.tab]
     assert.equal(info.section.width, width)
@@ -130,6 +132,7 @@ try {
     if (info.card) {
       assert.ok(Math.abs(info.card.y - (y + 130)) < 1.5, JSON.stringify(info.card))
       assert.ok(Math.abs(info.card.height - cardHeight) < 1.5, JSON.stringify(info.card))
+      assert.ok(info.card.y + info.card.height <= info.footer.y + 1, 'Entire desktop card fits above the footer')
     }
   }
   const exact = async tab => {
@@ -141,7 +144,8 @@ try {
     assert.ok(info.buttons.every(button => button.height === 66))
     if (info.card) {
       assert.ok(Math.abs(info.card.y - (info.section.y + 138)) < 1, JSON.stringify(info.card))
-      assert.equal(info.card.height, tab === 'controls' ? 657 : 594)
+      assert.equal(info.card.height, tab === 'controls' ? 659 : 594)
+      assert.ok(info.card.y + info.card.height <= info.footer.y + 1, 'Entire match desktop card fits above the footer')
     }
     await checkImages()
     await page.screenshot({ path: path.join(artifacts, `match-${tab}.png`) })
@@ -151,7 +155,13 @@ try {
   await openTab('Графика')
   await exact('graphics')
   assert.deepEqual(await parameterLabels(), ['Режим экрана', 'Разрешение', 'Качество графики', 'Качество теней', 'Сглаживание', 'Частота кадров', 'Вертикальная синхронизация'])
-  await checkLockedSelect('Сглаживание')
+  assert.equal(await antialiasSelect().isEnabled(), true)
+  assert.equal(await antialiasSelect().inputValue(), 'auto')
+  assert.deepEqual(await antialiasSelect().locator('option').allTextContents(), ['Авто (MSAA)', 'FXAA', 'SMAA'])
+  for (const mode of ['fxaa', 'smaa', 'auto']) {
+    await antialiasSelect().selectOption(mode)
+    assert.equal((await readSettings()).antialiasMode, mode)
+  }
   assert.match(await shell.getByRole('combobox', { name: 'Качество графики' }).evaluate(node => getComputedStyle(node).backgroundImage), /chevron-down\.svg/)
   assert.equal(await shell.getByRole('switch', { name: 'Вертикальная синхронизация' }).isDisabled(), true)
   await shell.getByRole('button', { name: 'Настройки матча', exact: true }).click()
@@ -188,9 +198,9 @@ try {
   await back()
   await openTab('Управление')
   await exact('controls')
-  assert.deepEqual(await parameterLabels(), ['Прицеливание', 'Сила и удар', 'Точка контакта / вращение', 'Наклон кия', 'Приближение камеры', 'Вид сверху', 'Обзор стола', 'Меню матча', 'Чувствительность мыши', 'Инверсия камеры', 'Плавное прицеливание'])
+  assert.deepEqual(await parameterLabels(), ['Прицеливание', 'Сила и удар', 'Точка контакта / вращение', 'Наклон кия', 'Приближение камеры', 'Вид сверху', 'Обзор стола', 'Дополнительные приборы', 'Меню матча', 'Чувствительность мыши', 'Инверсия камеры', 'Плавное прицеливание'])
   const bindings = shell.locator('.club-control-bindings')
-  assert.equal(await bindings.locator('button.club-binding-value > img[src$="pencil-small.svg"]').count(), 2)
+  assert.equal(await bindings.locator('button.club-binding-value > img[src$="pencil-small.svg"]').count(), 3)
   const staticBindings = await bindings.locator('span.club-binding-value').evaluateAll(nodes => nodes.map(node => ({
     background: getComputedStyle(node).backgroundColor, tabIndex: node.tabIndex, icons: node.querySelectorAll('img').length,
   })))
@@ -204,6 +214,12 @@ try {
   await shell.getByRole('button', { name: 'Назначение: Вид сверху', exact: true }).click()
   await page.keyboard.press('KeyH')
   assert.equal((await readSettings()).bindings.topView, 'KeyH')
+  assert.equal(await assistBinding().locator('[data-binding-key]').textContent(), 'Ctrl')
+  await assistBinding().click()
+  assert.equal(await assistBinding().locator('[data-binding-key]').textContent(), 'Нажмите клавишу…')
+  await page.keyboard.press('KeyJ')
+  assert.equal((await readSettings()).bindings.assist, 'KeyJ')
+  assert.equal(await assistBinding().locator('[data-binding-key]').textContent(), 'J')
   await shell.getByRole('button', { name: 'Применить', exact: true }).click()
   await shell.waitFor({ state: 'hidden' })
   assert.equal(await page.locator('[data-under-settings]').evaluate(el => el.inert), false)
@@ -234,6 +250,8 @@ try {
         assert.deepEqual(state.header, start.header)
         assert.deepEqual(state.footer, start.footer)
         assert.ok(await shell.getByRole('button', { name: match || label === 'Графика' ? 'Применить' : 'Сохранить', exact: true }).count())
+        if (label === 'Графика') assert.equal(await antialiasSelect().isEnabled(), true)
+        if (label === 'Управление') assert.equal(await assistBinding().locator('[data-binding-key]').textContent(), 'Ctrl')
         if (!match && width === 1440) {
           exactClub(state)
           await checkImages()

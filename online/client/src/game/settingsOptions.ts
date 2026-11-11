@@ -1,9 +1,11 @@
 export const RENDER_SCALES = [1, 0.75, 0.5] as const
+export const ANTIALIAS_MODES = ['auto', 'fxaa', 'smaa'] as const
 export const SHADOW_QUALITIES = ['auto', 'off', 'medium', 'high'] as const
 export const FRAME_RATE_LIMITS = [0, 30, 60, 120] as const
 
 export interface PresentationSettings {
   renderScale: (typeof RENDER_SCALES)[number]
+  antialiasMode: (typeof ANTIALIAS_MODES)[number]
   shadowQuality: (typeof SHADOW_QUALITIES)[number]
   frameRateLimit: (typeof FRAME_RATE_LIMITS)[number]
   invertCamera: boolean
@@ -14,6 +16,7 @@ export interface PresentationSettings {
 
 export const DEFAULT_PRESENTATION_SETTINGS: Readonly<PresentationSettings> = {
   renderScale: 1,
+  antialiasMode: 'auto',
   shadowQuality: 'auto',
   frameRateLimit: 0,
   invertCamera: false,
@@ -23,9 +26,10 @@ export const DEFAULT_PRESENTATION_SETTINGS: Readonly<PresentationSettings> = {
 }
 
 export function presentationSettings(value: Partial<PresentationSettings>): PresentationSettings {
-  const { renderScale, shadowQuality, frameRateLimit, invertCamera, smoothAim, impactVolume, audioInBackground } = value
+  const { renderScale, antialiasMode, shadowQuality, frameRateLimit, invertCamera, smoothAim, impactVolume, audioInBackground } = value
   return {
     renderScale: RENDER_SCALES.find(item => item === renderScale) ?? DEFAULT_PRESENTATION_SETTINGS.renderScale,
+    antialiasMode: ANTIALIAS_MODES.find(item => item === antialiasMode) ?? DEFAULT_PRESENTATION_SETTINGS.antialiasMode,
     shadowQuality: SHADOW_QUALITIES.find(item => item === shadowQuality) ?? DEFAULT_PRESENTATION_SETTINGS.shadowQuality,
     frameRateLimit: FRAME_RATE_LIMITS.find(item => item === frameRateLimit) ?? DEFAULT_PRESENTATION_SETTINGS.frameRateLimit,
     invertCamera: invertCamera === true,

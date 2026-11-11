@@ -49,6 +49,7 @@
 .club-settings-shell .club-binding-value.club-fixed-value { border-color: transparent; background: transparent; color: var(--club-muted); }
 .club-settings-shell .club-binding-value > span { min-width: 0; overflow-wrap: anywhere; }
 .club-settings-shell .club-binding-value > img { flex: none; width: 13px; height: 13px; }
+.club-settings-shell:not(.club-settings-in-match) .club-control-bindings { gap: 8px; }
 .club-settings-shell .club-control-hint strong { font-weight: 400; }
 .club-settings-shell .club-settings-kicker { line-height: normal; }
 .club-settings-shell .club-range-value input[type=range] { max-width: none; flex: 1 1 0; }
@@ -125,7 +126,8 @@
 .club-settings-in-match .club-range-value input[type=range] { width: 200px; }
 .club-settings-in-match .club-range-value input[type=range]::-webkit-slider-thumb { width: 12px; height: 12px; border-radius: 50%; }
 .club-settings-in-match .club-range-value input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; }
-.club-settings-in-match .club-control-bindings { flex-basis: 560px; width: 560px; gap: 6px; }
+.club-settings-in-match .club-control-bindings { flex-basis: 560px; width: 560px; gap: 4px; }
+.club-settings-in-match .club-control-bindings .club-parameter { min-height: 46px; }
 .club-settings-in-match .club-control-bindings .club-binding-value { width: 220px; }
 .club-settings-in-match .club-settings-kicker { font-size: 11px; line-height: 13px; }
 .club-settings-in-match .club-control-mouse { gap: 20px; }

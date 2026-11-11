@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Pooltool antialiasing renderer fixture</title>
+<body>
+<script type="module">
+  import { ACESFilmicToneMapping, Color, Mesh, MeshBasicMaterial, OrthographicCamera, PlaneGeometry, Scene, SRGBColorSpace, WebGLRenderer } from 'three'
+  import { createSceneAntialiasing } from '../src/game/sceneAntialiasing'
+
+  const renderer = new WebGLRenderer({ antialias: true, alpha: false })
+  renderer.outputColorSpace = SRGBColorSpace
+  renderer.toneMapping = ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.1
+  renderer.setPixelRatio(1)
+  renderer.setSize(127, 107)
+  document.body.append(renderer.domElement)
+  const scene = new Scene()
+  scene.background = new Color(0)
+  const geometry = new PlaneGeometry(1, 1)
+  const material = new MeshBasicMaterial({ color: 0xffffff })
+  const plane = new Mesh(geometry, material)
+  plane.rotation.z = Math.PI / 7
+  scene.add(plane)
+  const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 20)
+  camera.position.z = 4
+  const fallbacks = []
+  const pipeline = createSceneAntialiasing(renderer, scene, camera, mode => fallbacks.push(mode))
+  const gl = renderer.getContext()
+  const canvas = renderer.domElement
+  const has = renderer.extensions.has.bind(renderer.extensions)
+  let forceUnsupported = false
+  renderer.extensions.has = name => forceUnsupported && /^EXT_color_buffer_(half_)?float$/.test(name) ? false : has(name)
+  const setRenderTarget = renderer.setRenderTarget.bind(renderer)
+  let targets = []
+  renderer.setRenderTarget = (target, ...rest) => {
+    if (target) targets.push([target.width, target.height, target.samples])
+    return setRenderTarget(target, ...rest)
+  }
+  window.antialiasFixture = {
+    resize(width, height, ratio) {
+      renderer.setPixelRatio(ratio)
+      renderer.setSize(width, height)
+    },
+    blockFloat(value) { forceUnsupported = value },
+    async sample(mode) {
+      targets = []
+      pipeline.configure(mode)
+      // The stock SMAA pass decodes two embedded PNG lookup tables.
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      pipeline.render()
+      const { drawingBufferWidth: w, drawingBufferHeight: h } = gl
+      const pixels = new Uint8Array(w * h * 4)
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+      const center = pixels[(Math.floor(h / 2) * w + Math.floor(w / 2)) * 4]
+      let partial = 0
+      let signature = 2166136261
+      for (let i = 0; i < pixels.length; i += 4) {
+        const value = pixels[i]
+        if (value > 0 && value < center - 1) partial++
+        signature = Math.imul(signature ^ value, 16777619)
+      }
+      return {
+        signature, center, partial, w, h, targets,
+        mode: canvas.dataset.antialiasMode,
+        fallback: canvas.dataset.antialiasFallback || null,
+        fallbacks: [...fallbacks],
+        calls: renderer.info.render.calls,
+        textures: renderer.info.memory.textures,
+        error: gl.getError(),
+        sameCanvas: renderer.domElement === canvas && document.querySelectorAll('canvas').length === 1,
+      }
+    },
+    dispose() {
+      pipeline.dispose()
+      const textures = renderer.info.memory.textures
+      material.dispose()
+      geometry.dispose()
+      renderer.dispose()
+      return textures
+    },
+  }
+</script>
+</body>
+</html>

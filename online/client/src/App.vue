@@ -24,7 +24,7 @@ import { createVkPlayEntry, isVkPlayLaunch, type VkPlayConfig, type VkPlayEntryS
 import { copyText } from './platform/clipboard'
 import { emptyProfileDetails, normalizeProfileDetails, type ProfileDetails } from './profileDetails'
 import { isRoomCode } from './roomCode'
-import { DEFAULT_PRESENTATION_SETTINGS } from './game/settingsOptions'
+import { DEFAULT_PRESENTATION_SETTINGS, presentationSettings } from './game/settingsOptions'
 
 type View = 'menu' | 'play' | 'lobby' | 'search' | 'match' | 'profile' | 'models'
 const view = ref<View>('menu')
@@ -152,7 +152,7 @@ function mergeSettings(value: unknown): GameSettings {
   // Profile fields are synchronized through the same authenticated endpoint,
   // but never passed to the renderer or stored in the local game-settings cache.
   const { profileDetails: _profileDetails, ...s } = record
-  return { ...defaults(), ...s, bindings: { ...DEFAULT_BINDINGS, ...(s.bindings || {}), assist: normalizeAssistBinding(s.bindings?.assist) } }
+  return { ...defaults(), ...s, antialiasMode: presentationSettings(s).antialiasMode, bindings: { ...DEFAULT_BINDINGS, ...(s.bindings || {}), assist: normalizeAssistBinding(s.bindings?.assist) } }
 }
 const isPlayer = computed(() => Boolean(match.value?.players.some((p) => p.id === user.value?.id)))
 const ownSurrenderedMatchId = computed(() => {
@@ -236,7 +236,13 @@ function applyAuthenticatedUser(value: User) {
   const remoteSettings = mergeSettings(value.settings)
   const cached = restoreJson<GameSettings | null>(`pooltool.settings.${value.id}`, null)
   hydratingSettings = true
-  try { settings.value = cached ? mergeSettings({ ...cached, bindings: { ...cached.bindings, assist: cached.bindings?.assist ?? remoteSettings.bindings.assist } }) : remoteSettings }
+  try {
+    settings.value = cached ? mergeSettings({
+      ...cached,
+      antialiasMode: cached.antialiasMode ?? remoteSettings.antialiasMode,
+      bindings: { ...cached.bindings, assist: cached.bindings?.assist ?? remoteSettings.bindings.assist },
+    }) : remoteSettings
+  }
   finally { hydratingSettings = false }
   settingsDirty.value = JSON.stringify(settings.value) !== JSON.stringify(remoteSettings)
   localStorage.setItem(`pooltool.settings.${value.id}`, JSON.stringify(settings.value))

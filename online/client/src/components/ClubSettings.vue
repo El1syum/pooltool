@@ -4,7 +4,7 @@ import type { User } from '../api'
 import { DEFAULT_BINDINGS, type BindingAction, type GameSettings } from '../game/types'
 import { bindingLabel } from '../game/assistBinding'
 import { currentGameAudioOutput, gameAudioOutputs, setGameAudioOutput, supportsGameAudioOutput } from '../game/audio'
-import { FRAME_RATE_LIMITS, presentationSettings, renderPixelRatio, RENDER_SCALES, SHADOW_QUALITIES } from '../game/settingsOptions'
+import { ANTIALIAS_MODES, FRAME_RATE_LIMITS, presentationSettings, renderPixelRatio, RENDER_SCALES, SHADOW_QUALITIES } from '../game/settingsOptions'
 import ClubSettingRange from './ClubSettingRange.vue'
 import ClubSettingSwitch from './ClubSettingSwitch.vue'
 import '../club-menu.css'
@@ -42,6 +42,7 @@ const graphicsSummary = computed(() => ({ low: 'Низкая', medium: 'Сред
 const initial = computed(() => (props.user?.displayName || 'Игрок').trim().split(/\s+/).slice(0, 2).map(x => [...x][0]).join('').toUpperCase())
 const graphicsQualities = { low: 'Низкое', medium: 'Среднее', high: 'Высокое' }
 const shadowTitles = { auto: 'По качеству графики', off: 'Выкл.', medium: 'Среднее', high: 'Высокое' }
+const antialiasTitles = { auto: 'Авто (MSAA)', fxaa: 'FXAA', smaa: 'SMAA' } as const
 const presentation = computed(() => presentationSettings(props.settings))
 const noAudioTrack = 'Аудиодорожка недоступна.'
 const sensitivityMin = 0.1
@@ -63,6 +64,7 @@ const controlRows = computed<ControlRow[]>(() => [
   { label: props.inMatch ? 'Точка контакта / вращение' : 'Вращение битка', value: 'Мышь' },
   ...(props.inMatch ? [{ label: 'Наклон кия', value: 'Shift + колесо' }, { label: 'Приближение камеры', value: 'Колесо мыши' }] : []),
   { label: 'Вид сверху', action: 'topView' }, { label: 'Обзор стола', action: 'cueView' },
+  { label: 'Дополнительные приборы', action: 'assist' },
   { label: props.inMatch ? 'Меню матча' : 'Меню паузы', value: 'Esc' },
 ])
 function update<K extends keyof GameSettings>(key: K, value: GameSettings[K]) { emit('update:settings', { ...props.settings, [key]: value, bindings: { ...props.settings.bindings } }) }
@@ -213,7 +215,7 @@ onBeforeUnmount(() => {
             <label class="club-parameter"><span>Разрешение</span><select aria-label="Разрешение" :value="presentation.renderScale" @change="update('renderScale', Number(($event.target as HTMLSelectElement).value) as typeof RENDER_SCALES[number])"><option v-for="scale in RENDER_SCALES" :key="scale" :value="scale">{{ renderSizeLabel(scale) }}</option></select></label>
             <label class="club-parameter"><span>Качество графики</span><select :value="settings.quality" aria-label="Качество графики" @change="update('quality', ($event.target as HTMLSelectElement).value as GameSettings['quality'])"><option v-for="(label, quality) in graphicsQualities" :key="quality" :value="quality">{{ label }}</option></select></label>
             <label class="club-parameter"><span>Качество теней</span><select aria-label="Качество теней" :value="presentation.shadowQuality" @change="update('shadowQuality', ($event.target as HTMLSelectElement).value as typeof SHADOW_QUALITIES[number])"><option v-for="quality in SHADOW_QUALITIES" :key="quality" :value="quality">{{ shadowTitles[quality] }}</option></select></label>
-            <label class="club-parameter" title="Сглаживание запрашивается у WebGL при запуске игры"><span>Сглаживание</span><select aria-label="Сглаживание" disabled><option>MSAA</option></select></label>
+            <label class="club-parameter"><span>Сглаживание</span><select aria-label="Сглаживание" :value="presentation.antialiasMode" @change="update('antialiasMode', ($event.target as HTMLSelectElement).value as typeof ANTIALIAS_MODES[number])"><option v-for="mode in ANTIALIAS_MODES" :key="mode" :value="mode">{{ antialiasTitles[mode] }}</option></select></label>
             <label class="club-parameter"><span>Частота кадров</span><select aria-label="Частота кадров" :value="presentation.frameRateLimit" @change="update('frameRateLimit', Number(($event.target as HTMLSelectElement).value) as typeof FRAME_RATE_LIMITS[number])"><option v-for="fps in FRAME_RATE_LIMITS" :key="fps" :value="fps">{{ fps ? `${fps} FPS` : 'По частоте экрана' }}</option></select></label>
             <div class="club-parameter" title="Частота обновления управляется браузером"><span>Вертикальная синхронизация</span><ClubSettingSwitch label="Вертикальная синхронизация" :active="false" :in-match="inMatch" status="Авто" disabled /></div>
           </div>

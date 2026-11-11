@@ -810,6 +810,20 @@ breadcrumb links have visible underlines and 24px-high hit targets; the
 current page remains a label. Item 6 (gold heading contrast) is expressly
 excluded; the heading styles and previously closed table items are unchanged.
 
+## Selectable anti-aliasing and assist shortcut (2026-11-11)
+
+Graphics offers Auto (the existing direct WebGL/MSAA request), FXAA and SMAA.
+The two post-process modes switch on the existing match canvas, honor display
+pixel ratio and render scale, and leave game rules, timer, HUD and server
+physics untouched. If the device cannot allocate a compatible post-process
+buffer, the renderer uses Auto and reports the fallback. The settings API
+already stores the user's choice; no server or migration changes.
+
+Controls includes the existing hold-to-show `assist` binding as an editable
+row. Either Ctrl works by default; the configured key is persisted and
+shown in the game hints. The existing conflict checks prevent assigning a
+key already used by another action.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

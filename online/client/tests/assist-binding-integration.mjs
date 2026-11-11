@@ -32,7 +32,7 @@ async function openControls(page) {
   const settings = page.locator('.club-settings-shell')
   await settings.getByRole('button', { name: 'Управление', exact: true }).click()
   assert.equal(await settings.locator('details').count(), 0)
-  assert.equal(await settings.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true }).count(), 0)
+  await settings.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true }).waitFor()
   return settings
 }
 
@@ -110,7 +110,9 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
 
     const settings = await openControls(page)
     const topView = settings.getByRole('button', { name: 'Назначение: Вид сверху', exact: true })
+    const assistBinding = settings.getByRole('button', { name: 'Назначение: Дополнительные приборы', exact: true })
     const apply = settings.getByRole('button', { name: 'Применить', exact: true })
+    assert.equal(await assistBinding.innerText(), 'Ctrl')
     const originalTopView = await topView.innerText()
     await topView.click()
     assert.match(await topView.innerText(), /Нажмите клавишу/)
@@ -122,19 +124,35 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     await page.getByText(/Конфликт:.*Ctrl/).waitFor()
     assert.equal(await apply.isDisabled(), true)
     await topView.click(); await page.keyboard.press('KeyT')
+    await assistBinding.click(); await page.keyboard.press('Space')
+    await page.getByText(/Конфликт:.*Пробел/).waitFor()
+    assert.equal(await apply.isDisabled(), true)
+    await assistBinding.click(); await page.keyboard.press('KeyH')
+    assert.equal(await assistBinding.innerText(), 'H')
     await apply.click()
     await settings.waitFor({ state: 'hidden' })
-    async function loadStoredBinding(binding, additional = {}) {
-      await api(actor, '/api/me/settings', { ...legacy, bindings: { ...legacy.bindings, ...additional, assist: binding } }, 'PUT')
-      assert.equal((await api(actor, '/api/me/settings', undefined, 'GET')).settings.bindings.assist, binding)
+    assert.equal((await api(actor, '/api/me/settings', undefined, 'GET')).settings.bindings.assist, 'KeyH')
+    await enterPower(page)
+    await page.keyboard.press('ControlLeft')
+    assert.equal(await assist.count(), 0)
+    await page.keyboard.down('KeyH')
+    await assist.waitFor()
+    await page.keyboard.up('KeyH')
+    await assist.waitFor({ state: 'hidden' })
+
+    async function reloadWithoutCache() {
       await page.evaluate(id => localStorage.removeItem(`pooltool.settings.${id}`), actor.user.id)
       await page.reload()
       await page.getByTestId('match-hud').waitFor()
       await page.locator('.game-stage canvas').waitFor()
     }
-    // Players may have saved a different binding before the UI was aligned
-    // to Figma. The same persisted preference must keep working.
-    await loadStoredBinding('KeyH')
+    async function loadStoredBinding(binding, additional = {}) {
+      await api(actor, '/api/me/settings', { ...legacy, bindings: { ...legacy.bindings, ...additional, assist: binding } }, 'PUT')
+      assert.equal((await api(actor, '/api/me/settings', undefined, 'GET')).settings.bindings.assist, binding)
+      await reloadWithoutCache()
+    }
+    // Read the remapped key back from the real account after discarding cache.
+    await reloadWithoutCache()
     await enterPower(page)
     await page.keyboard.press('ControlLeft')
     assert.equal(await assist.count(), 0)
@@ -165,7 +183,7 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     assert.deepEqual(shots, [], 'Displaying/remapping assist must never submit a shot')
     assert.deepEqual(errors, [])
     await page.screenshot({ path: path.join(artifacts, `${engine}-assist.png`) })
-    console.log(JSON.stringify({ engine, actualApp: true, realSettingsApi: true, defaultCtrlFamily: true, oldAltInactive: true, noExtraControls: true, escapeCancels: true, familyConflict: true, storedConflictSafe: true, legacyPreferenceRetained: true, nativeCopyChordSafe: true, keyupBlurModalSafe: true, shotCommands: shots.length, jsErrors: errors.length }))
+    console.log(JSON.stringify({ engine, actualApp: true, realSettingsApi: true, defaultCtrlFamily: true, remappedInUiAndReloaded: true, oldAltInactive: true, escapeCancels: true, familyConflict: true, storedConflictSafe: true, legacyPreferenceRetained: true, nativeCopyChordSafe: true, keyupBlurModalSafe: true, shotCommands: shots.length, jsErrors: errors.length }))
   } catch (error) {
     await page.screenshot({ path: path.join(artifacts, `${engine}-failure.png`), fullPage: true }).catch(() => {})
     throw error

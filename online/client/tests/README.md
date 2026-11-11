@@ -15,6 +15,13 @@ for a result panel, ready button or advanced drawers no longer describe the
 current interface. Profile history is restored on request and is covered by
 `history-spacing.mjs` and the real match flows.
 
+`antialias-settings-integration.mjs` checks Auto/MSAA, FXAA and SMAA against
+the compiled client, real WebGL and existing settings API. It verifies live
+switching, an unchanged canvas/deadline, resizing and restoration from the
+server after clearing the local settings cache. `assist-binding-integration.mjs`
+also assigns the assist shortcut through the actual Controls screen and
+checks conflicts, persistence, key-up, and the lack of unintended shots.
+
 ## Surrender navigation
 
 `postgame-menu.mjs` checks the real room and match history: both players return

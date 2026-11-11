@@ -16,7 +16,7 @@ const goHome = ref(false)
 const settings = ref<GameSettings>({ ...DEFAULT_PRESENTATION_SETTINGS, quality: 'medium', volume: .5, sensitivity: 1,
   showAimGuide: true, showPocketLabels: true, bindings: { ...DEFAULT_BINDINGS } })
 const user = { id: 'tester', displayName: 'Игрок с длинным именем', elo: 1000 } as User
-const labels = Object.fromEntries(Object.keys(DEFAULT_BINDINGS).map(action => [action, ({ topView: 'Вид сверху', cueView: 'Вид из-за кия' } as Record<string, string>)[action] || action])) as Record<BindingAction, string>
+const labels = Object.fromEntries(Object.keys(DEFAULT_BINDINGS).map(action => [action, ({ topView: 'Вид сверху', cueView: 'Вид из-за кия', assist: 'Дополнительные приборы' } as Record<string, string>)[action] || action])) as Record<BindingAction, string>
 const sceneRoot = ref<HTMLElement | null>(null)
 let scene: GameScene | undefined
 const chrome = computed(() => innerWidth <= 760 ? (innerHeight < 500 ? 126 : 172) : 176)

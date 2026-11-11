@@ -5,6 +5,7 @@ import { VisualAssetManager } from '../models/VisualAssetManager'
 import { createPlaybackClock, createTrajectorySampler, isLegalCuePlacement, normalizeAim, numberForPocket } from './playback'
 import { applyShotPhaseLocks, isMeaningfulPowerDrag, powerDragAim, previousShotPhase } from './shotWorkflow'
 import { matchesAssistBinding } from './assistBinding'
+import { createSceneAntialiasing } from './sceneAntialiasing'
 import { DEFAULT_PRESENTATION_SETTINGS, nextRenderDeadline, presentationSettings, renderPixelRatio } from './settingsOptions'
 import {
   DEFAULT_BINDINGS,
@@ -115,6 +116,9 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
   canvas.setAttribute('role', 'application')
   container.appendChild(canvas)
   const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 50)
+  const antialiasing = createSceneAntialiasing(renderer, scene, camera, mode => {
+    callbacks.onError?.(`Сглаживание ${mode.toUpperCase()} недоступно на этом устройстве. Используем режим «Авто».`)
+  })
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = true
   controls.dampingFactor = 0.12
@@ -845,6 +849,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     const width = Math.max(1, container.clientWidth)
     const height = Math.max(1, container.clientHeight)
     renderer.setSize(width, height, false)
+    antialiasing.configure(settings.antialiasMode ?? DEFAULT_PRESENTATION_SETTINGS.antialiasMode)
     camera.aspect = width / height
     const nextScale = framingFactor()
     if (framingScale !== null && Math.abs(nextScale - framingScale) > 0.001) {
@@ -1274,7 +1279,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
     const paint = nextRenderDeadline(now, nextPaintAt, settings.frameRateLimit ?? 0)
     if (paint !== null) {
       nextPaintAt = paint
-      renderer.render(scene, camera)
+      antialiasing.render()
       measuredFrames++
     }
     if (now - measuredAt >= 5000) {
@@ -1417,6 +1422,7 @@ export function createGameScene(container: HTMLElement, callbacks: SceneCallback
       canvas.removeEventListener('webglcontextlost', handleContextLost)
       disposeGroup(scene)
       balls.clear()
+      antialiasing.dispose()
       renderer.dispose()
       canvas.remove()
     },
