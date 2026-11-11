@@ -28,6 +28,33 @@ try {
   const openTab = label => shell.getByRole('button', { name: label, exact: true }).click()
   const back = () => shell.getByRole('button', { name: 'Назад', exact: true }).click()
   const parameterLabels = () => shell.locator('.club-parameter > span:first-child').allTextContents()
+  async function checkLockedSelect(name) {
+    const select = shell.getByRole('combobox', { name, exact: true })
+    assert.ok(await select.isDisabled(), name)
+    const appearance = await select.evaluate(node => {
+      const style = getComputedStyle(node)
+      return { icon: style.backgroundImage, border: style.borderTopStyle, cursor: style.cursor }
+    })
+    assert.match(appearance.icon, /data:image\/svg\+xml/)
+    assert.doesNotMatch(appearance.icon, /chevron/)
+    assert.equal(appearance.border, 'dashed')
+    assert.equal(appearance.cursor, 'not-allowed')
+  }
+  async function toggleWithoutTint(name) {
+    const toggle = shell.getByRole('switch', { name, exact: true })
+    const caption = toggle.locator('span')
+    const color = () => caption.evaluate(node => getComputedStyle(node).color)
+    const wasOn = await toggle.getAttribute('aria-checked') === 'true'
+    assert.equal(await color(), 'rgb(165, 174, 166)')
+    await toggle.hover()
+    assert.equal(await color(), 'rgb(165, 174, 166)', 'hover does not tint the status label')
+    await toggle.click()
+    assert.equal(await toggle.getAttribute('aria-checked'), String(!wasOn))
+    assert.equal(await caption.textContent(), wasOn ? 'Выкл.' : 'Вкл.')
+    assert.equal(await color(), 'rgb(165, 174, 166)', 'click does not tint the status label')
+    await page.mouse.move(0, 0)
+    assert.equal(await color(), 'rgb(165, 174, 166)')
+  }
   const verifyNoExtras = async () => {
     assert.equal(await shell.locator('details').count(), 0)
     for (const label of ['Оформление', 'Модели стола и окружения', 'Сбросить настройки', 'Закрыть без сохранения на сервер']) {
@@ -82,7 +109,7 @@ try {
   }
   async function checkImages() {
     await shell.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())))
-    const img = await shell.locator('.club-action img, .club-toggle img').evaluateAll(nodes => nodes.filter(node => node.getClientRects().length).map(node => {
+    const img = await shell.locator('.club-action img, .club-toggle img, .club-binding-value img').evaluateAll(nodes => nodes.filter(node => node.getClientRects().length).map(node => {
       const rect = node.getBoundingClientRect()
       return { path: new URL(node.src).pathname, rendered: [rect.width, rect.height], natural: [node.naturalWidth, node.naturalHeight] }
     }))
@@ -124,7 +151,8 @@ try {
   await openTab('Графика')
   await exact('graphics')
   assert.deepEqual(await parameterLabels(), ['Режим экрана', 'Разрешение', 'Качество графики', 'Качество теней', 'Сглаживание', 'Частота кадров', 'Вертикальная синхронизация'])
-  assert.equal(await shell.getByRole('combobox', { name: 'Сглаживание' }).isDisabled(), true)
+  await checkLockedSelect('Сглаживание')
+  assert.match(await shell.getByRole('combobox', { name: 'Качество графики' }).evaluate(node => getComputedStyle(node).backgroundImage), /chevron-down\.svg/)
   assert.equal(await shell.getByRole('switch', { name: 'Вертикальная синхронизация' }).isDisabled(), true)
   await shell.getByRole('button', { name: 'Настройки матча', exact: true }).click()
   assert.equal(await shell.getAttribute('data-settings-tab'), 'index', 'match footer slot navigates to settings index')
@@ -143,19 +171,33 @@ try {
   await openTab('Звук')
   await exact('sound')
   assert.deepEqual(await parameterLabels(), ['Устройство вывода', 'Общая громкость', 'Музыка клуба', 'Удары и шары', 'Атмосфера зала', 'Уведомления', 'Звук в фоновом режиме'])
+  // Actual availability differs between browsers and the machine running the test.
+  if (await shell.getByRole('combobox', { name: 'Устройство вывода' }).isDisabled()) await checkLockedSelect('Устройство вывода')
   for (const name of ['Музыка клуба', 'Атмосфера зала', 'Уведомления']) assert.equal(await shell.getByRole('slider', { name }).isDisabled(), true)
   assert.equal(await shell.getByRole('slider', { name: 'Общая громкость' }).evaluate(el => el.getBoundingClientRect().width), 200)
-  await shell.getByRole('switch', { name: 'Звук в фоновом режиме' }).click()
+  await toggleWithoutTint('Звук в фоновом режиме')
   assert.equal((await readSettings()).audioInBackground, true)
   const impact = shell.getByRole('slider', { name: 'Удары и шары' })
+  await impact.focus()
+  await page.keyboard.press('Tab')
+  const soundToggle = shell.getByRole('switch', { name: 'Звук в фоновом режиме' })
+  assert.ok(await soundToggle.evaluate(node => node === document.activeElement && getComputedStyle(node).outlineStyle === 'solid'))
+  assert.equal(await soundToggle.locator('span').evaluate(node => getComputedStyle(node).color), 'rgb(165, 174, 166)')
   await impact.fill('0.33')
   assert.equal((await readSettings()).impactVolume, .33)
   await back()
   await openTab('Управление')
   await exact('controls')
   assert.deepEqual(await parameterLabels(), ['Прицеливание', 'Сила и удар', 'Точка контакта / вращение', 'Наклон кия', 'Приближение камеры', 'Вид сверху', 'Обзор стола', 'Меню матча', 'Чувствительность мыши', 'Инверсия камеры', 'Плавное прицеливание'])
-  await shell.getByRole('switch', { name: 'Инверсия камеры' }).click()
-  await shell.getByRole('switch', { name: 'Плавное прицеливание' }).click()
+  const bindings = shell.locator('.club-control-bindings')
+  assert.equal(await bindings.locator('button.club-binding-value > img[src$="pencil-small.svg"]').count(), 2)
+  const staticBindings = await bindings.locator('span.club-binding-value').evaluateAll(nodes => nodes.map(node => ({
+    background: getComputedStyle(node).backgroundColor, tabIndex: node.tabIndex, icons: node.querySelectorAll('img').length,
+  })))
+  assert.equal(staticBindings.length, 6)
+  assert.ok(staticBindings.every(value => value.background === 'rgba(0, 0, 0, 0)' && value.tabIndex === -1 && value.icons === 0))
+  await toggleWithoutTint('Инверсия камеры')
+  await toggleWithoutTint('Плавное прицеливание')
   assert.equal((await readSettings()).invertCamera, true)
   assert.equal((await readSettings()).smoothAim, false)
   await verifyNoExtras()

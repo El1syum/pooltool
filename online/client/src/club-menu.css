@@ -140,9 +140,10 @@
 .club-history-elo { padding-inline-end:24px; text-align:right; white-space:nowrap; font-size:inherit; font-variant-numeric:tabular-nums; }
 .club-footer { position:relative; flex:0 0 82px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 48px; color:var(--club-muted); font-size:11px; }
 .club-footer > span:nth-child(2) { color:#728078; letter-spacing:1px; white-space:nowrap; }
-.club-breadcrumbs { min-width:0; line-height:1.5; overflow-wrap:anywhere; text-align:left; }
-.club-shell .club-breadcrumbs button { display:inline; padding:0; min-height:0; border:0; background:none; font:inherit; color:inherit; text-align:left; }
-.club-shell .club-breadcrumbs button:hover:not(:disabled) { background:none; color:var(--club-gold); text-decoration:underline; }
+.club-breadcrumbs { min-width:0; display:flex; flex-wrap:wrap; align-items:center; column-gap:4px; line-height:1.5; overflow-wrap:anywhere; text-align:left; }
+.club-shell .club-breadcrumbs button { display:inline-flex; align-items:center; padding:0; min-height:24px; border:0; background:none; font:inherit; color:inherit; text-align:left; }
+.club-shell .club-breadcrumbs button:not(:disabled) { color:var(--club-cream); text-decoration:underline; text-underline-offset:3px; }
+.club-shell .club-breadcrumbs button:hover:not(:disabled) { background:none; color:var(--club-gold); }
 .club-settings-shell { z-index:30; }
 .club-settings-shell:focus { outline:none; }
 .club-settings-shell .club-account { display:flex; align-items:center; gap:12px; }

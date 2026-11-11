@@ -31,6 +31,16 @@ const openPlay = async page => {
 const openMatchMenu = async page => clickHudAction(page, button(page, 'Меню матча'))
 const hasNoExtras = page => page.evaluate(() => !window.qaUndesignedUI)
 const matchHud = page => page.getByTestId('match-hud')
+const breadcrumb = (page, path, label) => page.getByRole('navigation', { name: path, exact: true }).getByRole('button', { name: label, exact: true })
+async function checkBreadcrumb(crumb) {
+  const style = await crumb.evaluate(node => {
+    const css = getComputedStyle(node)
+    return { cursor: css.cursor, underline: css.textDecorationLine, height: node.getBoundingClientRect().height }
+  })
+  assert.equal(style.cursor, 'pointer')
+  assert.equal(style.underline, 'underline')
+  assert.ok(style.height >= 24, 'Breadcrumb hit target is at least 24 pixels tall')
+}
 
 assert.equal((await api('/ready')).physics, 'pooltool')
 for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
@@ -63,6 +73,21 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     const host = await newGuest('host')
     assert.equal(await host.page.locator('.club-main-menu .club-actions > button').count(), 4)
     await capture(host.page, 'home')
+    await button(host.page, 'Настройки').click()
+    await button(host.page, 'Графика').click()
+    const settingsPath = 'Путь к настройкам'
+    const settingsCrumb = breadcrumb(host.page, settingsPath, 'Настройки')
+    const homeCrumb = breadcrumb(host.page, settingsPath, 'Главное меню')
+    const currentCrumb = host.page.getByRole('navigation', { name: settingsPath, exact: true }).locator('[aria-current="page"]')
+    assert.equal(await currentCrumb.evaluate(node => node.tagName), 'SPAN')
+    assert.equal(await currentCrumb.innerText(), 'Графика')
+    await checkBreadcrumb(settingsCrumb)
+    await settingsCrumb.click()
+    await heading(host.page, 'Настройки').waitFor()
+    await button(host.page, 'Графика').click()
+    await checkBreadcrumb(homeCrumb)
+    await homeCrumb.press('Enter')
+    await waitForConnectedHome(host.page)
     await openPlay(host.page)
     assert.equal(await host.page.locator('.club-actions button').count(), 6)
     await capture(host.page, 'play')
@@ -80,8 +105,11 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
       await host.page.locator('.club-rating-data').waitFor()
       assert.match(await host.page.locator('.club-ranked-search-meta').innerText(), /Диапазон постепенно/)
       await capture(host.page, 'ranked')
-      await button(host.page, 'Отменить поиск').click()
+      const playCrumb = breadcrumb(host.page, 'Путь по меню', 'Играть')
+      await checkBreadcrumb(playCrumb)
+      await playCrumb.click()
       await heading(host.page, 'Играть').waitFor()
+      assert.equal((await api('/api/matchmaking', host.token)).queued, false, 'Leaving search via breadcrumb cancels the queue')
     }
     await button(host.page, 'Игра с другом').click()
     await button(host.page, 'Создать игру').click()
@@ -160,6 +188,21 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     assert.ok(headerGap >= 12, `Six-character table code must leave room before the scorecard: ${headerGap}px`)
     assert.deepEqual(await host.page.locator('.match-menu-actions button > span').allTextContents(), ['Продолжить игру', 'Настройки', 'Сдаться'])
     await capture(host.page, 'match-menu')
+    const matchPath = 'Навигация матча'
+    await button(host.page, 'Настройки').click()
+    await button(host.page, 'Звук').click()
+    const matchSettingsCrumb = breadcrumb(host.page, matchPath, 'Настройки')
+    await checkBreadcrumb(matchSettingsCrumb)
+    await matchSettingsCrumb.click()
+    const matchMenuCrumb = breadcrumb(host.page, matchPath, 'Меню')
+    await checkBreadcrumb(matchMenuCrumb)
+    await matchMenuCrumb.click()
+    await heading(host.page, 'Меню матча').waitFor()
+    const matchResumeCrumb = breadcrumb(host.page, matchPath, 'Матч')
+    await checkBreadcrumb(matchResumeCrumb)
+    await matchResumeCrumb.press('Enter')
+    await host.page.getByRole('dialog').waitFor({ state: 'hidden' })
+    await openMatchMenu(host.page)
     await button(host.page, 'Сдаться').click()
     await heading(host.page, 'Сдаться?').waitFor()
     await capture(host.page, 'surrender')
@@ -200,7 +243,7 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
     assert.deepEqual(await rows.locator('.club-history-elo').allTextContents(), ['—', '—'])
     await capture(host.page, 'profile')
     assert.deepEqual(errors, [])
-    console.log(JSON.stringify({ engine, local, guestRoomsAutoStart: true, spectator: true, canvasShot: local, surrenderReturnsEveryoneHome: true, historyRetained: true, botDirect: true, extrasMounted: false }))
+    console.log(JSON.stringify({ engine, local, breadcrumbTargets: true, guestRoomsAutoStart: true, spectator: true, canvasShot: local, surrenderReturnsEveryoneHome: true, historyRetained: true, botDirect: true, extrasMounted: false }))
   } finally {
     for (const context of contexts) await context.close()
     for (const token of users) {

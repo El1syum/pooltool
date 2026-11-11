@@ -13,6 +13,45 @@ const artifacts = process.env.ARTIFACT_DIR || path.resolve('tests/artifacts/matc
 await mkdir(artifacts, { recursive: true })
 const server = await createServer({ logLevel: 'error', server: { host: '127.0.0.1', port: 4318, strictPort: true } })
 let browser
+async function assertRackSpacing(page, viewport, timerGap) {
+  const spacing = await page.locator('.hud-rack-detail').evaluate(node => {
+    const text = node.firstChild
+    const dot = text.data.indexOf('·')
+    const textBounds = (start, end) => {
+      const range = document.createRange()
+      range.setStart(text, start)
+      range.setEnd(text, end)
+      return range.getBoundingClientRect()
+    }
+    const left = textBounds(0, dot - 3)
+    const center = textBounds(dot, dot + 1)
+    const right = textBounds(dot + 4, text.length)
+    const style = getComputedStyle(node)
+    const context = document.createElement('canvas').getContext('2d')
+    context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    const expectedGap = context.measureText('   ').width
+    const rack = node.getBoundingClientRect()
+    return {
+      text: node.innerText,
+      leftGap: center.left - left.right,
+      rightGap: right.left - center.right,
+      expectedGap,
+      timerGap: rack.top - node.previousElementSibling.getBoundingClientRect().bottom,
+      left: left.left,
+      right: right.right,
+    }
+  })
+  assert.equal(spacing.text, 'Раунд 1   ·   8-BALL')
+  assert.ok(spacing.expectedGap > 0, 'Round text must be visible')
+  for (const actualGap of [spacing.leftGap, spacing.rightGap]) {
+    // WebKit rounds the edges of individual DOM text ranges.
+    assert.ok(Math.abs(actualGap - spacing.expectedGap) < 2, `Figma rack label must keep three spaces on both sides: ${JSON.stringify(spacing)}`)
+  }
+  assert.ok(Math.abs(spacing.timerGap - timerGap) < 0.3, `The vertical timer/rack spacing must remain ${timerGap}px: ${JSON.stringify(spacing)}`)
+  assert.ok(spacing.left >= 0 && spacing.right <= viewport.width, `The rack label must fit ${viewport.width}px`)
+  return spacing
+}
+
 try {
   await server.listen()
   browser = await playwright[engine].launch({ headless: true })
@@ -87,7 +126,8 @@ try {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
     assert.equal(overflow, false, `No horizontal page overflow at ${viewport.width}`)
     await page.screenshot({ path: path.join(artifacts, `${engine}-${viewport.width}x${viewport.height}.png`) })
-    layouts.push({ viewport, bounds })
+    const rackSpacing = await assertRackSpacing(page, viewport, viewport.width <= 760 ? 6 : 10)
+    layouts.push({ viewport, bounds, rackSpacing })
   }
   await page.evaluate(() => { window.assistFixture.phase = 'aim' })
   const contact = page.getByRole('slider', { name: 'Точка контакта на схеме битка', exact: true })
@@ -123,6 +163,7 @@ try {
     const rect = node.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom }
   }))
   assert.ok(clockRows[1].top >= clockRows[0].bottom && clockRows[2].top >= clockRows[1].bottom, `Mobile clock parts must form separate rows: ${JSON.stringify(clockRows)}`)
+  await assertRackSpacing(page, { width: 390 }, 6)
   await page.screenshot({ path: path.join(artifacts, `${engine}-390x844-overview.png`) })
   // Only the original overview/direction/contact/power layers are mounted.
   // Native scene shots and optional calls are covered by match integration.
@@ -142,6 +183,7 @@ try {
   assert.equal(await page.getByText('Правила 8-ball', { exact: true }).count(), 1)
   assert.equal(await page.getByTestId('alt-assist').count(), 0, 'Assist does not invent a separate overview/heading panel')
   assert.equal(await page.locator('.hud-overview-instruction h2').innerText(), 'Ваш ход')
+  await assertRackSpacing(page, { width: 1920 }, 10)
   assert.equal(await page.locator('.hud-wordmark').innerText(), 'Pooltool\n8-BALL · СТОЛ ABC123')
   assert.equal(await page.locator('.hud-footer-instruction').innerText(), 'Колесо мыши · приблизить биток')
   await page.evaluate(() => { window.assistFixture.feedback = 'Соединение потеряно' })

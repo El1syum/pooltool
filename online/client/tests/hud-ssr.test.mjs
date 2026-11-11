@@ -75,6 +75,7 @@ test('moving the local player to the left preserves original group and turn indi
 test('the table code, turn timer and both mapped camera hints use real values', async () => {
   const html = await render(fixture({ topViewKey: 'KeyF', overviewKey: 'KeyB' }))
   assert.match(html, /00:24/)
+  assert.match(html, /<span class="hud-rack-detail">Раунд 1 {3}· {3}8-BALL<\/span>/)
   assert.match(html, /8-BALL.*СТОЛ ABC123/)
   assert.match(html, /F · вид сверху/)
   assert.match(html, /B · обзор стола/)

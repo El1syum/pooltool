@@ -798,6 +798,18 @@ restored table shows date, opponent, mode, outcome and Elo change, uses the
 previous five-column grid and keeps 24px between Elo text and the scrollbar.
 Other player screens, match completion and ranking logic are unchanged.
 
+## Second interface QA follow-up (2026-11-11)
+
+Applied items 1–5 from the introductory pages of
+`Test_Report бильярд интерфейс (2).pdf` only. Disabled graphics/audio selects
+show a lock instead of an arrow. Switch captions keep their neutral color
+during hover and focus, without hiding keyboard focus. Editable key bindings
+show the existing pencil icon; fixed inputs are plain values. The match round
+line preserves the exact Figma spacing around its separator. Existing
+breadcrumb links have visible underlines and 24px-high hit targets; the
+current page remains a label. Item 6 (gold heading contrast) is expressly
+excluded; the heading styles and previously closed table items are unchanged.
+
 ## Git identity
 
 Author and committer: `el1syum <kilmol606@gmail.com>`. No assistant/co-author

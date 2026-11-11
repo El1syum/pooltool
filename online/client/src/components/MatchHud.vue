@@ -90,7 +90,7 @@ function changeContactPhase(phase: 'overview' | 'power') {
       <div class="hud-clock" :class="{ 'hud-clock-low': remaining <= 10 && match.status === 'active' }">
         <div class="hud-turn-label"><img :src="asset('turn-light')" alt="" /><span>{{ turnLabel }}</span></div>
         <div class="hud-clock-digits" aria-label="Оставшееся время хода">{{ match.status === 'calculating' ? '··:··' : formatTime(remaining) }}</div>
-        <span class="hud-rack-detail">Раунд 1 · 8-BALL</span>
+        <span class="hud-rack-detail">{{ 'Раунд 1   ·   8-BALL' }}</span>
       </div>
     </div>
 

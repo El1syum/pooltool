@@ -34,7 +34,7 @@
 .hud-turn-label span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hud-clock-digits { font-size: 38px; line-height: 38px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .hud-clock-low .hud-clock-digits { color: #e7b394; }
-.hud-rack-detail { color: var(--hud-muted); font-size: 11px; line-height: 13px; }
+.hud-rack-detail { color: var(--hud-muted); font-size: 11px; line-height: 13px; white-space: pre; }
 .hud-footer { position: absolute; width: 1104px; max-width: calc(100% - 48px); left: 50%; transform: translateX(-50%); bottom: 26px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0; text-align: left; }
 .hud-footer-actions { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
 .hud-footer button { pointer-events: auto; background: none; border: 0; border-radius: 0; padding: 0; color: var(--hud-muted); font-size: 11px; line-height: 14px; white-space: nowrap; }

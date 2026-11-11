@@ -230,7 +230,7 @@ onBeforeUnmount(() => {
             <div class="club-control-columns">
               <div class="club-control-bindings"><p class="club-settings-kicker">МЫШЬ И КЛАВИАТУРА</p>
                 <div v-for="row in controlRows" :key="row.label" class="club-parameter"><span>{{ row.label }}</span>
-                  <button v-if="'action' in row" class="club-value-button club-binding-value" type="button" :class="{ 'club-binding-capture': bindingCapture === row.action }" :aria-label="`Назначение: ${captureLabels[row.action]}`" @click="emit('capture', row.action)"><span data-binding-key>{{ bindingCapture === row.action ? 'Нажмите клавишу…' : bindingLabel(settings.bindings[row.action] || DEFAULT_BINDINGS[row.action]) }}</span></button>
+                  <button v-if="'action' in row" class="club-value-button club-binding-value" type="button" :class="{ 'club-binding-capture': bindingCapture === row.action }" :aria-label="`Назначение: ${captureLabels[row.action]}`" @click="emit('capture', row.action)"><span data-binding-key>{{ bindingCapture === row.action ? 'Нажмите клавишу…' : bindingLabel(settings.bindings[row.action] || DEFAULT_BINDINGS[row.action]) }}</span><img :src="asset('pencil-small')" alt="" /></button>
                   <span v-else class="club-fixed-value club-binding-value">{{ row.value }}</span>
                 </div>
               </div>

@@ -33,11 +33,22 @@
   box-shadow: inset 0 0 0 1px var(--club-line), 0 18px 64px rgba(0, 0, 0, .33);
 }
 .club-settings-shell .club-parameter select { background-position: right 16px center; color-scheme: dark; }
-.club-settings-shell .club-parameter select:disabled { opacity: 1; cursor: not-allowed; color: var(--club-muted); }
+.club-settings-shell .club-parameter select:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+  color: var(--club-muted);
+  -webkit-text-fill-color: currentColor;
+  border-color: #657169;
+  border-style: dashed;
+  background-color: #19241f;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none' stroke='%23a5aea6' stroke-width='1.25' stroke-linecap='round'%3E%3Crect x='2.5' y='6' width='9' height='6.5' rx='1.25'/%3E%3Cpath d='M4.5 6V4a2.5 2.5 0 0 1 5 0v2M7 8.5v1.25'/%3E%3C/svg%3E");
+}
+.club-settings-shell .club-toggle > span { color: var(--club-muted); }
 .club-settings-shell .club-toggle img { width: auto; height: auto; max-width: none; flex: none; }
 .club-settings-shell .club-toggle:disabled { opacity: .8; }
-.club-settings-shell .club-binding-value { justify-content: flex-start; }
+.club-settings-shell .club-binding-value.club-fixed-value { border-color: transparent; background: transparent; color: var(--club-muted); }
 .club-settings-shell .club-binding-value > span { min-width: 0; overflow-wrap: anywhere; }
+.club-settings-shell .club-binding-value > img { flex: none; width: 13px; height: 13px; }
 .club-settings-shell .club-control-hint strong { font-weight: 400; }
 .club-settings-shell .club-settings-kicker { line-height: normal; }
 .club-settings-shell .club-range-value input[type=range] { max-width: none; flex: 1 1 0; }
