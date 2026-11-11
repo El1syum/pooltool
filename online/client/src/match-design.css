@@ -79,6 +79,9 @@
   /* Preserve Figma's single upper row, giving the brand and Menu real side
      gutters instead of dropping the scoreboard below them. */
   .hud-modern:not(.hud-compact) .hud-scoreboard { top:0; width:calc(100% - 480px); height:176px; padding:26px 0 20px; grid-template-columns:minmax(0,1fr) 248px minmax(0,1fr); }
+  /* Real invite codes have six characters, unlike Figma's sample table 07. */
+  .hud-modern:not(.hud-compact) .hud-wordmark > span { max-width: 132px; }
+  .hud-modern:not(.hud-compact) .hud-wordmark > span, .hud-modern:not(.hud-compact) .hud-wordmark > span > span { letter-spacing: .8px; white-space: normal; }
   .hud-modern:not(.hud-compact) .hud-clock { width:248px; }
   .hud-modern:not(.hud-compact) .hud-stage-instruction { top:220px; }
 }

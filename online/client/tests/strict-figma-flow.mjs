@@ -152,6 +152,12 @@ for (const engine of (process.env.BROWSERS || 'chromium,webkit').split(',')) {
 
     await openMatchMenu(host.page)
     await heading(host.page, 'Меню матча').waitFor()
+    const headerGap = await host.page.locator('.hud-wordmark > span').evaluate(brand => {
+      const range = document.createRange()
+      range.selectNodeContents(brand)
+      return document.querySelector('.hud-player').getBoundingClientRect().left - range.getBoundingClientRect().right
+    })
+    assert.ok(headerGap >= 12, `Six-character table code must leave room before the scorecard: ${headerGap}px`)
     assert.deepEqual(await host.page.locator('.match-menu-actions button > span').allTextContents(), ['Продолжить игру', 'Настройки', 'Сдаться'])
     await capture(host.page, 'match-menu')
     await button(host.page, 'Сдаться').click()
