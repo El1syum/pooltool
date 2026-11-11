@@ -1,0 +1,27 @@
+.club-profile-fields { display:flex; flex-direction:column; gap:14px; min-width:0; width:100%; }
+.club-profile-field { display:grid; grid-template-columns:minmax(0,1fr) min(260px,62%); align-items:center; gap:24px; min-height:46px; font-size:14px; line-height:normal; }
+.club-profile-field > label { min-width:0; overflow-wrap:anywhere; }
+.club-profile-value { display:flex; align-items:center; gap:10px; min-width:0; height:42px; padding:0 14px; box-shadow:inset 0 0 0 1px var(--club-line); border-radius:5px; background:rgba(11,19,18,.85); }
+.club-profile-value:focus-within { box-shadow:inset 0 0 0 1px var(--club-gold); }
+.club-shell .club-profile-value > input:not([type=range]):not([type=checkbox]), .club-profile-about-input > textarea {
+  flex:1; min-width:0; width:100%; height:100%; margin:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--club-cream); font:inherit;
+}
+.club-shell .club-profile-value > input:focus-visible, .club-profile-about-input > textarea:focus-visible { outline:none; }
+.club-shell .club-profile-edit { display:flex; flex:0 0 13px; align-items:center; justify-content:flex-end; width:13px; height:24px; padding:0; border:0; border-radius:3px; background:transparent; }
+.club-profile-edit > img { display:block; max-width:none; flex:none; }
+.club-profile-about { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.club-profile-about > label { font-size:12px; line-height:normal; color:var(--club-muted); }
+.club-profile-about .club-profile-value { height:auto; min-height:49px; align-items:flex-start; gap:12px; padding:14px; }
+.club-profile-about-input { position:relative; flex:1; min-width:0; max-height:180px; overflow:hidden; font-size:13px; line-height:1.5; }
+/* The hidden copy sizes the field to its real wrapped text in both engines. */
+.club-profile-about-measure, .club-profile-about-input > textarea { white-space:pre-wrap; overflow-wrap:anywhere; }
+.club-profile-about-measure { display:block; min-height:19.5px; max-height:180px; overflow:hidden; visibility:hidden; pointer-events:none; }
+.club-profile-about-input > textarea { position:absolute; inset:0; display:block; resize:none; overflow:auto; }
+.club-profile-about .club-profile-edit { height:19.5px; align-items:flex-start; }
+.club-rating-progress { display:flex; flex-direction:column; gap:16px; width:100%; min-width:0; }
+.club-rating-progress p { margin:0; font-size:11px; line-height:normal; color:var(--club-muted); }
+.club-rating-track { display:flex; height:4px; width:100%; overflow:hidden; background:var(--club-line); }
+
+@media (max-width:420px) {
+  .club-profile-field { grid-template-columns:minmax(0,1fr); gap:6px; }
+}

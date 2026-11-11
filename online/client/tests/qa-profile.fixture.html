@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QA profile fields</title></head><body><div id="fixture"></div><script type="module">
+import { createApp, h, reactive } from 'vue'
+import '/src/style.css'
+import ClubMenu from '/src/components/ClubMenu.vue'
+import { emptyProfileDetails, normalizeProfileDetails } from '/src/profileDetails.ts'
+
+const user = reactive({ id: 'PT-00842', displayName: 'Север', elo: 1240, games: 128, wins: 76, losses: 52, settings: {} })
+const state = reactive({ name: user.displayName, details: emptyProfileDetails(), user, disabled: false, saved: null })
+window.qaProfile = state
+createApp({ setup() { return () => h(ClubMenu, {
+  view: 'profile', user, history: [], busy: state.disabled, connected: true, code: '', name: state.name,
+  turnSeconds: 60, botDifficulty: 'medium', searchMode: 'casual', clientVersion: 'fixture', profileDetails: state.details,
+  'onUpdate:name': value => state.name = value, 'onUpdate:profileDetails': value => state.details = value,
+  onSaveName: () => state.saved = { name: state.name.trim(), ...normalizeProfileDetails(state.details) },
+}) } }).mount('#fixture')
+</script></body></html>

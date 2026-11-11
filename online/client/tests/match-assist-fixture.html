@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Match assist integration fixture</title></head>
+<body style="margin:0;background:#176c5a"><main id="app" style="position:relative;width:100vw;height:100vh"></main>
+<script type="module">
+import { createApp, h, reactive, ref } from 'vue'
+import MatchHud from '/src/components/MatchHud.vue'
+import MatchMenu from '/src/components/MatchMenu.vue'
+import '/src/style.css'
+import '/src/match-hud.css'
+import '/src/match-design.css'
+import '/src/match-overlays.css'
+const state = reactive({
+  match: { id: 'component-fixture', status: 'active', revision: 0, currentPlayer: 0,
+    players: [{ id: 'a', displayName: 'Alex Chen' }, { id: 'b', displayName: 'Morgan Reed' }],
+    snapshot: { groups: [null, null], balls: [], table: { width: 1.27, length: 2.54, pockets: [] } } },
+  user: { id: 'a' }, room: { code: 'ABC123' }, aim: { phi: 90, V0: 4.1, theta: 30, a: 0, b: 0 },
+  phase: 'power', canShoot: true, canPlace: false, remaining: 24,
+  topViewKey: 'KeyT', overviewKey: 'KeyV', cameraMode: 'cue', showAssist: true, feedback: '', overlay: false,
+})
+const confirmation = ref(false)
+function resume() { state.overlay = false; confirmation.value = false }
+window.assistFixture = state
+window.aimChanges = []
+createApp({ render: () => h('div', {
+  class: state.overlay ? 'app-shell in-match match-overlay-open' : '',
+  style: 'position:relative;width:100%;height:100%',
+}, [
+  h(MatchHud, { ...state,
+    onAim: aim => { state.aim = aim; window.aimChanges.push(aim) },
+    onPhase: phase => { state.phase = phase },
+    onMenu: () => { state.overlay = true },
+  }),
+  state.overlay ? h(MatchMenu, {
+    match: state.match, room: state.room, userId: state.user.id, confirmation: confirmation.value,
+    busy: false, connected: true, version: '1.0.4', feedback: state.feedback,
+    onResume: resume, onLeave: resume, onConfirm: () => { confirmation.value = true },
+    onCancel: () => { confirmation.value = false },
+  }) : null,
+]) }).mount('#app')
+window.fixtureReady = true
+</script></body></html>

@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="250.5" height="138.187" viewBox="0 0 250.5 138.187" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Group 511">
+<path id="Vector 2" d="M83.5 106.464C70.2052 71.3149 54.0896 37.7895 9.15527e-05 0L192 106.464L83.5 106.464Z" fill="#BEAF8F"/>
+<mask id="stroke0_0_9" fill="white">
+<path d="M92 138.187C75.2408 69.97 53.8698 40.6249 0 0.000305176L250.5 138.187L92 138.187Z"/>
+</mask>
+<path id="Vector 3" d="M0 0.000305176C53.8698 40.6249 75.2408 69.97 92 138.187L250.5 138.187L0 0.000305176Z" stroke-width="2" stroke="#D9D9D9" mask="url(#stroke0_0_9)"/>
+</g>
+</svg>

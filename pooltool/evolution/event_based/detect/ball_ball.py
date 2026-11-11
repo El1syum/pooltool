@@ -129,6 +129,12 @@ def ball_ball_collision_time_2d(
     d = 2 * Bx * Cx + 2 * By * Cy
     e = Cx * Cx + Cy * Cy - 4 * R * R
 
+    # Equal accelerations cancel the fourth- and third-order coefficients.
+    # In that case the relative trajectory is linear and collision time is a
+    # quadratic, just as in ball_ball_collision_time's general-dimensional path.
+    if a == 0.0:
+        return get_real_positive_smallest_root(quadratic.solve(c, d, e))
+
     return get_real_positive_smallest_root(quartic.solve(a, b, c, d, e))
 
 
@@ -193,7 +199,7 @@ def get_next_ball_ball_event(
     if not cache:
         return null_event(np.inf)
 
-    ball_pair = min(cache, key=lambda k: cache[k])
+    ball_pair = min(cache, key=cache.__getitem__)
 
     return ball_ball_collision(
         ball1=shot.balls[ball_pair[0]],

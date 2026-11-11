@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#1d2529;color:#eee;font:16px system-ui}canvas{display:block}#label{position:fixed;left:20px;top:20px;padding:12px;background:#0009}</style></head><body><div id="label">AI derivative audit · not gameplay evidence</div><script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(1);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;document.body.append(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color('#1d2529');
+scene.add(new THREE.HemisphereLight(0xffffff,0x8c8c7a,2));const light=new THREE.DirectionalLight(0xfff0dd,3);light.position.set(3,6,4);scene.add(light);const fill=new THREE.DirectionalLight(0xcce2ff,2);fill.position.set(-3,3,-2);scene.add(fill);
+const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.001,100);
+const gltf=await new GLTFLoader().loadAsync('/generated-source.glb');const root=gltf.scene;scene.add(root);const box=new THREE.Box3().setFromObject(root),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());root.position.sub(center);
+const length=size.length();let orientation='raw';
+window.auditOrientation=(name)=>{orientation=name;root.position.set(0,0,0);root.rotation.set(name==='raw'?0:-Math.PI/2,name==='raw'?0:Math.PI/2,0,'YXZ');box.setFromObject(root);root.position.sub(box.getCenter(new THREE.Vector3()));};
+window.auditView=(name)=>{const dirs={front:[0,.1,1],back:[0,.1,-1],threequarter:[1,.65,1],edge:[1,.1,0],top:[0,1,0.001]};const d=new THREE.Vector3(...dirs[name]).normalize();camera.position.copy(d.multiplyScalar(length*1.55));camera.lookAt(0,0,0);document.querySelector('#label').textContent=`AI GLB derivative audit · ${name} · ${orientation} orientation`;renderer.render(scene,camera)};
+window.auditView('threequarter');window.auditReady=true;window.auditScene=scene;window.auditRoot=root;window.auditCamera=camera;window.auditRenderer=renderer;window.THREE=THREE;
+</script></body></html>

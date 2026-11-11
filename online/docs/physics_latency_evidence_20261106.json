@@ -1,0 +1,723 @@
+{
+  "date": "2026-11-06",
+  "targetSeconds": 2.5,
+  "targetHostAcceptance": "FAIL",
+  "deployment": "HELD; active service unchanged",
+  "sourceRevisionBeforeChanges": "fc9e96eea2076d01d11ba8b95287023079ac9f5e",
+  "testedWorkingTreeSha256": {
+    "online/server/detection.py": "ea1697b795ae07c99d2b9f746ae90cfafdeb90869a7396fa499ed3fe2f5b9019",
+    "online/server/evolution.py": "59fd8347ae83db35c76575a7297f3ba6fd34d6bd0ffe894254b429e1366ee4fc",
+    "online/server/ordered_cache.py": "9d12379b7123517850b2acb203b39f51d378e5e346eb5b70db9fe9815c33f8f5",
+    "online/server/broadphase.py": "8c37467351173e366af62bffc90e1b51cab7ed8128f9c5b144250e3444ca8fd0",
+    "online/server/pair_broadphase.py": "1c55a0a46c379b04fb08248c661ff2c1314fd2ed4f9af191b607784072bd0faf",
+    "online/server/physics.py": "caeb3a40cf903571373112fd5bdd0705c57113305dfc515f895ea5fc40a6fcb3",
+    "online/server/worker.py": "96eb099c98b31ae69406260a786a12379d861a7a4a0dbeb0d866ded9f91fa548",
+    "pooltool/physics/resolve/ball_cushion/stronge_compliant/model.py": "34f83b1a278464861f2a0b3bb02afbc2f0c41cec77546f3fd3d7fac84f723a5e",
+    "pooltool/physics/resolve/stronge_compliant.py": "84159046e85a59c24023bfe32a5df01eaa0cf04031d6c84f90e596610208b721"
+  },
+  "notes": [
+    "Hash values identify the exact working-tree bytes exported to the isolated Linux candidate; Git text normalization may differ.",
+    "All samples are complete, settled results compared to same-platform pre-change goldens. No timeout or truncation counted as success.",
+    "These are finite warm probes, not an all-input or arbitrary-load SLA. Network, DB and playback lead are excluded.",
+    "The final review added an exact-dict custom ball-mapping fallback guard. The final 14x3 Linux corpus was repeated on that source; worker/development probes preceded only this guard and exercised ordinary dict inputs."
+  ],
+  "linuxCorpus": {
+    "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+    "repeats": 3,
+    "completeCases": 14,
+    "maximumSeconds": 10.238676220877096,
+    "failures": [
+      {
+        "case": "recorded_dense_1675",
+        "kind": "deadline",
+        "maximumSeconds": 7.633597971871495,
+        "limitSeconds": 2.5
+      },
+      {
+        "case": "weak_dense_break",
+        "kind": "deadline",
+        "maximumSeconds": 10.238676220877096,
+        "limitSeconds": 2.5
+      },
+      {
+        "case": "maximum_follow_break",
+        "kind": "deadline",
+        "maximumSeconds": 5.524760018917732,
+        "limitSeconds": 2.5
+      },
+      {
+        "case": "maximum_elevation",
+        "kind": "deadline",
+        "maximumSeconds": 3.9877688289852813,
+        "limitSeconds": 2.5
+      }
+    ],
+    "samples": [
+      {
+        "case": "recorded_dense_1675",
+        "events": 1675,
+        "exactEquality": true,
+        "simulateSeconds": [
+          6.641737669007853,
+          6.124587761005387,
+          7.404356439947151
+        ],
+        "jsonSeconds": [
+          0.2972476779250428,
+          0.23568427108693868,
+          0.2292415319243446
+        ],
+        "maximumSeconds": 7.633597971871495
+      },
+      {
+        "case": "weak_dense_break",
+        "events": 2439,
+        "exactEquality": true,
+        "simulateSeconds": [
+          7.361795304925181,
+          9.979302746942267,
+          8.930800850968808
+        ],
+        "jsonSeconds": [
+          0.2824240130139515,
+          0.25937347393482924,
+          0.2848373509477824
+        ],
+        "maximumSeconds": 10.238676220877096
+      },
+      {
+        "case": "minimum_speed_miss",
+        "events": 5,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.10466902900952846,
+          0.10429063008632511,
+          0.09026097902096808
+        ],
+        "jsonSeconds": [
+          0.006680835038423538,
+          0.004556422005407512,
+          0.0066164659801870584
+        ],
+        "maximumSeconds": 0.111349864047952
+      },
+      {
+        "case": "slow_break",
+        "events": 5,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.146663881954737,
+          0.10924837097991258,
+          0.13016040192451328
+        ],
+        "jsonSeconds": [
+          0.007917494978755713,
+          0.007557867909781635,
+          0.009313415037468076
+        ],
+        "maximumSeconds": 0.15458137693349272
+      },
+      {
+        "case": "maximum_speed_break",
+        "events": 140,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.9573256769217551,
+          1.6008419849677011,
+          0.7523644380271435
+        ],
+        "jsonSeconds": [
+          0.0734001569217071,
+          0.11904444999527186,
+          0.08099910500459373
+        ],
+        "maximumSeconds": 1.719886434962973
+      },
+      {
+        "case": "maximum_follow_break",
+        "events": 1258,
+        "exactEquality": true,
+        "simulateSeconds": [
+          5.332265940960497,
+          4.4575163329718634,
+          5.060710299061611
+        ],
+        "jsonSeconds": [
+          0.19249407795723528,
+          0.18977537902537733,
+          0.14126161497551948
+        ],
+        "maximumSeconds": 5.524760018917732
+      },
+      {
+        "case": "maximum_draw_break",
+        "events": 90,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.7902633659541607,
+          0.7871758140390739,
+          0.8735776259563863
+        ],
+        "jsonSeconds": [
+          0.05396002402994782,
+          0.06286954809911549,
+          0.07275806798133999
+        ],
+        "maximumSeconds": 0.9463356939377263
+      },
+      {
+        "case": "maximum_side_spin",
+        "events": 166,
+        "exactEquality": true,
+        "simulateSeconds": [
+          1.661533014033921,
+          1.9699054629309103,
+          1.7806369790341705
+        ],
+        "jsonSeconds": [
+          0.10105673607904464,
+          0.13383852900005877,
+          0.13125288800802082
+        ],
+        "maximumSeconds": 2.103743991930969
+      },
+      {
+        "case": "maximum_elevation",
+        "events": 841,
+        "exactEquality": true,
+        "simulateSeconds": [
+          3.8579094460001215,
+          3.7174160790164024,
+          3.4007317769574
+        ],
+        "jsonSeconds": [
+          0.12985938298515975,
+          0.20791101001668721,
+          0.1426477381028235
+        ],
+        "maximumSeconds": 3.9877688289852813
+      },
+      {
+        "case": "grazing_ball",
+        "events": 51,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.5529169039800763,
+          0.5553381579229608,
+          0.5731309569673613
+        ],
+        "jsonSeconds": [
+          0.05065719306003302,
+          0.042069600080139935,
+          0.04223807295784354
+        ],
+        "maximumSeconds": 0.6153690299252048
+      },
+      {
+        "case": "near_parallel_rail",
+        "events": 5,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.0858838219428435,
+          0.07901683601085097,
+          0.07949602196458727
+        ],
+        "jsonSeconds": [
+          0.004251277074217796,
+          0.005536991986446083,
+          0.005300197983160615
+        ],
+        "maximumSeconds": 0.0901350990170613
+      },
+      {
+        "case": "head_on_draw",
+        "events": 9,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.16351069696247578,
+          0.18316455010790378,
+          0.1383762719342485
+        ],
+        "jsonSeconds": [
+          0.011967160040512681,
+          0.010103712906129658,
+          0.00924980198033154
+        ],
+        "maximumSeconds": 0.19326826301403344
+      },
+      {
+        "case": "scratch_blocked_respot",
+        "events": 4,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.06350866600405425,
+          0.06403567700181156,
+          0.06489496002905071
+        ],
+        "jsonSeconds": [
+          0.003151156008243561,
+          0.003603532910346985,
+          0.004258724977262318
+        ],
+        "maximumSeconds": 0.06915368500631303
+      },
+      {
+        "case": "after_foul_placement",
+        "events": 5,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.06992431299295276,
+          0.08510309900157154,
+          0.09091828996315598
+        ],
+        "jsonSeconds": [
+          0.0067036960972473025,
+          0.005786504945717752,
+          0.005111175938509405
+        ],
+        "maximumSeconds": 0.09602946590166539
+      }
+    ]
+  },
+  "linuxRealWorkers": {
+    "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+    "workerCount": 2,
+    "completeExactSamples": 12,
+    "requestedSamples": 12,
+    "status": "FAIL",
+    "maximumSeconds": 9.401356294983998,
+    "summaries": {
+      "individual": {
+        "recorded_dense_1675": {
+          "completeExactSamples": 3,
+          "calculateIpcSeconds": {
+            "median": 6.365177117986605,
+            "maximum": 6.6742318669566885
+          },
+          "jsonSeconds": {
+            "median": 0.2706471630372107,
+            "maximum": 0.2977992830565199
+          },
+          "completePlusJsonSeconds": {
+            "median": 6.6629764010431245,
+            "maximum": 6.8659774620318785
+          }
+        },
+        "weak_dense_break": {
+          "completeExactSamples": 3,
+          "calculateIpcSeconds": {
+            "median": 8.93102976900991,
+            "maximum": 9.169633198995143
+          },
+          "jsonSeconds": {
+            "median": 0.23172309598885477,
+            "maximum": 0.3344469889998436
+          },
+          "completePlusJsonSeconds": {
+            "median": 9.084585770964622,
+            "maximum": 9.401356294983998
+          }
+        }
+      },
+      "simultaneous": {
+        "recorded_dense_1675": {
+          "completeExactSamples": 3,
+          "calculateIpcSeconds": {
+            "median": 6.185565038002096,
+            "maximum": 6.3463175350334495
+          },
+          "jsonSeconds": {
+            "median": 0.21169030794408172,
+            "maximum": 0.2176833610283211
+          },
+          "completePlusJsonSeconds": {
+            "median": 6.369686438003555,
+            "maximum": 6.564000896061771
+          }
+        },
+        "weak_dense_break": {
+          "completeExactSamples": 3,
+          "calculateIpcSeconds": {
+            "median": 8.496739509049803,
+            "maximum": 8.640633105067536
+          },
+          "jsonSeconds": {
+            "median": 0.227221856941469,
+            "maximum": 0.2624052679166198
+          },
+          "completePlusJsonSeconds": {
+            "median": 8.723961365991272,
+            "maximum": 8.903038372984156
+          }
+        }
+      }
+    },
+    "cleanup": {
+      "seconds": 0.15111167810391635,
+      "allChildrenStopped": true,
+      "survivingPids": []
+    }
+  },
+  "developmentCorpus": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu": "AMD Ryzen AI 9 H 465",
+    "repeats": 3,
+    "completeCases": 14,
+    "maximumSeconds": 0.6983366999775171,
+    "failures": []
+  },
+  "developmentRealWorkers": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "workerCount": 2,
+    "completeExactSamples": 12,
+    "status": "PASS",
+    "maximumSeconds": 0.6452506000641733,
+    "summaries": {
+      "individual": {
+        "recorded_dense_1675": {
+          "completeExactSamples": 3,
+          "calculateIpcSeconds": {
+            "median": 0.43684000009670854,
+            "maximum": 0.4440413999836892
+          },
+          "jsonSeconds": {
+            "median": 0.021310099866241217,
+            "maximum": 0.022128799930214882
+          },
+          "completePlusJsonSeconds": {
+            "median": 0.45815009996294975,
+            "maximum": 0.4651975999586284
+          }
+        },
+        "weak_dense_break": {
+          "completeExactSamples": 3,
+          "calculateIpcSeconds": {
+            "median": 0.5467306999489665,
+            "maximum": 0.6047837000805885
+          },
+          "jsonSeconds": {
+            "median": 0.02149649988859892,
+            "maximum": 0.021592600038275123
+          },
+          "completePlusJsonSeconds": {
+            "median": 0.5683232999872416,
+            "maximum": 0.6260724000167102
+          }
+        }
+      },
+      "simultaneous": {
+        "recorded_dense_1675": {
+          "completeExactSamples": 3,
+          "calculateIpcSeconds": {
+            "median": 0.42037670011632144,
+            "maximum": 0.4279118999838829
+          },
+          "jsonSeconds": {
+            "median": 0.021812800085172057,
+            "maximum": 0.02227870002388954
+          },
+          "completePlusJsonSeconds": {
+            "median": 0.4415713001508266,
+            "maximum": 0.44972470006905496
+          }
+        },
+        "weak_dense_break": {
+          "completeExactSamples": 3,
+          "calculateIpcSeconds": {
+            "median": 0.6087595999706537,
+            "maximum": 0.6234906001482159
+          },
+          "jsonSeconds": {
+            "median": 0.02130699995905161,
+            "maximum": 0.02175999991595745
+          },
+          "completePlusJsonSeconds": {
+            "median": 0.6300665999297053,
+            "maximum": 0.6452506000641733
+          }
+        }
+      }
+    },
+    "cleanup": {
+      "seconds": 0.043985299998894334,
+      "allChildrenStopped": true,
+      "survivingPids": []
+    }
+  },
+  "unitRegression": {
+    "tests": 486,
+    "subtests": 5373,
+    "status": "PASS",
+    "seconds": 73.29,
+    "warning": "Existing Starlette/httpx deprecation"
+  },
+  "finalReviewedWorkingTreeSha256": {
+    "online/server/detection.py": "ea1697b795ae07c99d2b9f746ae90cfafdeb90869a7396fa499ed3fe2f5b9019",
+    "online/server/evolution.py": "5b7566712589108493c9cfd21228693300df1c51cfc986e38af31ee04e7d6382",
+    "online/server/ordered_cache.py": "9d12379b7123517850b2acb203b39f51d378e5e346eb5b70db9fe9815c33f8f5",
+    "online/server/broadphase.py": "8c37467351173e366af62bffc90e1b51cab7ed8128f9c5b144250e3444ca8fd0",
+    "online/server/pair_broadphase.py": "1c55a0a46c379b04fb08248c661ff2c1314fd2ed4f9af191b607784072bd0faf",
+    "online/server/physics.py": "caeb3a40cf903571373112fd5bdd0705c57113305dfc515f895ea5fc40a6fcb3",
+    "online/server/worker.py": "96eb099c98b31ae69406260a786a12379d861a7a4a0dbeb0d866ded9f91fa548",
+    "pooltool/physics/resolve/ball_cushion/stronge_compliant/model.py": "34f83b1a278464861f2a0b3bb02afbc2f0c41cec77546f3fd3d7fac84f723a5e",
+    "pooltool/physics/resolve/stronge_compliant.py": "84159046e85a59c24023bfe32a5df01eaa0cf04031d6c84f90e596610208b721"
+  },
+  "linuxCorpusBeforeMappingGuard": {
+    "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+    "repeats": 3,
+    "completeCases": 14,
+    "maximumSeconds": 10.711293340893462,
+    "failures": [
+      {
+        "case": "recorded_dense_1675",
+        "kind": "deadline",
+        "maximumSeconds": 8.557010030956008,
+        "limitSeconds": 2.5
+      },
+      {
+        "case": "weak_dense_break",
+        "kind": "deadline",
+        "maximumSeconds": 10.711293340893462,
+        "limitSeconds": 2.5
+      },
+      {
+        "case": "maximum_follow_break",
+        "kind": "deadline",
+        "maximumSeconds": 5.803918675053865,
+        "limitSeconds": 2.5
+      },
+      {
+        "case": "maximum_elevation",
+        "kind": "deadline",
+        "maximumSeconds": 4.351578534930013,
+        "limitSeconds": 2.5
+      }
+    ],
+    "samples": [
+      {
+        "case": "recorded_dense_1675",
+        "events": 1675,
+        "exactEquality": true,
+        "simulateSeconds": [
+          8.25809243391268,
+          6.235351204057224,
+          6.734707733965479
+        ],
+        "jsonSeconds": [
+          0.298917597043328,
+          0.21388430893421173,
+          0.18391246302053332
+        ],
+        "maximumSeconds": 8.557010030956008
+      },
+      {
+        "case": "weak_dense_break",
+        "events": 2439,
+        "exactEquality": true,
+        "simulateSeconds": [
+          9.388110091094859,
+          10.452833406976424,
+          9.05392854695674
+        ],
+        "jsonSeconds": [
+          0.3085854119854048,
+          0.25845993391703814,
+          0.27574705495499074
+        ],
+        "maximumSeconds": 10.711293340893462
+      },
+      {
+        "case": "minimum_speed_miss",
+        "events": 5,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.09701855201274157,
+          0.0895540569908917,
+          0.06613674201071262
+        ],
+        "jsonSeconds": [
+          0.007228184025734663,
+          0.0032250588992610574,
+          0.002883892972022295
+        ],
+        "maximumSeconds": 0.10424673603847623
+      },
+      {
+        "case": "slow_break",
+        "events": 5,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.12070660502649844,
+          0.09911833598744124,
+          0.11056706798262894
+        ],
+        "jsonSeconds": [
+          0.007843201979994774,
+          0.006445275968872011,
+          0.007195318001322448
+        ],
+        "maximumSeconds": 0.1285498070064932
+      },
+      {
+        "case": "maximum_speed_break",
+        "events": 140,
+        "exactEquality": true,
+        "simulateSeconds": [
+          1.5703063309192657,
+          1.5155307459644973,
+          1.1005347120808437
+        ],
+        "jsonSeconds": [
+          0.1285630560014397,
+          0.09794793603941798,
+          0.1161261519882828
+        ],
+        "maximumSeconds": 1.6988693869207054
+      },
+      {
+        "case": "maximum_follow_break",
+        "events": 1258,
+        "exactEquality": true,
+        "simulateSeconds": [
+          5.428822305984795,
+          5.036167840007693,
+          5.589127028011717
+        ],
+        "jsonSeconds": [
+          0.11682046798523515,
+          0.18250581494066864,
+          0.21479164704214782
+        ],
+        "maximumSeconds": 5.803918675053865
+      },
+      {
+        "case": "maximum_draw_break",
+        "events": 90,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.8110701440600678,
+          0.6745154910022393,
+          0.5335131810279563
+        ],
+        "jsonSeconds": [
+          0.07449059397913516,
+          0.03557823796290904,
+          0.04934666201006621
+        ],
+        "maximumSeconds": 0.885560738039203
+      },
+      {
+        "case": "maximum_side_spin",
+        "events": 166,
+        "exactEquality": true,
+        "simulateSeconds": [
+          1.2241841949289665,
+          1.442006167024374,
+          1.8773728620726615
+        ],
+        "jsonSeconds": [
+          0.07260618393775076,
+          0.12034329702146351,
+          0.12115477491170168
+        ],
+        "maximumSeconds": 1.9985276369843632
+      },
+      {
+        "case": "maximum_elevation",
+        "events": 841,
+        "exactEquality": true,
+        "simulateSeconds": [
+          4.2152197730029,
+          3.8563879880821332,
+          3.7191506390227005
+        ],
+        "jsonSeconds": [
+          0.13635876192711294,
+          0.13977717608213425,
+          0.12962511798832566
+        ],
+        "maximumSeconds": 4.351578534930013
+      },
+      {
+        "case": "grazing_ball",
+        "events": 51,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.4877334029879421,
+          0.450291465036571,
+          0.3087330759735778
+        ],
+        "jsonSeconds": [
+          0.045794368954375386,
+          0.019440238014794886,
+          0.023627780028618872
+        ],
+        "maximumSeconds": 0.5335277719423175
+      },
+      {
+        "case": "near_parallel_rail",
+        "events": 5,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.054685292998328805,
+          0.05513375299051404,
+          0.057068558991886675
+        ],
+        "jsonSeconds": [
+          0.0037273450288921595,
+          0.0038673109374940395,
+          0.0034300630213692784
+        ],
+        "maximumSeconds": 0.060498622013255954
+      },
+      {
+        "case": "head_on_draw",
+        "events": 9,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.09166569402441382,
+          0.07942248194012791,
+          0.0969598579686135
+        ],
+        "jsonSeconds": [
+          0.005618705996312201,
+          0.005548733053728938,
+          0.007472955039702356
+        ],
+        "maximumSeconds": 0.10443281300831586
+      },
+      {
+        "case": "scratch_blocked_respot",
+        "events": 4,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.060364805976860225,
+          0.04296034399885684,
+          0.052102974033914506
+        ],
+        "jsonSeconds": [
+          0.003910447936505079,
+          0.003241445985622704,
+          0.0027460299897938967
+        ],
+        "maximumSeconds": 0.0642752539133653
+      },
+      {
+        "case": "after_foul_placement",
+        "events": 5,
+        "exactEquality": true,
+        "simulateSeconds": [
+          0.07355299999471754,
+          0.055334149044938385,
+          0.06246418703813106
+        ],
+        "jsonSeconds": [
+          0.003619937924668193,
+          0.003361611976288259,
+          0.003964321920648217
+        ],
+        "maximumSeconds": 0.07717293791938573
+      }
+    ]
+  }
+}
